@@ -59,8 +59,8 @@
       "11": {
         "ticks_completed": 6000,
         "truncated_at": null,
-        "elapsed_seconds": 7.1,
-        "ticks_per_second": 842.1,
+        "elapsed_seconds": 13.7,
+        "ticks_per_second": 437.0,
         "samples": [
           {
             "tick": 100,
@@ -114,7 +114,21 @@
             "cleanliness": 78.0,
             "satisfaction": 67.8,
             "happiness": 62.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 1,
+            "food_seen_ticks": 5,
+            "action_counts": {
+              "exploring": 97,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 51.253,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 200,
@@ -161,7 +175,22 @@
             "cleanliness": 71.0,
             "satisfaction": 65.8,
             "happiness": 57.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 3,
+            "food_seen_ticks": 46,
+            "action_counts": {
+              "exploring": 196,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 1.909,
+              "act_move": 51.272,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 300,
@@ -205,7 +234,22 @@
             "cleanliness": 69.0,
             "satisfaction": 63.8,
             "happiness": 62.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 3,
+            "food_seen_ticks": 146,
+            "action_counts": {
+              "exploring": 296,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 48.32,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 400,
@@ -255,7 +299,22 @@
             "cleanliness": 62.0,
             "satisfaction": 61.8,
             "happiness": 67.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 3,
+            "food_seen_ticks": 194,
+            "action_counts": {
+              "exploring": 396,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 48.284,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 500,
@@ -307,7 +366,22 @@
             "cleanliness": 40.0,
             "satisfaction": 59.8,
             "happiness": 71.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 3,
+            "food_seen_ticks": 203,
+            "action_counts": {
+              "exploring": 496,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 49.35,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 600,
@@ -357,7 +431,22 @@
             "cleanliness": 33.0,
             "satisfaction": 57.8,
             "happiness": 71.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 5,
+            "food_seen_ticks": 291,
+            "action_counts": {
+              "exploring": 596,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 47.345,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 700,
@@ -409,7 +498,22 @@
             "cleanliness": 6.0,
             "satisfaction": 55.8,
             "happiness": 71.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 5,
+            "food_seen_ticks": 377,
+            "action_counts": {
+              "exploring": 696,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 46.077,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 800,
@@ -470,7 +574,22 @@
             "cleanliness": 0.0,
             "satisfaction": 53.8,
             "happiness": 71.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 6,
+            "food_seen_ticks": 472,
+            "action_counts": {
+              "exploring": 796,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 49.027,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 900,
@@ -531,7 +650,22 @@
             "cleanliness": 0.0,
             "satisfaction": 51.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 9,
+            "food_seen_ticks": 572,
+            "action_counts": {
+              "exploring": 896,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 49.919,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1000,
@@ -585,7 +719,22 @@
             "cleanliness": 0.0,
             "satisfaction": 49.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 10,
+            "food_seen_ticks": 672,
+            "action_counts": {
+              "exploring": 996,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 53.209,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1100,
@@ -639,7 +788,22 @@
             "cleanliness": 0.0,
             "satisfaction": 47.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 11,
+            "food_seen_ticks": 772,
+            "action_counts": {
+              "exploring": 1096,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.127,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1200,
@@ -693,7 +857,22 @@
             "cleanliness": 0.0,
             "satisfaction": 45.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 14,
+            "food_seen_ticks": 872,
+            "action_counts": {
+              "exploring": 1196,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.102,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1300,
@@ -747,7 +926,22 @@
             "cleanliness": 0.0,
             "satisfaction": 43.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 15,
+            "food_seen_ticks": 950,
+            "action_counts": {
+              "exploring": 1296,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.522,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1400,
@@ -794,7 +988,22 @@
             "cleanliness": 0.0,
             "satisfaction": 41.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 16,
+            "food_seen_ticks": 1037,
+            "action_counts": {
+              "exploring": 1396,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.151,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1500,
@@ -848,7 +1057,22 @@
             "cleanliness": 0.0,
             "satisfaction": 39.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 17,
+            "food_seen_ticks": 1125,
+            "action_counts": {
+              "exploring": 1496,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 54.071,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1600,
@@ -934,7 +1158,22 @@
             "cleanliness": 0.0,
             "satisfaction": 37.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 18,
+            "food_seen_ticks": 1195,
+            "action_counts": {
+              "exploring": 1596,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.075,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1700,
@@ -1020,7 +1259,22 @@
             "cleanliness": 0.0,
             "satisfaction": 35.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 19,
+            "food_seen_ticks": 1295,
+            "action_counts": {
+              "exploring": 1696,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.497,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1800,
@@ -1081,7 +1335,22 @@
             "cleanliness": 0.0,
             "satisfaction": 33.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 22,
+            "food_seen_ticks": 1395,
+            "action_counts": {
+              "exploring": 1796,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.261,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1900,
@@ -1142,7 +1411,22 @@
             "cleanliness": 0.0,
             "satisfaction": 31.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 25,
+            "food_seen_ticks": 1495,
+            "action_counts": {
+              "exploring": 1896,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.007,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2000,
@@ -1203,7 +1487,22 @@
             "cleanliness": 0.0,
             "satisfaction": 29.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 25,
+            "food_seen_ticks": 1595,
+            "action_counts": {
+              "exploring": 1996,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.95,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2100,
@@ -1264,7 +1563,22 @@
             "cleanliness": 0.0,
             "satisfaction": 27.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 26,
+            "food_seen_ticks": 1695,
+            "action_counts": {
+              "exploring": 2096,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.182,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2200,
@@ -1325,7 +1639,22 @@
             "cleanliness": 0.0,
             "satisfaction": 25.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 30,
+            "food_seen_ticks": 1795,
+            "action_counts": {
+              "exploring": 2196,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.164,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2300,
@@ -1386,7 +1715,22 @@
             "cleanliness": 0.0,
             "satisfaction": 23.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 32,
+            "food_seen_ticks": 1895,
+            "action_counts": {
+              "exploring": 2296,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.182,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2400,
@@ -1454,7 +1798,22 @@
             "cleanliness": 0.0,
             "satisfaction": 21.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 34,
+            "food_seen_ticks": 1995,
+            "action_counts": {
+              "exploring": 2396,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.82,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2500,
@@ -1522,7 +1881,22 @@
             "cleanliness": 0.0,
             "satisfaction": 19.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 36,
+            "food_seen_ticks": 2095,
+            "action_counts": {
+              "exploring": 2496,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.173,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2600,
@@ -1590,7 +1964,22 @@
             "cleanliness": 0.0,
             "satisfaction": 17.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 40,
+            "food_seen_ticks": 2195,
+            "action_counts": {
+              "exploring": 2596,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.935,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2700,
@@ -1658,7 +2047,22 @@
             "cleanliness": 0.0,
             "satisfaction": 15.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 41,
+            "food_seen_ticks": 2295,
+            "action_counts": {
+              "exploring": 2696,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.826,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2800,
@@ -1726,7 +2130,22 @@
             "cleanliness": 0.0,
             "satisfaction": 13.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 42,
+            "food_seen_ticks": 2395,
+            "action_counts": {
+              "exploring": 2796,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.297,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2900,
@@ -1794,7 +2213,22 @@
             "cleanliness": 0.0,
             "satisfaction": 11.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 45,
+            "food_seen_ticks": 2495,
+            "action_counts": {
+              "exploring": 2896,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.568,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3000,
@@ -1862,7 +2296,22 @@
             "cleanliness": 0.0,
             "satisfaction": 9.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 48,
+            "food_seen_ticks": 2595,
+            "action_counts": {
+              "exploring": 2996,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.062,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3100,
@@ -1923,7 +2372,22 @@
             "cleanliness": 0.0,
             "satisfaction": 7.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 52,
+            "food_seen_ticks": 2695,
+            "action_counts": {
+              "exploring": 3096,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.969,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3200,
@@ -1984,7 +2448,22 @@
             "cleanliness": 0.0,
             "satisfaction": 5.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 52,
+            "food_seen_ticks": 2795,
+            "action_counts": {
+              "exploring": 3196,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.164,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3300,
@@ -2045,7 +2524,22 @@
             "cleanliness": 0.0,
             "satisfaction": 3.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 54,
+            "food_seen_ticks": 2895,
+            "action_counts": {
+              "exploring": 3296,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.574,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3400,
@@ -2106,7 +2600,22 @@
             "cleanliness": 0.0,
             "satisfaction": 1.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 60,
+            "food_seen_ticks": 2995,
+            "action_counts": {
+              "exploring": 3396,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.415,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3500,
@@ -2167,7 +2676,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 60,
+            "food_seen_ticks": 3095,
+            "action_counts": {
+              "exploring": 3496,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.851,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3600,
@@ -2228,7 +2752,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 60,
+            "food_seen_ticks": 3195,
+            "action_counts": {
+              "exploring": 3596,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.506,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3700,
@@ -2289,7 +2828,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 62,
+            "food_seen_ticks": 3295,
+            "action_counts": {
+              "exploring": 3696,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.643,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3800,
@@ -2356,7 +2910,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 64,
+            "food_seen_ticks": 3395,
+            "action_counts": {
+              "exploring": 3796,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.511,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3900,
@@ -2424,7 +2993,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 67,
+            "food_seen_ticks": 3495,
+            "action_counts": {
+              "exploring": 3896,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.024,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4000,
@@ -2492,7 +3076,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 67,
+            "food_seen_ticks": 3595,
+            "action_counts": {
+              "exploring": 3996,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.312,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4100,
@@ -2560,7 +3159,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 67,
+            "food_seen_ticks": 3695,
+            "action_counts": {
+              "exploring": 4096,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.822,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4200,
@@ -2628,7 +3242,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 69,
+            "food_seen_ticks": 3795,
+            "action_counts": {
+              "exploring": 4196,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.261,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4300,
@@ -2696,7 +3325,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 72,
+            "food_seen_ticks": 3895,
+            "action_counts": {
+              "exploring": 4296,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.257,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4400,
@@ -2764,7 +3408,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 76,
+            "food_seen_ticks": 3995,
+            "action_counts": {
+              "exploring": 4396,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.222,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4500,
@@ -2832,7 +3491,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 77,
+            "food_seen_ticks": 4095,
+            "action_counts": {
+              "exploring": 4496,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.729,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4600,
@@ -2900,7 +3574,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 77,
+            "food_seen_ticks": 4195,
+            "action_counts": {
+              "exploring": 4596,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 61.678,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4700,
@@ -2968,7 +3657,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 79,
+            "food_seen_ticks": 4295,
+            "action_counts": {
+              "exploring": 4696,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 61.746,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4800,
@@ -3036,7 +3740,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 81,
+            "food_seen_ticks": 4395,
+            "action_counts": {
+              "exploring": 4796,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 63.87,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4900,
@@ -3104,7 +3823,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 86,
+            "food_seen_ticks": 4495,
+            "action_counts": {
+              "exploring": 4896,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 65.199,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5000,
@@ -3178,7 +3912,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 88,
+            "food_seen_ticks": 4595,
+            "action_counts": {
+              "exploring": 4996,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 64.823,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5100,
@@ -3246,7 +3995,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 91,
+            "food_seen_ticks": 4695,
+            "action_counts": {
+              "exploring": 5096,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 63.533,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5200,
@@ -3314,7 +4078,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 93,
+            "food_seen_ticks": 4795,
+            "action_counts": {
+              "exploring": 5196,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 65.055,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5300,
@@ -3382,7 +4161,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 95,
+            "food_seen_ticks": 4895,
+            "action_counts": {
+              "exploring": 5296,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 64.927,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5400,
@@ -3456,7 +4250,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 98,
+            "food_seen_ticks": 4995,
+            "action_counts": {
+              "exploring": 5396,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 63.699,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5500,
@@ -3530,7 +4339,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 101,
+            "food_seen_ticks": 5095,
+            "action_counts": {
+              "exploring": 5496,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.733,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5600,
@@ -3604,7 +4428,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 103,
+            "food_seen_ticks": 5195,
+            "action_counts": {
+              "exploring": 5596,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.713,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5700,
@@ -3678,7 +4517,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 105,
+            "food_seen_ticks": 5295,
+            "action_counts": {
+              "exploring": 5696,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.169,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5800,
@@ -3752,7 +4606,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 0.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 109,
+            "food_seen_ticks": 5395,
+            "action_counts": {
+              "exploring": 5796,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 61.73,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5900,
@@ -3826,7 +4695,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 0.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 112,
+            "food_seen_ticks": 5495,
+            "action_counts": {
+              "exploring": 5896,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 61.871,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 6000,
@@ -3900,7 +4784,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 0.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 112,
+            "food_seen_ticks": 5595,
+            "action_counts": {
+              "exploring": 5996,
+              "eating": 3,
+              "fleeing": 1
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 64.837,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           }
         ],
         "births": [
@@ -9848,32 +10747,32 @@
             "cooldown_remaining": 32.0,
             "stood_down": [
               {
-                "at": 1794226194.8602698,
+                "at": 1794240940.556303,
                 "deficit": "regulation:hunger:down",
                 "because": "only 37s into the 60s growth cooldown"
               },
               {
-                "at": 1794226194.861719,
+                "at": 1794240940.559119,
                 "deficit": "regulation:hunger:down",
                 "because": "only 36s into the 60s growth cooldown"
               },
               {
-                "at": 1794226194.8632631,
+                "at": 1794240940.561856,
                 "deficit": "regulation:hunger:down",
                 "because": "only 35s into the 60s growth cooldown"
               },
               {
-                "at": 1794226194.8646479,
+                "at": 1794240940.5645132,
                 "deficit": "regulation:hunger:down",
                 "because": "only 34s into the 60s growth cooldown"
               },
               {
-                "at": 1794226194.8660285,
+                "at": 1794240940.5671546,
                 "deficit": "regulation:hunger:down",
                 "because": "only 33s into the 60s growth cooldown"
               },
               {
-                "at": 1794226194.8676908,
+                "at": 1794240940.5703442,
                 "deficit": "regulation:hunger:down",
                 "because": "only 32s into the 60s growth cooldown"
               }
@@ -9881,67 +10780,67 @@
             "grown": [
               {
                 "neuron": "learned_expectation",
-                "at": 1794226187.780961,
+                "at": 1794240926.895542,
                 "deficit": "expression",
                 "because": "the squid has worked out that can see food plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from can see food to hunger that could act on it"
               },
               {
                 "neuron": "anticipation",
-                "at": 1794226187.7996035,
+                "at": 1794240926.9320939,
                 "deficit": "expression",
                 "because": "the squid has worked out that anxiety plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from anxiety to hunger that could act on it"
               },
               {
                 "neuron": "play_reward",
-                "at": 1794226187.8179119,
+                "at": 1794240926.969449,
                 "deficit": "expression",
                 "because": "the squid has worked out that cleanliness plus fleeing sends hunger up by 1 (42% confident), but there is no pathway in the network from cleanliness to hunger that could act on it"
               },
               {
                 "neuron": "safety_signal",
-                "at": 1794226187.8363323,
+                "at": 1794240927.0074284,
                 "deficit": "expression",
                 "because": "the squid has worked out that sleepiness plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from sleepiness to hunger that could act on it"
               },
               {
                 "neuron": "tension_release",
-                "at": 1794226187.8557062,
+                "at": 1794240927.047339,
                 "deficit": "expression",
                 "because": "the squid has worked out that cleanliness plus fleeing sends satisfaction down by 1 (42% confident), but there is no pathway in the network from cleanliness to satisfaction that could act on it"
               },
               {
                 "neuron": "stress_learned_expectation",
-                "at": 1794226187.8766716,
+                "at": 1794240927.0902727,
                 "deficit": "expression",
                 "because": "the squid has worked out that cleanliness plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from cleanliness to hunger that could act on it"
               },
               {
                 "neuron": "role_separation",
-                "at": 1794226187.8988397,
+                "at": 1794240927.1356132,
                 "deficit": "differentiation",
                 "because": "play reward is pushed the same way by both cleanliness and safety signal, which are almost never active at the same time (correlation -0.90); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "second_opinion",
-                "at": 1794226187.9218972,
+                "at": 1794240927.1824255,
                 "deficit": "differentiation",
                 "because": "tension release is pushed the same way by both cleanliness and play reward, which are almost never active at the same time (correlation -0.86); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "investigation_drive",
-                "at": 1794226187.9465554,
+                "at": 1794240927.232273,
                 "deficit": "differentiation",
                 "because": "satisfaction is pushed the same way by both anxiety and tension release, which are almost never active at the same time (correlation -0.58); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "curiosity_spark",
-                "at": 1794226187.972656,
+                "at": 1794240927.2850943,
                 "deficit": "differentiation",
                 "because": "play reward is pushed the same way by both cleanliness and tension release, which are almost never active at the same time (correlation -0.92); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "novelty_role_separation",
-                "at": 1794226188.0006087,
+                "at": 1794240927.3414721,
                 "deficit": "differentiation",
                 "because": "tension release is pushed the same way by both cleanliness and role separation, which are almost never active at the same time (correlation -0.87); one neuron cannot stand for both situations at once"
               }
@@ -9970,8 +10869,8 @@
       "11": {
         "ticks_completed": 6000,
         "truncated_at": null,
-        "elapsed_seconds": 12.6,
-        "ticks_per_second": 475.5,
+        "elapsed_seconds": 23.4,
+        "ticks_per_second": 256.9,
         "samples": [
           {
             "tick": 100,
@@ -10057,7 +10956,21 @@
             "cleanliness": 78.0,
             "satisfaction": 67.8,
             "happiness": 62.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 1,
+            "food_seen_ticks": 5,
+            "action_counts": {
+              "exploring": 97,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 51.977,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 200,
@@ -10143,7 +11056,21 @@
             "cleanliness": 76.0,
             "satisfaction": 65.8,
             "happiness": 57.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 2,
+            "food_seen_ticks": 22,
+            "action_counts": {
+              "exploring": 197,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 51.568,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 300,
@@ -10211,7 +11138,21 @@
             "cleanliness": 64.0,
             "satisfaction": 63.8,
             "happiness": 62.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 3,
+            "food_seen_ticks": 25,
+            "action_counts": {
+              "exploring": 297,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 49.832,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 400,
@@ -10271,7 +11212,21 @@
             "cleanliness": 57.0,
             "satisfaction": 61.8,
             "happiness": 67.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 4,
+            "food_seen_ticks": 96,
+            "action_counts": {
+              "exploring": 397,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 49.672,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 500,
@@ -10324,7 +11279,21 @@
             "cleanliness": 55.0,
             "satisfaction": 59.8,
             "happiness": 71.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 10,
+            "food_seen_ticks": 196,
+            "action_counts": {
+              "exploring": 497,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 52.036,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 600,
@@ -10362,7 +11331,21 @@
             "cleanliness": 38.0,
             "satisfaction": 57.8,
             "happiness": 71.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 11,
+            "food_seen_ticks": 296,
+            "action_counts": {
+              "exploring": 597,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 51.104,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 700,
@@ -10393,7 +11376,21 @@
             "cleanliness": 16.0,
             "satisfaction": 55.8,
             "happiness": 71.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 12,
+            "food_seen_ticks": 396,
+            "action_counts": {
+              "exploring": 697,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 50.431,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 800,
@@ -10473,7 +11470,21 @@
             "cleanliness": 14.0,
             "satisfaction": 53.8,
             "happiness": 71.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 16,
+            "food_seen_ticks": 495,
+            "action_counts": {
+              "exploring": 797,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 50.892,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 900,
@@ -10526,7 +11537,21 @@
             "cleanliness": 7.0,
             "satisfaction": 51.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 20,
+            "food_seen_ticks": 591,
+            "action_counts": {
+              "exploring": 897,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 50.944,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1000,
@@ -10573,7 +11598,21 @@
             "cleanliness": 5.0,
             "satisfaction": 49.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 22,
+            "food_seen_ticks": 691,
+            "action_counts": {
+              "exploring": 997,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 53.304,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1100,
@@ -10659,7 +11698,21 @@
             "cleanliness": 0.0,
             "satisfaction": 47.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 23,
+            "food_seen_ticks": 791,
+            "action_counts": {
+              "exploring": 1097,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.026,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1200,
@@ -10745,7 +11798,21 @@
             "cleanliness": 0.0,
             "satisfaction": 45.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 26,
+            "food_seen_ticks": 891,
+            "action_counts": {
+              "exploring": 1197,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.98,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1300,
@@ -10831,7 +11898,21 @@
             "cleanliness": 0.0,
             "satisfaction": 43.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 27,
+            "food_seen_ticks": 991,
+            "action_counts": {
+              "exploring": 1297,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 54.115,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1400,
@@ -10917,7 +11998,21 @@
             "cleanliness": 0.0,
             "satisfaction": 41.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 28,
+            "food_seen_ticks": 1091,
+            "action_counts": {
+              "exploring": 1397,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 53.248,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1500,
@@ -11003,7 +12098,21 @@
             "cleanliness": 0.0,
             "satisfaction": 39.8,
             "happiness": 61.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 29,
+            "food_seen_ticks": 1191,
+            "action_counts": {
+              "exploring": 1497,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 51.682,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1600,
@@ -11089,7 +12198,21 @@
             "cleanliness": 0.0,
             "satisfaction": 37.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 30,
+            "food_seen_ticks": 1291,
+            "action_counts": {
+              "exploring": 1597,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 52.457,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1700,
@@ -11175,7 +12298,21 @@
             "cleanliness": 0.0,
             "satisfaction": 35.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 31,
+            "food_seen_ticks": 1391,
+            "action_counts": {
+              "exploring": 1697,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 54.633,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1800,
@@ -11261,7 +12398,21 @@
             "cleanliness": 0.0,
             "satisfaction": 33.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 34,
+            "food_seen_ticks": 1491,
+            "action_counts": {
+              "exploring": 1797,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.693,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1900,
@@ -11347,7 +12498,21 @@
             "cleanliness": 0.0,
             "satisfaction": 31.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 37,
+            "food_seen_ticks": 1591,
+            "action_counts": {
+              "exploring": 1897,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.342,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2000,
@@ -11433,7 +12598,21 @@
             "cleanliness": 0.0,
             "satisfaction": 29.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 37,
+            "food_seen_ticks": 1691,
+            "action_counts": {
+              "exploring": 1997,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.305,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2100,
@@ -11519,7 +12698,21 @@
             "cleanliness": 0.0,
             "satisfaction": 27.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 38,
+            "food_seen_ticks": 1791,
+            "action_counts": {
+              "exploring": 2097,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.514,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2200,
@@ -11605,7 +12798,21 @@
             "cleanliness": 0.0,
             "satisfaction": 25.8,
             "happiness": 51.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 42,
+            "food_seen_ticks": 1891,
+            "action_counts": {
+              "exploring": 2197,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.603,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2300,
@@ -11691,7 +12898,21 @@
             "cleanliness": 0.0,
             "satisfaction": 23.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 45,
+            "food_seen_ticks": 1991,
+            "action_counts": {
+              "exploring": 2297,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.18,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2400,
@@ -11777,7 +12998,21 @@
             "cleanliness": 0.0,
             "satisfaction": 21.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 47,
+            "food_seen_ticks": 2091,
+            "action_counts": {
+              "exploring": 2397,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.614,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2500,
@@ -11863,7 +13098,21 @@
             "cleanliness": 0.0,
             "satisfaction": 19.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 49,
+            "food_seen_ticks": 2191,
+            "action_counts": {
+              "exploring": 2497,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.982,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2600,
@@ -11949,7 +13198,21 @@
             "cleanliness": 0.0,
             "satisfaction": 17.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 53,
+            "food_seen_ticks": 2291,
+            "action_counts": {
+              "exploring": 2597,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.834,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2700,
@@ -12035,7 +13298,21 @@
             "cleanliness": 0.0,
             "satisfaction": 15.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 54,
+            "food_seen_ticks": 2391,
+            "action_counts": {
+              "exploring": 2697,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.942,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2800,
@@ -12121,7 +13398,21 @@
             "cleanliness": 0.0,
             "satisfaction": 13.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 55,
+            "food_seen_ticks": 2491,
+            "action_counts": {
+              "exploring": 2797,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.368,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2900,
@@ -12207,7 +13498,21 @@
             "cleanliness": 0.0,
             "satisfaction": 11.8,
             "happiness": 41.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 58,
+            "food_seen_ticks": 2591,
+            "action_counts": {
+              "exploring": 2897,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.651,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3000,
@@ -12293,7 +13598,21 @@
             "cleanliness": 0.0,
             "satisfaction": 9.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 61,
+            "food_seen_ticks": 2691,
+            "action_counts": {
+              "exploring": 2997,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.897,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3100,
@@ -12379,7 +13698,21 @@
             "cleanliness": 0.0,
             "satisfaction": 7.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 65,
+            "food_seen_ticks": 2791,
+            "action_counts": {
+              "exploring": 3097,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.763,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3200,
@@ -12465,7 +13798,21 @@
             "cleanliness": 0.0,
             "satisfaction": 5.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 65,
+            "food_seen_ticks": 2891,
+            "action_counts": {
+              "exploring": 3197,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.793,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3300,
@@ -12551,7 +13898,21 @@
             "cleanliness": 0.0,
             "satisfaction": 3.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 67,
+            "food_seen_ticks": 2991,
+            "action_counts": {
+              "exploring": 3297,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 54.946,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3400,
@@ -12637,7 +13998,21 @@
             "cleanliness": 0.0,
             "satisfaction": 1.8,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 73,
+            "food_seen_ticks": 3091,
+            "action_counts": {
+              "exploring": 3397,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.203,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3500,
@@ -12723,7 +14098,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 73,
+            "food_seen_ticks": 3191,
+            "action_counts": {
+              "exploring": 3497,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.784,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3600,
@@ -12809,7 +14198,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 31.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 73,
+            "food_seen_ticks": 3291,
+            "action_counts": {
+              "exploring": 3597,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.929,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3700,
@@ -12895,7 +14298,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 75,
+            "food_seen_ticks": 3391,
+            "action_counts": {
+              "exploring": 3697,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.425,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3800,
@@ -12981,7 +14398,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 77,
+            "food_seen_ticks": 3491,
+            "action_counts": {
+              "exploring": 3797,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 58.229,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3900,
@@ -13067,7 +14498,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 80,
+            "food_seen_ticks": 3591,
+            "action_counts": {
+              "exploring": 3897,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.151,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4000,
@@ -13153,7 +14598,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 80,
+            "food_seen_ticks": 3691,
+            "action_counts": {
+              "exploring": 3997,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.793,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4100,
@@ -13239,7 +14698,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 80,
+            "food_seen_ticks": 3791,
+            "action_counts": {
+              "exploring": 4097,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 55.295,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4200,
@@ -13325,7 +14798,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 82,
+            "food_seen_ticks": 3891,
+            "action_counts": {
+              "exploring": 4197,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 56.436,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4300,
@@ -13411,7 +14898,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 21.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 85,
+            "food_seen_ticks": 3991,
+            "action_counts": {
+              "exploring": 4297,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 57.531,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4400,
@@ -13497,7 +14998,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 88,
+            "food_seen_ticks": 4091,
+            "action_counts": {
+              "exploring": 4397,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 59.869,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4500,
@@ -13583,7 +15098,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 88,
+            "food_seen_ticks": 4191,
+            "action_counts": {
+              "exploring": 4497,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.742,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4600,
@@ -13669,7 +15198,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 88,
+            "food_seen_ticks": 4291,
+            "action_counts": {
+              "exploring": 4597,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 61.596,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4700,
@@ -13755,7 +15298,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 90,
+            "food_seen_ticks": 4391,
+            "action_counts": {
+              "exploring": 4697,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 61.806,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4800,
@@ -13841,7 +15398,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 92,
+            "food_seen_ticks": 4491,
+            "action_counts": {
+              "exploring": 4797,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 63.919,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4900,
@@ -13927,7 +15498,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 98,
+            "food_seen_ticks": 4591,
+            "action_counts": {
+              "exploring": 4897,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 65.078,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5000,
@@ -14013,7 +15598,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 11.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 99,
+            "food_seen_ticks": 4691,
+            "action_counts": {
+              "exploring": 4997,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 64.738,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5100,
@@ -14099,7 +15698,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 101,
+            "food_seen_ticks": 4791,
+            "action_counts": {
+              "exploring": 5097,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 63.834,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5200,
@@ -14185,7 +15798,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 103,
+            "food_seen_ticks": 4891,
+            "action_counts": {
+              "exploring": 5197,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 65.356,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5300,
@@ -14271,7 +15898,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 105,
+            "food_seen_ticks": 4991,
+            "action_counts": {
+              "exploring": 5297,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 65.229,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5400,
@@ -14357,7 +15998,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 108,
+            "food_seen_ticks": 5091,
+            "action_counts": {
+              "exploring": 5397,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 64.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5500,
@@ -14443,7 +16098,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 111,
+            "food_seen_ticks": 5191,
+            "action_counts": {
+              "exploring": 5497,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 61.034,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5600,
@@ -14529,7 +16198,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 113,
+            "food_seen_ticks": 5291,
+            "action_counts": {
+              "exploring": 5597,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 61.015,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5700,
@@ -14615,7 +16298,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 1.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 115,
+            "food_seen_ticks": 5391,
+            "action_counts": {
+              "exploring": 5697,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 60.47,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5800,
@@ -14701,7 +16398,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 0.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 119,
+            "food_seen_ticks": 5491,
+            "action_counts": {
+              "exploring": 5797,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 62.032,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5900,
@@ -14787,7 +16498,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 0.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 122,
+            "food_seen_ticks": 5591,
+            "action_counts": {
+              "exploring": 5897,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 62.172,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 6000,
@@ -14873,7 +16598,21 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 0.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 122,
+            "food_seen_ticks": 5691,
+            "action_counts": {
+              "exploring": 5997,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 65.138,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           }
         ],
         "births": [
@@ -21067,32 +22806,32 @@
             "cooldown_remaining": 26.0,
             "stood_down": [
               {
-                "at": 1794226207.4797292,
+                "at": 1794240963.9136298,
                 "deficit": "regulation:hunger:down",
                 "because": "only 31s into the 60s growth cooldown"
               },
               {
-                "at": 1794226207.4822283,
+                "at": 1794240963.918339,
                 "deficit": "regulation:hunger:down",
                 "because": "only 30s into the 60s growth cooldown"
               },
               {
-                "at": 1794226207.4845467,
+                "at": 1794240963.9227233,
                 "deficit": "regulation:hunger:down",
                 "because": "only 29s into the 60s growth cooldown"
               },
               {
-                "at": 1794226207.4868731,
+                "at": 1794240963.9271383,
                 "deficit": "regulation:hunger:down",
                 "because": "only 28s into the 60s growth cooldown"
               },
               {
-                "at": 1794226207.489184,
+                "at": 1794240963.931562,
                 "deficit": "regulation:hunger:down",
                 "because": "only 27s into the 60s growth cooldown"
               },
               {
-                "at": 1794226207.4920897,
+                "at": 1794240963.9370568,
                 "deficit": "regulation:hunger:down",
                 "because": "only 26s into the 60s growth cooldown"
               }
@@ -21100,91 +22839,91 @@
             "grown": [
               {
                 "neuron": "relay_bridge",
-                "at": 1794226194.9314113,
+                "at": 1794240940.6947198,
                 "deficit": "connectivity",
                 "because": "pred food ahead has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "waypoint",
-                "at": 1794226194.9811888,
+                "at": 1794240940.7818575,
                 "deficit": "connectivity",
                 "because": "pred food west has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "junction",
-                "at": 1794226195.020217,
+                "at": 1794240940.861429,
                 "deficit": "connectivity",
                 "because": "pred food north has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "connector_connectivity_bridge",
-                "at": 1794226195.0564282,
+                "at": 1794240940.9353938,
                 "deficit": "connectivity",
                 "because": "pred hunger rise has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "connector_connectivity_bridge_2",
-                "at": 1794226195.0942316,
+                "at": 1794240941.0121183,
                 "deficit": "connectivity",
                 "because": "pred anxiety rise has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "connector_connectivity_bridge_3",
-                "at": 1794226195.1315312,
+                "at": 1794240941.0881045,
                 "deficit": "connectivity",
                 "because": "pred reward soon has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "learned_expectation",
-                "at": 1794226195.1690836,
+                "at": 1794240941.16439,
                 "deficit": "expression",
                 "because": "the squid has worked out that can see food plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from can see food to hunger that could act on it"
               },
               {
                 "neuron": "role_separation",
-                "at": 1794226195.2101912,
+                "at": 1794240941.2468073,
                 "deficit": "differentiation",
                 "because": "happiness is pushed the same way by both curiosity and can see food, which are almost never active at the same time (correlation -0.54); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "anticipation",
-                "at": 1794226195.251425,
+                "at": 1794240941.3296595,
                 "deficit": "expression",
                 "because": "the squid has worked out that anxiety plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from anxiety to hunger that could act on it"
               },
               {
                 "neuron": "second_opinion",
-                "at": 1794226195.300276,
+                "at": 1794240941.4250038,
                 "deficit": "differentiation",
                 "because": "satisfaction is pushed the same way by both hunger and anxiety, which are almost never active at the same time (correlation -0.57); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "hunger_alarm",
-                "at": 1794226195.3488927,
+                "at": 1794240941.522762,
                 "deficit": "regulation",
                 "because": "hunger has been outside its comfortable range for 99% of the last 240 ticks (currently 89), and the existing synapses supply 1.06 of corrective push and it is still not coming back"
               },
               {
                 "neuron": "foraging_urgency",
-                "at": 1794226195.4019997,
+                "at": 1794240941.6281273,
                 "deficit": "regulation",
                 "because": "hunger is pinned at 95 and the 1 synapse(s) pulling it back are already at full strength and it is still stuck"
               },
               {
                 "neuron": "safety_signal",
-                "at": 1794226195.4600883,
+                "at": 1794240941.741213,
                 "deficit": "regulation",
                 "because": "hunger is pinned at 100 and the 2 synapse(s) pulling it back are already at full strength and it is still stuck"
               },
               {
                 "neuron": "investigation_drive",
-                "at": 1794226195.5333745,
+                "at": 1794240941.875566,
                 "deficit": "differentiation",
                 "because": "hunger alarm is pushed the same way by both cleanliness and sleepiness, which are almost never active at the same time (correlation -0.97); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "curiosity_spark",
-                "at": 1794226195.724762,
+                "at": 1794240942.23286,
                 "deficit": "differentiation",
                 "because": "hunger alarm is pushed the same way by both hunger and cleanliness, which are almost never active at the same time (correlation -0.98); one neuron cannot stand for both situations at once"
               }
@@ -21226,8 +22965,8 @@
           "action_top1": 0.998999833305551,
           "action_top1_samples": 5999,
           "uncertainty": 0.05931008611853841,
-          "inference_seconds": 0.027,
-          "train_seconds": 0.111,
+          "inference_seconds": 0.058,
+          "train_seconds": 0.207,
           "brain_effect": {
             "synapses_from_predictions": 53,
             "synapses_into_predictions": 0,
@@ -21279,8 +23018,8 @@
       "11": {
         "ticks_completed": 6000,
         "truncated_at": null,
-        "elapsed_seconds": 24.9,
-        "ticks_per_second": 241.2,
+        "elapsed_seconds": 38.0,
+        "ticks_per_second": 158.1,
         "samples": [
           {
             "tick": 100,
@@ -21365,7 +23104,21 @@
             "cleanliness": 78.0,
             "satisfaction": 67.8,
             "happiness": 62.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 1,
+            "food_seen_ticks": 5,
+            "action_counts": {
+              "exploring": 97,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 51.977,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 200,
@@ -21445,7 +23198,21 @@
             "cleanliness": 76.0,
             "satisfaction": 65.8,
             "happiness": 57.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 2,
+            "food_seen_ticks": 22,
+            "action_counts": {
+              "exploring": 197,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 51.568,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 300,
@@ -21506,7 +23273,21 @@
             "cleanliness": 64.0,
             "satisfaction": 63.8,
             "happiness": 62.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 3,
+            "food_seen_ticks": 25,
+            "action_counts": {
+              "exploring": 297,
+              "eating": 3
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 49.778,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 400,
@@ -21562,7 +23343,22 @@
             "cleanliness": 62.0,
             "satisfaction": 76.8,
             "happiness": 77.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 3,
+            "food_seen_ticks": 116,
+            "action_counts": {
+              "exploring": 309,
+              "eating": 7,
+              "idle": 84
+            },
+            "motor_activation": {
+              "act_eat": 33.824,
+              "act_move": 36.448,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 500,
@@ -21612,7 +23408,22 @@
             "cleanliness": 60.0,
             "satisfaction": 99.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 2,
+            "food_seen_ticks": 152,
+            "action_counts": {
+              "exploring": 367,
+              "eating": 13,
+              "idle": 120
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 47.414,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 600,
@@ -21692,7 +23503,22 @@
             "cleanliness": 53.0,
             "satisfaction": 97.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": false,
+            "food_items": 4,
+            "food_seen_ticks": 152,
+            "action_counts": {
+              "exploring": 467,
+              "eating": 13,
+              "idle": 120
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 49.847,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 700,
@@ -21778,7 +23604,22 @@
             "cleanliness": 41.0,
             "satisfaction": 95.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 5,
+            "food_seen_ticks": 209,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 177
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 30.652,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 800,
@@ -21858,7 +23699,22 @@
             "cleanliness": 34.0,
             "satisfaction": 93.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 6,
+            "food_seen_ticks": 309,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 277
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 11.545,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 900,
@@ -21944,7 +23800,22 @@
             "cleanliness": 27.0,
             "satisfaction": 91.4,
             "happiness": 92.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 10,
+            "food_seen_ticks": 409,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 377
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1000,
@@ -22030,7 +23901,22 @@
             "cleanliness": 25.0,
             "satisfaction": 89.4,
             "happiness": 97.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 11,
+            "food_seen_ticks": 509,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 477
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1100,
@@ -22116,7 +24002,22 @@
             "cleanliness": 18.0,
             "satisfaction": 87.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 15,
+            "food_seen_ticks": 609,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 577
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1200,
@@ -22202,7 +24103,22 @@
             "cleanliness": 16.0,
             "satisfaction": 85.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 15,
+            "food_seen_ticks": 709,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 677
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1300,
@@ -22288,7 +24204,22 @@
             "cleanliness": 4.0,
             "satisfaction": 83.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 17,
+            "food_seen_ticks": 809,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 777
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1400,
@@ -22374,7 +24305,22 @@
             "cleanliness": 2.0,
             "satisfaction": 81.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 20,
+            "food_seen_ticks": 909,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 877
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1500,
@@ -22460,7 +24406,22 @@
             "cleanliness": 0.0,
             "satisfaction": 79.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 21,
+            "food_seen_ticks": 1009,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 977
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1600,
@@ -22546,7 +24507,22 @@
             "cleanliness": 0.0,
             "satisfaction": 77.4,
             "happiness": 92.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 24,
+            "food_seen_ticks": 1109,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1077
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1700,
@@ -22632,7 +24608,22 @@
             "cleanliness": 0.0,
             "satisfaction": 75.4,
             "happiness": 97.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 25,
+            "food_seen_ticks": 1209,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1177
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1800,
@@ -22718,7 +24709,22 @@
             "cleanliness": 0.0,
             "satisfaction": 73.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 25,
+            "food_seen_ticks": 1309,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1277
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 1900,
@@ -22804,7 +24810,22 @@
             "cleanliness": 0.0,
             "satisfaction": 71.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 30,
+            "food_seen_ticks": 1409,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1377
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2000,
@@ -22890,7 +24911,22 @@
             "cleanliness": 0.0,
             "satisfaction": 69.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 33,
+            "food_seen_ticks": 1509,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1477
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2100,
@@ -22976,7 +25012,22 @@
             "cleanliness": 0.0,
             "satisfaction": 67.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 35,
+            "food_seen_ticks": 1609,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1577
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2200,
@@ -23062,7 +25113,22 @@
             "cleanliness": 0.0,
             "satisfaction": 65.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 37,
+            "food_seen_ticks": 1709,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1677
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2300,
@@ -23148,7 +25214,22 @@
             "cleanliness": 0.0,
             "satisfaction": 63.4,
             "happiness": 92.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 38,
+            "food_seen_ticks": 1809,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1777
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2400,
@@ -23234,7 +25315,22 @@
             "cleanliness": 0.0,
             "satisfaction": 61.4,
             "happiness": 97.5,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 40,
+            "food_seen_ticks": 1909,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1877
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2500,
@@ -23320,7 +25416,22 @@
             "cleanliness": 0.0,
             "satisfaction": 59.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 42,
+            "food_seen_ticks": 2009,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 1977
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2600,
@@ -23406,7 +25517,22 @@
             "cleanliness": 0.0,
             "satisfaction": 57.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 44,
+            "food_seen_ticks": 2109,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2077
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2700,
@@ -23492,7 +25618,22 @@
             "cleanliness": 0.0,
             "satisfaction": 55.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 46,
+            "food_seen_ticks": 2209,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2177
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2800,
@@ -23578,7 +25719,22 @@
             "cleanliness": 0.0,
             "satisfaction": 53.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 47,
+            "food_seen_ticks": 2309,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2277
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 2900,
@@ -23664,7 +25820,22 @@
             "cleanliness": 0.0,
             "satisfaction": 51.4,
             "happiness": 100.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 48,
+            "food_seen_ticks": 2409,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2377
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3000,
@@ -23750,7 +25921,22 @@
             "cleanliness": 0.0,
             "satisfaction": 49.4,
             "happiness": 90.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 50,
+            "food_seen_ticks": 2509,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2477
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3100,
@@ -23836,7 +26022,22 @@
             "cleanliness": 0.0,
             "satisfaction": 47.4,
             "happiness": 90.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 51,
+            "food_seen_ticks": 2609,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2577
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3200,
@@ -23922,7 +26123,22 @@
             "cleanliness": 0.0,
             "satisfaction": 45.4,
             "happiness": 90.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 53,
+            "food_seen_ticks": 2709,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2677
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3300,
@@ -23996,7 +26212,22 @@
             "cleanliness": 0.0,
             "satisfaction": 43.4,
             "happiness": 90.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 56,
+            "food_seen_ticks": 2809,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2777
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3400,
@@ -24070,7 +26301,22 @@
             "cleanliness": 0.0,
             "satisfaction": 41.4,
             "happiness": 90.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 56,
+            "food_seen_ticks": 2909,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2877
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3500,
@@ -24144,7 +26390,22 @@
             "cleanliness": 0.0,
             "satisfaction": 39.4,
             "happiness": 90.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 56,
+            "food_seen_ticks": 3009,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 2977
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3600,
@@ -24217,7 +26478,22 @@
             "cleanliness": 0.0,
             "satisfaction": 37.4,
             "happiness": 90.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 56,
+            "food_seen_ticks": 3109,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3077
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3700,
@@ -24300,7 +26576,22 @@
             "cleanliness": 0.0,
             "satisfaction": 35.4,
             "happiness": 80.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 59,
+            "food_seen_ticks": 3209,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3177
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3800,
@@ -24386,7 +26677,22 @@
             "cleanliness": 0.0,
             "satisfaction": 33.4,
             "happiness": 80.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 64,
+            "food_seen_ticks": 3309,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3277
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 3900,
@@ -24466,7 +26772,22 @@
             "cleanliness": 0.0,
             "satisfaction": 31.4,
             "happiness": 80.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 65,
+            "food_seen_ticks": 3409,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3377
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4000,
@@ -24540,7 +26861,22 @@
             "cleanliness": 0.0,
             "satisfaction": 29.4,
             "happiness": 80.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 65,
+            "food_seen_ticks": 3509,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3477
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4100,
@@ -24614,7 +26950,22 @@
             "cleanliness": 0.0,
             "satisfaction": 27.4,
             "happiness": 80.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 67,
+            "food_seen_ticks": 3609,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3577
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4200,
@@ -24688,7 +27039,22 @@
             "cleanliness": 0.0,
             "satisfaction": 25.4,
             "happiness": 80.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 72,
+            "food_seen_ticks": 3709,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3677
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4300,
@@ -24762,7 +27128,22 @@
             "cleanliness": 0.0,
             "satisfaction": 23.4,
             "happiness": 80.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 75,
+            "food_seen_ticks": 3809,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3777
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4400,
@@ -24842,7 +27223,22 @@
             "cleanliness": 0.0,
             "satisfaction": 21.4,
             "happiness": 70.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 81,
+            "food_seen_ticks": 3909,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3877
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4500,
@@ -24922,7 +27318,22 @@
             "cleanliness": 0.0,
             "satisfaction": 19.4,
             "happiness": 70.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 83,
+            "food_seen_ticks": 4009,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 3977
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4600,
@@ -25002,7 +27413,22 @@
             "cleanliness": 0.0,
             "satisfaction": 17.4,
             "happiness": 70.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 84,
+            "food_seen_ticks": 4109,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4077
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4700,
@@ -25082,7 +27508,22 @@
             "cleanliness": 0.0,
             "satisfaction": 15.4,
             "happiness": 70.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 85,
+            "food_seen_ticks": 4209,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4177
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4800,
@@ -25162,7 +27603,22 @@
             "cleanliness": 0.0,
             "satisfaction": 13.4,
             "happiness": 70.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 85,
+            "food_seen_ticks": 4309,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4277
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 4900,
@@ -25242,7 +27698,22 @@
             "cleanliness": 0.0,
             "satisfaction": 11.4,
             "happiness": 70.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 88,
+            "food_seen_ticks": 4409,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4377
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5000,
@@ -25322,7 +27793,22 @@
             "cleanliness": 0.0,
             "satisfaction": 9.4,
             "happiness": 70.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 90,
+            "food_seen_ticks": 4509,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4477
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5100,
@@ -25402,7 +27888,22 @@
             "cleanliness": 0.0,
             "satisfaction": 7.4,
             "happiness": 60.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 94,
+            "food_seen_ticks": 4609,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4577
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5200,
@@ -25470,7 +27971,22 @@
             "cleanliness": 0.0,
             "satisfaction": 5.4,
             "happiness": 60.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 96,
+            "food_seen_ticks": 4709,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4677
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5300,
@@ -25538,7 +28054,22 @@
             "cleanliness": 0.0,
             "satisfaction": 3.4,
             "happiness": 60.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 98,
+            "food_seen_ticks": 4809,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4777
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5400,
@@ -25599,7 +28130,22 @@
             "cleanliness": 0.0,
             "satisfaction": 1.4,
             "happiness": 60.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 99,
+            "food_seen_ticks": 4909,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4877
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5500,
@@ -25660,7 +28206,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 60.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 104,
+            "food_seen_ticks": 5009,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 4977
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5600,
@@ -25721,7 +28282,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 60.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 105,
+            "food_seen_ticks": 5109,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 5077
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5700,
@@ -25782,7 +28358,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 60.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 105,
+            "food_seen_ticks": 5209,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 5177
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5800,
@@ -25843,7 +28434,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 50.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 107,
+            "food_seen_ticks": 5309,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 5277
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 5900,
@@ -25904,7 +28510,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 50.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 109,
+            "food_seen_ticks": 5409,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 5377
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           },
           {
             "tick": 6000,
@@ -25965,7 +28586,22 @@
             "cleanliness": 0.0,
             "satisfaction": 0.0,
             "happiness": 50.0,
-            "sleeping": false
+            "sleeping": false,
+            "food_visible": true,
+            "food_items": 112,
+            "food_seen_ticks": 5509,
+            "action_counts": {
+              "exploring": 510,
+              "eating": 13,
+              "idle": 5477
+            },
+            "motor_activation": {
+              "act_eat": 0.0,
+              "act_move": 0.0,
+              "act_collapse": 0.0,
+              "act_rest": 0.0,
+              "act_flee": 0.0
+            }
           }
         ],
         "births": [
@@ -32123,32 +34759,32 @@
             "cooldown_remaining": 27.0,
             "stood_down": [
               {
-                "at": 1794226232.3514214,
+                "at": 1794241001.8584814,
                 "deficit": "regulation:hunger:down",
                 "because": "only 32s into the 60s growth cooldown"
               },
               {
-                "at": 1794226232.3557854,
+                "at": 1794241001.8676047,
                 "deficit": "regulation:hunger:down",
                 "because": "only 31s into the 60s growth cooldown"
               },
               {
-                "at": 1794226232.3600311,
+                "at": 1794241001.8744876,
                 "deficit": "regulation:hunger:down",
                 "because": "only 30s into the 60s growth cooldown"
               },
               {
-                "at": 1794226232.3641248,
+                "at": 1794241001.8802567,
                 "deficit": "regulation:hunger:down",
                 "because": "only 29s into the 60s growth cooldown"
               },
               {
-                "at": 1794226232.368196,
+                "at": 1794241001.8858402,
                 "deficit": "regulation:hunger:down",
                 "because": "only 28s into the 60s growth cooldown"
               },
               {
-                "at": 1794226232.3731463,
+                "at": 1794241001.8927908,
                 "deficit": "regulation:hunger:down",
                 "because": "only 27s into the 60s growth cooldown"
               }
@@ -32156,97 +34792,97 @@
             "grown": [
               {
                 "neuron": "relay_bridge",
-                "at": 1794226207.6236837,
+                "at": 1794240964.1406054,
                 "deficit": "connectivity",
                 "because": "pred food west has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "waypoint",
-                "at": 1794226207.767821,
+                "at": 1794240964.3548753,
                 "deficit": "connectivity",
                 "because": "pred food south has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "junction",
-                "at": 1794226207.9081419,
+                "at": 1794240964.5578573,
                 "deficit": "connectivity",
                 "because": "pred reward soon has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "connector_connectivity_bridge",
-                "at": 1794226208.0400646,
+                "at": 1794240964.7455099,
                 "deficit": "connectivity",
                 "because": "pred threat soon has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "learned_expectation",
-                "at": 1794226208.1776,
+                "at": 1794240964.9447713,
                 "deficit": "expression",
                 "because": "the squid has worked out that can see food plus eating sends hunger down by 23 (55% confident), but there is no pathway in the network from can see food to hunger that could act on it"
               },
               {
                 "neuron": "anticipation",
-                "at": 1794226208.328213,
+                "at": 1794240965.1691048,
                 "deficit": "expression",
                 "because": "the squid has worked out that anxiety plus eating sends hunger down by 23 (55% confident), but there is no pathway in the network from anxiety to hunger that could act on it"
               },
               {
                 "neuron": "role_separation",
-                "at": 1794226208.456425,
+                "at": 1794240965.3751981,
                 "deficit": "differentiation",
                 "because": "act eat is pushed the same way by both can see food and hunger, which are almost never active at the same time (correlation -0.44); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "second_opinion",
-                "at": 1794226208.6014621,
+                "at": 1794240965.5873122,
                 "deficit": "differentiation",
                 "because": "happiness is pushed the same way by both curiosity and learned expectation, which are almost never active at the same time (correlation -0.74); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "play_reward",
-                "at": 1794226208.7418597,
+                "at": 1794240965.7930527,
                 "deficit": "expression",
                 "because": "the squid has worked out that satisfaction plus exploring sends anxiety up by 2 (48% confident), but there is no pathway in the network from satisfaction to anxiety that could act on it"
               },
               {
                 "neuron": "investigation_drive",
-                "at": 1794226208.8959396,
+                "at": 1794240966.0237231,
                 "deficit": "differentiation",
                 "because": "role separation is pushed the same way by both hunger and happiness, which are almost never active at the same time (correlation -0.95); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "curiosity_spark",
-                "at": 1794226209.053689,
+                "at": 1794240966.2623086,
                 "deficit": "differentiation",
                 "because": "act flee is pushed the same way by both waypoint and learned expectation, which are almost never active at the same time (correlation -0.56); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "novelty_role_separation",
-                "at": 1794226209.2104082,
+                "at": 1794240966.5059927,
                 "deficit": "differentiation",
                 "because": "act eat is pushed the same way by both waypoint and second opinion, which are almost never active at the same time (correlation -0.58); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "novelty_role_separation_2",
-                "at": 1794226209.3803177,
+                "at": 1794240966.7712874,
                 "deficit": "differentiation",
                 "because": "satisfaction is pushed the same way by both role separation and curiosity spark, which are almost never active at the same time (correlation -0.94); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "filth_avoidance",
-                "at": 1794226214.3628688,
+                "at": 1794240974.2449713,
                 "deficit": "regulation",
                 "because": "cleanliness has been outside its comfortable range for 100% of the last 240 ticks (currently 0), and the existing synapses only supply 0.19 of corrective push and it is not coming back"
               },
               {
                 "neuron": "hunger_alarm",
-                "at": 1794226214.55626,
+                "at": 1794240974.5335674,
                 "deficit": "regulation",
                 "because": "hunger has been outside its comfortable range for 100% of the last 240 ticks (currently 100), and the existing synapses supply 3.84 of corrective push and it is still not coming back"
               },
               {
                 "neuron": "squalor_alarm",
-                "at": 1794226221.5606797,
+                "at": 1794240985.1122365,
                 "deficit": "regulation",
                 "because": "cleanliness has been outside its comfortable range for 100% of the last 240 ticks (currently 0), and the 1 synapse(s) that push it that way are already at full strength and it is not coming back"
               }
@@ -32275,22 +34911,22 @@
           "train_calls": 186,
           "train_steps": 372,
           "sleep_train_steps": 0,
-          "loss_ema": 0.004739121169582535,
+          "loss_ema": 0.004739121978332224,
           "mae": {
-            "drives": 0.03193033449203289,
-            "flags": 0.012175179856435344,
-            "senses": 0.1043207602039188,
-            "position": 0.00971645862446354,
-            "food": 0.014936269691700092,
-            "action": 0.0069134676138640026,
-            "neural": 0.009097996950905194
+            "drives": 0.031930337254896295,
+            "flags": 0.012175190396537925,
+            "senses": 0.1043207909494321,
+            "position": 0.009716407538094617,
+            "food": 0.01493630482108094,
+            "action": 0.006913468028603522,
+            "neural": 0.009098000652581007
           },
-          "delta_mae": 0.004787489538502139,
+          "delta_mae": 0.004787425582227069,
           "action_top1": 0.9573262210368395,
           "action_top1_samples": 5999,
-          "uncertainty": 0.09365060325504826,
-          "inference_seconds": 4.111,
-          "train_seconds": 3.795,
+          "uncertainty": 0.09365062605897792,
+          "inference_seconds": 4.553,
+          "train_seconds": 3.762,
           "brain_effect": {
             "synapses_from_predictions": 61,
             "synapses_into_predictions": 0,
@@ -32328,7 +34964,7 @@
             "pred_food_east": 0.0,
             "pred_food_west": 14.8091,
             "pred_food_south": 0.0,
-            "pred_food_north": 5.152,
+            "pred_food_north": 5.1521,
             "pred_hunger_rise": 0.0,
             "pred_anxiety_rise": 0.0,
             "pred_reward_soon": 0.0,
@@ -32353,7 +34989,7 @@
       "total_weight_updates": 81.0,
       "weight_updates_after_last_birth": 21.0,
       "food_eaten_after_last_birth": 0.0,
-      "ticks_per_second": 842.1,
+      "ticks_per_second": 437.0,
       "phases": [
         {
           "name": "east",
@@ -32407,7 +35043,7 @@
           "weight_updates_after_last_birth": 21,
           "food_eaten_after_last_birth": 0,
           "food_eaten_total": 1,
-          "ticks_per_second": 842.1,
+          "ticks_per_second": 437.0,
           "truncated_at": null
         }
       ]
@@ -32425,7 +35061,7 @@
       "total_weight_updates": 408.0,
       "weight_updates_after_last_birth": 305.0,
       "food_eaten_after_last_birth": 0.0,
-      "ticks_per_second": 475.5,
+      "ticks_per_second": 256.9,
       "phases": [
         {
           "name": "east",
@@ -32479,7 +35115,7 @@
           "weight_updates_after_last_birth": 305,
           "food_eaten_after_last_birth": 0,
           "food_eaten_total": 1,
-          "ticks_per_second": 475.5,
+          "ticks_per_second": 256.9,
           "truncated_at": null
         }
       ]
@@ -32497,7 +35133,7 @@
       "total_weight_updates": 165.0,
       "weight_updates_after_last_birth": 5.0,
       "food_eaten_after_last_birth": 0.0,
-      "ticks_per_second": 241.2,
+      "ticks_per_second": 158.1,
       "phases": [
         {
           "name": "east",
@@ -32551,7 +35187,7 @@
           "weight_updates_after_last_birth": 5,
           "food_eaten_after_last_birth": 0,
           "food_eaten_total": 4,
-          "ticks_per_second": 241.2,
+          "ticks_per_second": 158.1,
           "truncated_at": null
         }
       ]
