@@ -479,3 +479,51 @@ briefly), explicitly mark those interventions as artificial
 and **never** count them as earned feeding or learning. Only
 after an identifiable cause is demonstrated should we vary
 the stress cap, suppression strength, or action policy.
+
+
+## Results: run 20 (read-only motor and food-visibility diagnostic)
+
+Run 20, experiment commit `379991eb`, CI
+`42652663624` (9 November 2026), passed both test stages and
+completed a 6,000-tick, seed-11 quick growth experiment with
+read-only motor/action/food telemetry. Results are in
+`ci-logs/20/results/growth_timeseries_{off,linear,transformer}.csv`.
+The only code change was additional observation at regular sample
+ticks; no actions, learning rules, random draws or neural parameters
+were changed.
+
+**Motor pathway diagnosis:**
+
+* Transformer `act_move` is 51.98 at tick 100, 47.41 at tick
+  500 and **0 at tick 900**, remaining 0 at every subsequent
+  sampled tick through 5,700. Its threshold is 45 and resting
+  level 50. Exactly 510 of 6,000 ticks choose exploration;
+  5,477 choose idle; none choose exhaustion.
+* Off and linear locomotion stay around 49–60 across the same
+  samples and choose exploration 5,996/5,997 times, respectively.
+* Transformer **can see food** at the tick-900 sample and
+  throughout later sampled ticks; `food_seen_ticks` reaches
+  5,209 by tick 5,700 and 105 food objects remain in the tank.
+  The squid is not idle because food is absent or invisible.
+* At later samples, `act_eat` is exactly **0 in all three
+  modes**, including samples with visible food. The direct
+  food-to-eating instinct (threshold 38) is therefore not
+  producing a usable motor command. All three conditions stop
+  eating after their first few hundred ticks. This is a shared
+  feeding-pathway problem, separate from the transformer's
+  complete locomotion shutdown.
+* The quick run reproduces the full run's lifetime trend:
+  off/linear/transformer ate 1/1/4 meals, with final neurons
+  30/44/45. This adds an explanation for the early collapse,
+  but **not yet a causal account of why the synaptic input
+  to either motor neuron is suppressed**.
+
+**Next diagnostic**: record the *actual weights* of the innate
+`can_see_food → act_eat`, `hunger → act_eat` and
+`curiosity → act_move` paths, alongside each motor neuron's
+largest positive and negative synaptic contributors. The
+remaining alternatives are learned negative wiring, active
+inhibition, or an unexpected read/propagation path.
+The diagnostic must remain read-only and use the same seed and
+cortex conditions. Only after identifying the mechanism should
+we change the motor network or plasticity.
