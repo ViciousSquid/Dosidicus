@@ -1,0 +1,16 @@
+# tick,phase,neurons,synapses,grown,deepened,strength_sum,weight_updates,food_eaten,food_approaches,anxiety,cleanliness,active_count,top_actionable
+100,0,30,80,1,0,1.0,8,1,3,10.0,78.0,8,connectivity:pred_food_south
+500,0,36,232,7,0,7.0,65,3,9,30.0,55.0,12,differentiation:act_ink:rela
+900,0,41,383,12,1,13.0,90,3,9,57.5,22.0,19,differentiation:act_rest:rel
+1300,0,42,426,13,1,16.0,98,3,9,98.7,0.0,29,regulation:anxiety:down
+1700,1,44,518,15,2,19.0,109,3,9,100.0,0.0,27,regulation:anxiety:down
+2100,1,44,518,15,2,21.0,109,3,9,100.0,0.0,25,regulation:anxiety:down
+2500,1,44,518,15,2,21.0,109,3,9,100.0,0.0,19,regulation:anxiety:down
+2900,1,44,518,15,2,21.0,111,3,9,100.0,0.0,14,regulation:anxiety:down
+3300,2,44,518,15,2,21.0,123,3,9,100.0,0.0,9,regulation:anxiety:down
+3700,2,44,521,15,2,21.0,131,3,9,100.0,0.0,5,regulation:anxiety:down
+4100,2,44,521,15,2,21.0,134,3,9,100.0,0.0,6,regulation:anxiety:down
+4500,3,44,523,15,2,21.0,141,3,9,100.0,0.0,6,regulation:anxiety:down
+4900,3,44,523,15,2,21.0,146,3,9,100.0,0.0,6,regulation:anxiety:down
+5300,3,44,523,15,2,21.0,151,3,9,100.0,0.0,7,regulation:anxiety:down
+5700,3,44,523,15,2,21.0,151,3,9,100.0,0.0,7,regulation:anxiety:down

@@ -19,8 +19,8 @@
   "action_top1": 0.9785407725321889,
   "action_top1_samples": 23999,
   "uncertainty": 0.07586957565268074,
-  "inference_seconds": 27.125,
-  "train_seconds": 24.875,
+  "inference_seconds": 16.775,
+  "train_seconds": 16.69,
   "brain_effect": {
     "synapses_from_predictions": 73,
     "synapses_into_predictions": 0,
