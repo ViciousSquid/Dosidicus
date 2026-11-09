@@ -1,5 +1,73 @@
 # HANDOFF — Dosidicus predictive-cognition research branch
 
+## Current status — 9 November 2026, after run 22
+
+**The run-21 task below is completed; this section takes precedence over older
+status headings.** Work only on `research/transformer-predictive-cognition`.
+The next active workflow is [run 23](https://github.com/ViciousSquid/Dosidicus/actions/runs/42656767125);
+check its current outcome before drawing conclusions.
+
+**Run 21:** successful, `ci-logs/21/results/`. The original
+`can_see_food → act_eat` innate synapse survived, but its positive
+contribution was overwhelmed by huge negative inputs from grown neurons;
+the transformer also received severe negative input to `act_move`.
+The cause was traced to `FunctionalNeuron.get_functional_connections`:
+each new neuron automatically connects negatively to any low-activation
+motor neuron in its birth-time context even when that motor is irrelevant
+to the neuron’s diagnosed purpose.
+
+**Run 22:** controlled *opt-in* deletion of incidental birth-context
+outputs *into motor targets only*, leaving explicit remedy connections,
+innate synapses, learning and action selection intact. Commit
+`12cdb21e`, published `7e75ab09`, CI [success](https://github.com/ViciousSquid/Dosidicus/actions/runs/42655419535);
+data `ci-logs/22/results/motor_wiring_study.json`.
+38 predictive and 55 baseline tests (114 subtests) passed.
+
+| Mode, 6,000 ticks, seed 11 | Original meals | Intervention meals | Original exploring | Intervention exploring |
+|---|---:|---:|---:|---:|
+| Off | 1 | **132** | 5,996 | 1,482 |
+| Linear | 1 | **46** | 5,997 | 724 |
+| Transformer | 4 | **4** | 510 | 4,559 |
+
+This is **strong single-seed evidence of motor poisoning by incidental
+birth wiring**, not a general population-level feeding claim. Off and
+linear feeding are rescued; transformer movement is rescued but feeding
+remains impaired. Grown-source negative `act_eat` edges in controls:
+11/15/12 off/linear/transformer, **zero** in all three corrected arms.
+The transformer is therefore **not fixed**. Detailed interpretation:
+`docs/brain_growth.md`, “Results: run 22”.
+
+**Run 23:** launched as commit `711cbf08` using the `[motor-repl]`
+depth. It reruns the paired original / no-incidental-motor study across
+**three independent seeds 22, 33, 44** (seed 11 remains the discovery
+run, and historically exceptional seed 222 is excluded from the
+confirmatory set). Results will publish to
+`ci-logs/23/results/motor_wiring_replication.json` on success.
+The new per-edge provenance from `CausalLedger.weight_history` traces
+whether differentiation or plasticity removed the transformer's
+`hunger → act_eat` innate connection. Report any failures and
+non-replication without downplaying them. Run both test suites; check
+actual CI conclusion and not merely the existence of published files.
+
+**Scientific caveat:** Each arm resets the seed, but diverging motor
+actions change consumption of the shared Python RNG, so random
+ambient world events are not a perfectly frozen common tape.
+Scheduled startle→food contingency timing is the same. Treat paired
+differences as outcomes of the intervention *in the stochastic
+simulation*, not a stepwise environment-matched replay.
+
+**Next after Run 23:** analyse the paired per-seed feeding and movement
+deltas; inspect the three innate-edge histories and actual removal
+mechanisms. If the poor transformer feeding persists and the ledger
+names `neurogenesis` (“handed over to …”), test a narrowly scoped,
+opt-in innate-synapse-preservation counterfactual, with its own control.
+Do not force feeding, alter motor action rules, silently change
+default behaviour, expand caps as a substitute for correction, or
+overwrite the preserved historical seed-222 organism.
+
+---
+
+
 Last updated: 2026-11-09 after **Run 22 completed successfully**.
 **This file is a snapshot, not a live CI status.** Check branch HEAD and
 Actions on resumption.
