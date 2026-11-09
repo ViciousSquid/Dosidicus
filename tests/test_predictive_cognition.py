@@ -609,3 +609,41 @@ class IncidentalMotorBirthWiringTests(unittest.TestCase):
             'context_motor_autowiring'])
         self.assertFalse(blocked.brain.learning_config.neurogenesis[
             'context_motor_autowiring'])
+
+
+class InnateOffloadGuardTests(unittest.TestCase):
+    """Deliberately separate intentional differentiation from innate deletion."""
+
+    def _offload(self, sim, source, target):
+        from src.capability import Deficit
+        from types import SimpleNamespace
+        deficit = Deficit(
+            kind='differentiation', key='test-offload', summary='test',
+            sources=[source], target=target)
+        return sim.brain.enhanced_neurogenesis._remedy_wiring(
+            'test_new_neuron', deficit, SimpleNamespace(represents_concept=''))
+
+    def test_innate_feed_path_survives_only_when_opted_in(self):
+        edge = ('hunger', 'act_eat')
+        historic = HeadlessSimulation(make_config(seed=21))
+        guarded = HeadlessSimulation(make_config(
+            seed=21, preserve_innate_motor_offload=True))
+        self.assertIn(edge, historic.brain.weights)
+        initial = guarded.brain.weights[edge]
+        expected = ('test_new_neuron', 'act_eat', initial, 'remedy')
+        old_plan = self._offload(historic, *edge)
+        new_plan = self._offload(guarded, *edge)
+        self.assertNotIn(edge, historic.brain.weights)
+        self.assertIn(edge, guarded.brain.weights)
+        self.assertIn(expected, new_plan)
+        self.assertEqual(old_plan, new_plan)
+
+    def test_guard_still_allows_learned_edge_retirement(self):
+        sim = HeadlessSimulation(make_config(
+            seed=21, preserve_innate_motor_offload=True))
+        edge = ('curiosity', 'act_eat')
+        sim.brain.apply_weight_change(
+            edge, value=0.3, mechanism='manual', create=True)
+        self.assertIn(edge, sim.brain.weights)
+        self._offload(sim, *edge)
+        self.assertNotIn(edge, sim.brain.weights)

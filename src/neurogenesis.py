@@ -33,7 +33,11 @@ from typing import Dict, List, Tuple, Optional, Set, Any
 from .capability import Deficit, regulation_specialisation
 from .brain_constants import (SOCIAL_SENSOR, SOCIAL_SENSORS, SOCIAL_NEURONS, SQUID_SENSORS,
                               AQUARIUM_SENSE, REQUIRED_SOCIAL_SENSES,
-                              ensure_grown_sensor, ACTION_NEURONS)
+                              ensure_grown_sensor, ACTION_NEURONS, INNATE_ACTION_WIRING)
+
+# Innate sensorimotor/reflex edges may be temporarily protected from
+# differentiation offload in a strictly opt-in research experiment.
+_INNATE_MOTOR_EDGES = frozenset((src, dst) for src, dst, _ in INNATE_ACTION_WIRING)
 
 # Localisation. The package-relative import is the one that works when the
 # game runs; the flat fallback covers running this module standalone. The old
@@ -1264,8 +1268,17 @@ class EnhancedNeurogenesis:
                 old = self.brain_widget.weights.get((offload, target))
                 if old is not None:
                     plan.append((neuron_name, target, float(old), 'remedy'))
-                    self._retire_edge((offload, target),
-                                      f"handed over to {neuron_name}")
+                    # Paired, opt-in research ablation: a differentiation
+                    # neuron still receives its explicit remedy connection,
+                    # but it does not DELETE an existing innate sensorimotor
+                    # pathway. The baseline keeps the historical behaviour.
+                    preserve_innate = (
+                        self.config.neurogenesis.get(
+                            'preserve_innate_motor_offload', False)
+                        and (offload, target) in _INNATE_MOTOR_EDGES)
+                    if not preserve_innate:
+                        self._retire_edge((offload, target),
+                                          f"handed over to {neuron_name}")
 
         elif deficit.kind == 'causal_differentiation':
             # The squid has two candidate causes for one outcome and no way to

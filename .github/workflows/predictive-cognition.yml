@@ -92,6 +92,9 @@ jobs:
           if git log -1 --pretty=%B | grep -q '\[motor-repl\]'; then
             depth="motor-repl"
           fi
+          if git log -1 --pretty=%B | grep -q '\[innate-study\]'; then
+            depth="innate-study"
+          fi
           echo "DEPTH=$depth" >> "$GITHUB_ENV"
           echo "Experiment depth: $depth"
       - name: Run the experiment
@@ -102,6 +105,8 @@ jobs:
             python experiments/motor_wiring_intervention.py --ticks 6000 --output experiments/results/motor_wiring_study.json 2>&1 | tee ci-experiment.log
           elif [ "$DEPTH" = "motor-repl" ]; then
             python experiments/motor_wiring_replication.py --seeds 22,33,44 --ticks 6000 --output experiments/results/motor_wiring_replication.json 2>&1 | tee ci-experiment.log
+          elif [ "$DEPTH" = "innate-study" ]; then
+            python experiments/innate_offload_intervention.py --ticks 6000 --output experiments/results/innate_offload_study.json 2>&1 | tee ci-experiment.log
           elif [ "$DEPTH" = "squid" ]; then
             python experiments/save_special_squid.py --full 2>&1 | tee ci-experiment.log
           elif [ "$DEPTH" = "full" ]; then

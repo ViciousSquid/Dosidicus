@@ -16,10 +16,12 @@ from pathlib import Path
 from growth_experiment import make_growth_sim, sample_growth
 from predictive_cognition_experiments import MODES, contingency_events
 
-def condition(mode, seed, ticks, context_motor_autowiring):
+def condition(mode, seed, ticks, context_motor_autowiring,
+              preserve_innate_motor_offload=False):
     sim = make_growth_sim(
         mode, seed, learning=True,
-        context_motor_autowiring=context_motor_autowiring)
+        context_motor_autowiring=context_motor_autowiring,
+        preserve_innate_motor_offload=preserve_innate_motor_offload)
     sim.event_queue = deque(contingency_events(0, ticks))
     sim.food_side = 'east'
     records = []
@@ -109,6 +111,7 @@ def condition(mode, seed, ticks, context_motor_autowiring):
         'seed': seed,
         'innate_edge_provenance': traced_edges,
         'context_motor_autowiring': context_motor_autowiring,
+        'preserve_innate_motor_offload': preserve_innate_motor_offload,
         'ticks': ticks,
         'final_neurons': len(sim.brain.positions),
         'grown_neurons': len(grown),
