@@ -53,8 +53,7 @@ from headless_trainer import (  # noqa: E402
 from src.brain_constants import (  # noqa: E402
     REQUIRED_NEURONS,
     CORE_STAT_NEURONS,
-    PUR
-E_INPUT_NEURONS,
+    PURE_INPUT_NEURONS,
     ACTION_NEURONS,
     INNATE_ACTION_WIRING,
     LEARNED_ACTIONS,
@@ -105,8 +104,7 @@ class BlankBrainTests(unittest.TestCase):
     def test_a_blank_brain_has_no_synapses_at_all(self):
         brain = blank_brain()
         self.assertEqual(dict(brain.weights), {},
-                         "a blank brain must start knowing nothin
-g")
+                         "a blank brain must start knowing nothing")
 
     def test_a_blank_brain_has_no_innate_reflexes(self):
         """No action neurons, so no behaviour is available without learning."""
@@ -148,8 +146,7 @@ g")
 # 2. Reproducibility
 # ===========================================================================
 class ReproducibilityTests(unittest.TestCase):
-    """A res
-ult nobody else can reproduce is not a result."""
+    """A result nobody else can reproduce is not a result."""
 
     def _run(self, seed, ticks=250, blank=True):
         sim = HeadlessSimulation(TrainingConfig(seed=seed, blank=blank))
@@ -192,8 +189,7 @@ class PropagationTests(unittest.TestCase):
 
     def test_a_silent_sensor_contributes_nothing(self):
         """The documented reason signal_of() exists. Subtracting a fixed 50
-        from a sensor made N
-OT seeing food a signal as loud as seeing it,
+        from a sensor made NOT seeing food a signal as loud as seeing it,
         pointing the other way."""
         self.assertEqual(signal_of("can_see_food", 0.0), 0.0)
         self.assertGreater(signal_of("can_see_food", 100.0), 0.0)
@@ -233,8 +229,7 @@ OT seeing food a signal as loud as seeing it,
         brain.propagate()
         for name, value in before.items():
             with self.subTest(neuron=name):
-                self.assertEqual(brain.state[name],
- value)
+                self.assertEqual(brain.state[name], value)
 
     def test_an_unconnected_neuron_settles_at_its_resting_level(self):
         state = {"lonely": 90.0}
@@ -276,8 +271,7 @@ class HebbianConvergenceTests(unittest.TestCase):
                            "co-active neurons produced an inhibitory synapse")
 
     def test_anti_correlated_neurons_develop_an_inhibitory_synapse(self):
-        """
-Weights are signed. An avoidance behaviour IS a negative weight."""
+        """Weights are signed. An avoidance behaviour IS a negative weight."""
         brain = blank_brain(learning_rate=0.04, weight_decay=0.04)
         for _ in range(60):
             self._drive(brain, {"hunger": 95.0, "happiness": 5.0}, 5)
@@ -316,8 +310,7 @@ Weights are signed. An avoidance behaviour IS a negative weight."""
 # ===========================================================================
 # 5. Training actually changes the brain, measurably
 # ===========================================================================
-class TrainingOutcomeTests(unittest.T
-estCase):
+class TrainingOutcomeTests(unittest.TestCase):
 
     def test_training_a_blank_brain_gives_it_synapses_it_did_not_have(self):
         sim = HeadlessSimulation(TrainingConfig(seed=7, blank=True))
@@ -354,8 +347,7 @@ estCase):
         # Exactly the ceiling, not "roughly" it. The count used to subtract the
         # LENGTH of the excluded-neurons list rather than the excluded neurons
         # actually present, so a brain containing none of them ran five past
-        # its own
- limit.
+        # its own limit.
         self.assertLessEqual(len(live), 12,
                              "the brain grew past its configured maximum")
 
@@ -395,8 +387,7 @@ class PersistenceTests(unittest.TestCase):
     def test_a_saved_brain_is_plain_readable_json(self):
         """Anyone auditing a result has to be able to open the file."""
         sim = HeadlessSimulation(TrainingConfig(seed=41, blank=True))
-        sim
-.run(ticks=150, progress_interval=0)
+        sim.run(ticks=150, progress_interval=0)
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "trained.json")
             sim.brain.save_brain(path)
@@ -437,8 +428,7 @@ class TrainerGameParityTests(unittest.TestCase):
                    if n not in PURE_INPUT_NEURONS
                    and n not in CORE_STAT_NEURONS
                    and n not in sim.brain.excluded_neurons]
-        baseline_st
-ate = {k: v for k, v in sim.brain.state.items()
+        baseline_state = {k: v for k, v in sim.brain.state.items()
                           if isinstance(v, (int, float))}
 
         first = dict(baseline_state)
@@ -487,8 +477,7 @@ class KnowledgeExtractionTests(unittest.TestCase):
         """Otherwise a trained brain arrives with weights and no idea why."""
         with open(self.path) as handle:
             data = json.load(handle)
-        for key in ("provenance", "causal_learn
-ing", "capability"):
+        for key in ("provenance", "causal_learning", "capability"):
             with self.subTest(section=key):
                 self.assertIn(key, data,
                               f"a brain file with no {key} cannot be asked why")
@@ -529,8 +518,7 @@ ing", "capability"):
                 break
         self.assertIsNotNone(subject, "no association to ask about")
 
-        focused = self.reloaded.ledger.kn
-owledge(subject, limit=500)
+        focused = self.reloaded.ledger.knowledge(subject, limit=500)
         self.assertTrue(focused, f"asking about {subject!r} returned nothing")
         self.assertLessEqual(len(focused), len(everything),
                              "asking about one topic returned MORE than "
@@ -569,8 +557,7 @@ owledge(subject, limit=500)
 
     # -- why this neuron ----------------------------------------------
     def test_every_grown_neuron_can_say_why_it_exists(self):
-        grown = sorted(self.reloaded.custom_n
-eurons)
+        grown = sorted(self.reloaded.custom_neurons)
         self.assertTrue(grown, "1200 ticks of experience grew no structure")
         for name in grown[:8]:
             explanation = self.reloaded.explain_neuron(name)
@@ -612,10 +599,9 @@ eurons)
         # Every claim carries its confidence, so a reader can weigh it.
         self.assertIn("Confidence:", report)
 
-# ---------------------------------------------------------------------------
-# The anxiety relief loop (regression: run-13 growth-study post-mortem)
-# ---------------------------------------------------------------------------
-
+# ===========================================================================
+# 9. The anxiety relief loop (regression: run-13 growth-study post-mortem)
+# ===========================================================================
 class StressSuppressionTests(unittest.TestCase):
     """Grown stress neurons are suppression neurons: they drive themselves
     on anxiety and force it down, on the body as well as the network state.

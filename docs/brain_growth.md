@@ -35,8 +35,7 @@ happened"; structure is spent only on a diagnosed deficiency:
   observations, >=20 sim-seconds old), **severe** (>=0.35) and
   **unresolved** (its severity is not already falling - ordinary
   learning gets its chance first).
-* **Permission to grow** is the
-n bounded by:
+* **Permission to grow** is then bounded by:
   * per-type caps: stress 5, novelty 6, reward 6, connector 10 grown
     neurons;
   * a global ceiling of 100 neurons (this branch's headless config);
@@ -77,8 +76,7 @@ a measurement rather than an interpretation:
 |---|---|---|
 | east | 0-60k | the runs-8/9 contingency, unchanged |
 | west | 60k-120k | the same contingency mirrored: food lands 0.2 west |
-| fouling | 120k-180k | east again, heavily fouled water (a
- genuinely new problem: cleanliness regulation) |
+| fouling | 120k-180k | east again, heavily fouled water (a genuinely new problem: cleanliness regulation) |
 | retention | 180k-240k | clean water again: does the east behaviour survive? |
 
 Telemetry, sampled every 250 ticks straight from the engine's own
@@ -120,8 +118,7 @@ overlaid, and the honest verdict - in either direction.
 
 Run 13 (CI run on commit d2e8f412, 2026-11-09, 01:58-03:16 UTC,
 published in `ci-logs/13/results/`) ran the full design above: off /
-lin
-ear / transformer, seed 11, 240,000 ticks each, 4 world phases.
+linear / transformer, seed 11, 240,000 ticks each, 4 world phases.
 All three runs completed without truncation.
 
 ### The neuron curve
@@ -159,8 +156,7 @@ This is a **forbidden plateau**, by the criteria above:
   the 19,145 stand-downs in each condition, and its suggested type is
   stress - the cap that is full.
 * **Cap-blocked births become cooldown.** The stand-down histogram's
-  head is misleading: 18,825 of 19,145 sta
-nd-downs per condition cite
+  head is misleading: 18,825 of 19,145 stand-downs per condition cite
   "only Ns into the 60s growth cooldown", and only ~320 cite the caps
   directly ("already has 5 stress neurons; strengthened one instead").
   But the mechanism chains: when the stress cap blocks a birth the
@@ -194,8 +190,7 @@ east), and it never eats in west, fouling or retention.
 * **The fouling problem was never solved.** The cleanliness deficit
   (a genuinely new problem at tick 120k) stood down 20 times in each
   condition and produced zero births (the transformer's
-  `filth_avoidance` neuron was born at tick 1,000, in east, befo
-re
+  `filth_avoidance` neuron was born at tick 1,000, in east, before
   fouling began) and no behavioural adaptation.
 * The known headless-engine limitation above (stress neurons don't
   mechanically damp anxiety in the headless trainer) explains *why*
