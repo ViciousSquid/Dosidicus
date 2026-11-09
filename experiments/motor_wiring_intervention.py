@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run 22: paired, seed-matched motor-birth-wiring counterfactual.
+"""Run 23: paired motor-birth-wiring counterfactual with innate-edge provenance.
 
 The same real headless brain runs without artificial actions, feeds or
 policy overrides. The *only* intervention excludes incidental birth-context
@@ -46,6 +46,10 @@ def condition(mode, seed, ticks, context_motor_autowiring):
                     'move_positive': s['motor_synaptic_inputs']['act_move']['positive_total'],
                     'move_negative': s['motor_synaptic_inputs']['act_move']['negative_total'],
                     'innate_motor_weights': s['innate_motor_weights'],
+                    'eat_top_positive': s['motor_synaptic_inputs']['act_eat']['top_positive'],
+                    'eat_top_negative': s['motor_synaptic_inputs']['act_eat']['top_negative'],
+                    'move_top_negative': s['motor_synaptic_inputs']['act_move']['top_negative'],
+                    'innate_motor_weights': s['innate_motor_weights'],
                     'eat_top_negative': s['motor_synaptic_inputs']['act_eat']['top_negative'],
                     'move_top_negative': s['motor_synaptic_inputs']['act_move']['top_negative'],
                 })
@@ -78,9 +82,32 @@ def condition(mode, seed, ticks, context_motor_autowiring):
             'grown_source_negative_weight_sum': round(
                 sum(w for _, w in edges if w < 0), 4)
         }
+    # Read the existing CausalLedger instead of guessing why an edge changed.
+    # A removed innate weight remains visible through its deletion event.
+    traced_edges = {}
+    for edge in (('hunger', 'act_eat'),
+                 ('can_see_food', 'act_eat'),
+                 ('curiosity', 'act_move')):
+        key = ' -> '.join(edge)
+        history = sim.brain.ledger._events_by_edge.get(edge, ())
+        traced_edges[key] = {
+            'present': edge in sim.brain.weights,
+            'final_weight': (round(float(sim.brain.weights[edge]), 6)
+                             if edge in sim.brain.weights else None),
+            'event_counts_by_mechanism': dict(
+                sim.brain.ledger._counts.get(edge, {})),
+            'narrated_events': [
+                {'old': round(float(e.old_weight), 5),
+                 'new': round(float(e.new_weight), 5),
+                 'mechanism': str(e.mechanism),
+                 'detail': dict(e.detail or {})}
+                for e in history
+            ]
+        }
     return {
         'mode': mode,
         'seed': seed,
+        'innate_edge_provenance': traced_edges,
         'context_motor_autowiring': context_motor_autowiring,
         'ticks': ticks,
         'final_neurons': len(sim.brain.positions),
