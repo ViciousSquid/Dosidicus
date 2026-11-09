@@ -110,8 +110,9 @@ transformer's weights.
 
 `experiments/predictive_cognition_experiments.py` (see
 `experiments/README.md` for the full protocol) compares the three
-conditions, 6 seeds each, 12,000 training ticks on a delayed-reward
-contingency (startle, then food 8 ticks later in the east), followed by
+conditions, 6 seeds each, 24,000 training ticks on a delayed-reward
+contingency (a startle, then food 16 ticks later, placed within sight
+of the squid; see Results II for the world's history), followed by
 held-out evaluations: object permanence, delayed-consequence
 anticipation, stress adaptation, retention of learned feeding behaviour,
 prediction telemetry and wall-clock overhead. Everything runs through
@@ -279,3 +280,96 @@ anticipation over a horizon longer than one tick. The infrastructure to
 do all of this - seeds, held-out scenarios, per-condition telemetry,
 automatic publication of results to the branch - now exists and is
 verified end to end.
+
+## Results II: the fairer world (run 8)
+
+Commit `e7465276` implemented the recommendations above and CI executed
+the full experiment again (workflow run 8: 3 conditions x 6 seeds x
+24,000 training ticks, all 36 predictive and 51 baseline tests
+passing). The world changes:
+
+- food placed **within sight** (0.2 east of the squid's position at
+  placement time) instead of at a fixed far spot;
+- the scripted contingency startles **spaced 700 ticks** apart;
+- the contingency delay lengthened to **16 ticks**, scored in an early
+  (t0+1..t0+7) and a late (t0+8..t0+14) anticipation window;
+- training interval halved (64 -> 32) and tick budget doubled
+  (12k -> 24k): ~1,500 gradient steps per run;
+- a harness bug fixed: the delayed-consequence evaluation queued its
+  startle/food events but never called the event processor, so run 6's
+  trials had silently run in an empty world (eat rate was structurally
+  zero; the anticipation numbers of run 6 measured nothing).
+
+### Headline table (run 8, means over 6 seeds)
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| train: food eaten | 2.50 | 2.50 | 4.67 |
+| train: food approaches | 5.33 | 5.50 | 9.83 |
+| train: ticks/sec | 279.0 | 204.1 | 131.5 |
+| object permanence: alignment | - | 0.778 | -0.193 |
+| delayed consequence: rise, early window | - | 0.000 | +1.149 |
+| delayed consequence: rise, late window | - | 0.000 | -0.708 |
+| delayed consequence: eat rate | 0.000 | 0.000 | 0.000 |
+| retention: food eaten (frozen) | 2.00 | 0.00 | 0.00 |
+| prediction: action top-1 | - | 0.992 | 0.988 |
+| synapses grown from predictions | - | 54.0 | 79.7 |
+
+### What changed
+
+**The transformer population ate more.** 4.67 vs 2.50 foods per run
+(the two controls are identical), on 9.83 approaches vs ~5.4. Per-seed
+against the linear control the transformer was ahead in 4 of 6 seeds
+and tied in 2 (diffs +3, 0, +3, 0, +2, +5; paired t = 2.7, p = 0.04,
+n = 6); against off, ahead in 4 of 6 (+2, -2, +4, 0, +3, +6; t = 2.0,
+p = 0.10). This is the first behavioural separation between
+conditions, in the direction the thesis predicts - but with six seeds
+in one world it is suggestive, not established. It needs replication
+with more seeds before it means anything.
+
+**Genuine anticipation appeared in some seeds.** With the evaluation
+bug fixed, trials now really contain a startle followed by food. The
+linear control saturates `pred_food_ahead` at 100 (rise 0.000: its
+decaying food trace pins the sensor). The transformer, whose baseline
+sits at 53-73, raised `pred_food_ahead` in the early window in 3 of 6
+seeds (+5.4, +5.4, +4.5 points) and did not in the others; means
++1.15 early, -0.71 late. The transformer predicts in a graded way the
+hand-coded control structurally cannot, but the learned contingency
+signal is still seed-unstable.
+
+**Object permanence remained bimodal in the transformer.** The linear
+control was stable and good (per-seed 0.57-0.86, mean 0.778). The
+transformer was either excellent (+0.96, +0.97) or confidently wrong
+(-0.70 to -0.89), mean -0.19. Four times the gradient budget did not
+stabilise its spatial memory across seeds; the hand-coded trace still
+wins this metric.
+
+**The chronic-stress confound persisted through a different channel.**
+The 700-tick spacing applies only to the scripted contingency; the
+trainer's ambient random startle chance (default 0.005/tick) still
+fired ~120 startles per 24k-tick run, so training saw ~150 startles
+and anxiety stayed pinned at 100 in every condition (the adaptation
+eval confirms: final anxiety 100 everywhere, zero feeding). The
+delayed-consequence eat rate stayed 0 everywhere for the same reason:
+a startled, frozen squid does not choose to eat within the 80-tick
+window. The world still lacks behavioural dynamic range - the run-6
+diagnosis was right about the mechanism but incomplete about the
+channel.
+
+### Overhead (run 8)
+
+Transformer: 0.47x throughput (131.5 vs 279.0 ticks/sec), 17.7 s
+inference + 15.5 s training per 24k-tick run (~1,500 steps). Linear:
+0.73x. Off: free.
+
+### Where this leaves the question
+
+The integration mechanism continues to hold (54-80 synapses grown from
+predictions, zero into them, all tests green), and for the first time
+a behavioural metric separates the transformer from both controls in
+the predicted direction. But the world is still stress-pinned through
+the ambient startle channel, the object-permanence signal is still
+seed-unstable, and n = 6 is too small to trust the feeding difference.
+Next test: silence the ambient random startles during training so
+stress arrives only through the spaced contingency, and raise the seed
+count before claiming the feeding advantage.
