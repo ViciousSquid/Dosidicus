@@ -445,22 +445,39 @@ def summarise(results):
     return summary
 
 
+def _phase_of(tick, phases):
+    for i, ph in enumerate(phases):
+        if ph['from'] <= tick < ph['until']:
+            return i
+    return len(phases) - 1 if phases else 0
+
+
 def write_compact_outputs(results, out_path):
     """Downloadable-size siblings of the full JSON: a per-mode CSV time
-    series (every 4th stored sample), per-mode event lists, and a
+    series (every 4th stored sample), per-mode event records, and a
     summary-only JSON. The full JSON stays the record of everything;
     these exist so the analysis can fetch the curve without paging
-    through a multi-megabyte file."""
+    through a multi-megabyte file. Births are rare and kept whole;
+    stand-downs and resolutions fire constantly (the quick smoke logged
+    ~1,000 stand-downs in 6,000 ticks), so they are aggregated into
+    counts, per-phase tallies and reason histograms with a few
+    verbatim examples."""
     out = Path(out_path)
     base = out.parent
     base.mkdir(parents=True, exist_ok=True)
+    phases = results['meta']['phases']
+
+    def _empty_flow():
+        return {'count': 0, 'first_tick': None, 'last_tick': None,
+                'examples': [], 'per_phase': {}}
 
     for mode, runs in results['runs'].items():
         rows = ['# tick,phase,neurons,synapses,grown,deepened,'
                 'strength_sum,weight_updates,food_eaten,'
                 'food_approaches,anxiety,cleanliness,active_count,'
                 'top_actionable']
-        events = {'births': [], 'stood_down': [], 'resolutions': []}
+        events = {'births': [], 'stood_down': _empty_flow(),
+                  'resolutions': _empty_flow()}
         for seed, r in sorted(runs.items()):
             for s in (r.get('samples') or [])[::4]:
                 act = '-'
@@ -482,13 +499,45 @@ def write_compact_outputs(results, out_path):
                     _trunc(str(b.get('deficit')), 48),
                     _trunc(str(b.get('because')), 64)])
             for sd in r.get('stood_down') or []:
-                events['stood_down'].append([
-                    sd.get('tick'), _trunc(str(sd.get('deficit')), 32),
-                    _trunc(str(sd.get('because')), 64)])
+                e = events['stood_down']
+                tick = sd.get('tick')
+                e['count'] += 1
+                if e['first_tick'] is None or (tick is not None
+                                               and tick < e['first_tick']):
+                    e['first_tick'] = tick
+                if e['last_tick'] is None or (tick is not None
+                                              and tick > e['last_tick']):
+                    e['last_tick'] = tick
+                why = _trunc(str(sd.get('because')), 64)
+                dkey = _trunc(str(sd.get('deficit')), 32)
+                e.setdefault('by_reason', {})
+                e['by_reason'][why] = e['by_reason'].get(why, 0) + 1
+                e.setdefault('by_deficit', {})
+                e['by_deficit'][dkey] = e['by_deficit'].get(dkey, 0) + 1
+                ph = _phase_of(tick, phases)
+                e['per_phase'][ph] = e['per_phase'].get(ph, 0) + 1
+                if len(e['examples']) < 25:
+                    e['examples'].append([tick, dkey, why])
             for rs in r.get('resolutions') or []:
-                events['resolutions'].append([
-                    rs.get('tick'), _trunc(str(rs.get('kind')), 24),
-                    _trunc(str(rs.get('why')), 64)])
+                e = events['resolutions']
+                tick = rs.get('tick')
+                e['count'] += 1
+                if e['first_tick'] is None or (tick is not None
+                                               and tick < e['first_tick']):
+                    e['first_tick'] = tick
+                if e['last_tick'] is None or (tick is not None
+                                              and tick > e['last_tick']):
+                    e['last_tick'] = tick
+                why = _trunc(str(rs.get('why')), 64)
+                kind = _trunc(str(rs.get('kind')), 24)
+                e.setdefault('by_reason', {})
+                e['by_reason'][why] = e['by_reason'].get(why, 0) + 1
+                e.setdefault('by_kind', {})
+                e['by_kind'][kind] = e['by_kind'].get(kind, 0) + 1
+                ph = _phase_of(tick, phases)
+                e['per_phase'][ph] = e['per_phase'].get(ph, 0) + 1
+                if len(e['examples']) < 25:
+                    e['examples'].append([tick, kind, why])
         (base / f'growth_timeseries_{mode}.csv').write_text(
             '\n'.join(rows) + '\n')
         (base / f'growth_events_{mode}.json').write_text(
