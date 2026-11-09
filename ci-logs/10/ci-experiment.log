@@ -1,0 +1,84 @@
+Predictive-cognition experiment: 3 modes x 2 seeds x 1500 training ticks
+Configuration loaded from config.ini
+  off          seed 11: trained 4 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  off          seed 22: trained 14 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  linear       seed 11: trained 1 eaten, op=0.8453805301650336, retain=0
+Configuration loaded from config.ini
+  linear       seed 22: trained 3 eaten, op=0.9786669684218658, retain=0
+Configuration loaded from config.ini
+  transformer  seed 11: trained 3 eaten, op=0.23624925192723775, retain=0
+Configuration loaded from config.ini
+  transformer  seed 22: trained 2 eaten, op=-0.8560735619573213, retain=0
+
+Results written to experiments/results/quick_results.json
+
+## Predictive-cognition experiment results
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| train: food eaten | 9.000 | 2.000 | 2.500 |
+| train: escape ratio | 0.250 | 0.250 | 0.250 |
+| train: neurons created | 10.000 | 14.500 | 14.000 |
+| train: ticks/sec | 781.500 | 528.650 | 218.000 |
+| object permanence: alignment | - | 0.912 | -0.310 |
+| object permanence: coverage | - | 1.000 | 1.000 |
+| object permanence: refeed ticks | - | - | - |
+| delayed consequence: rise early (t+1..t+7) | - | 0.000 | -5.029 |
+| delayed consequence: rise late (t+8..t+14) | - | 0.000 | -16.856 |
+| delayed consequence: eat latency | 12.500 | - | - |
+| delayed consequence: eat rate | 0.333 | 0.000 | 0.000 |
+| adaptation: escape ratio | 0.000 | 0.000 | 0.000 |
+| adaptation: peak anxiety rise | 0.000 | 0.000 | 0.000 |
+| adaptation: food eaten | 0.000 | 0.000 | 0.000 |
+| retention: food eaten | 0.000 | 0.000 | 0.000 |
+| prediction: action top-1 | - | 0.978 | 0.844 |
+| synapses grown from predictions | - | 57.000 | 62.500 |
+Growth study: 3 modes x 1 seed(s) x 6000 ticks, sampled every 100
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] tick 1500: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] tick 3000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] tick 4500: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] off/11 tick 5000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (501 t/s)
+[growth] off/11 done: 6000 ticks, neurons=31 grown=12 births=12 churn=106
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] tick 1500: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] tick 3000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] tick 4500: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] linear/11 tick 5000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (366 t/s)
+[growth] linear/11 done: 6000 ticks, neurons=42 grown=13 births=13 churn=78
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] tick 1500: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] tick 3000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] tick 4500: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] transformer/11 tick 5000: neurons=44 grown=15 synapses=523 churn=147 eaten=3 (179 t/s)
+[growth] transformer/11 done: 6000 ticks, neurons=44 grown=15 births=15 churn=158
+
+Results written to experiments/results/growth_quick_results.json
+
+## Growth-study results
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| final neuron count | 31 | 42 | 44 |
+| grown tissue (of type caps 5/6/6/10) | 12.0 | 13.0 | 15.0 |
+| births during life | 12.0 | 13.0 | 15.0 |
+| tick of last birth | 800 | 1000 | 1500 |
+| synapses at end | 471 | 418 | 523 |
+| weight updates (total) | 106 | 78 | 158 |
+| weight updates AFTER last birth | 0 | 0 | 53 |
+| food eaten AFTER last birth | 0.0 | 0.0 | 0.0 |
+| ticks/sec | 495.9 | 358.0 | 176.2 |
+
+### food eaten per world phase
+
+| phase | off | linear | transformer |
+|---|---|---|---|
+| east | 0.0 | 0.0 | 2.0 |
+| west | 0.0 | 0.0 | 0.0 |
+| fouling | 0.0 | 0.0 | 0.0 |
+| retention | 0.0 | 0.0 | 0.0 |
