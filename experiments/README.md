@@ -33,6 +33,13 @@ range, and placed food at a fixed far spot that was almost never inside
 the squid's 0.32 sight radius, so the contingency barely existed in
 its own percept stream. Both confounds are fixed here.
 
+Run-8 post-mortem: spacing the scripted contingency was not enough -
+the trainer's ambient random startle chance (0.005/tick, ~120 fires
+per 24k ticks) kept anxiety pinned at 100 in every condition. Training
+now silences ambient startles entirely (`startle_chance=0`): stress
+arrives only through the spaced contingency, and anxiety can recover
+between events.
+
 ## Held-out evaluations
 
 Scored OUTSIDE the squid (the squid itself only ever receives unsigned
@@ -64,7 +71,7 @@ From the repository root (numpy only; no Qt, no torch):
 
 ```bash
 python experiments/predictive_cognition_experiments.py --quick   # smoke: 2 seeds
-python experiments/predictive_cognition_experiments.py --full    # 6 seeds x 24k ticks
+python experiments/predictive_cognition_experiments.py --full    # 12 seeds x 24k ticks
 ```
 
 Results are written to `experiments/results/full_results.json` (full)

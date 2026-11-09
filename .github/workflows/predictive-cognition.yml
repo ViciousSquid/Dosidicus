@@ -37,7 +37,7 @@ permissions:
 jobs:
   tests-and-experiments:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Checkout research branch
         uses: actions/checkout@v4

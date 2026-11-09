@@ -110,9 +110,11 @@ transformer's weights.
 
 `experiments/predictive_cognition_experiments.py` (see
 `experiments/README.md` for the full protocol) compares the three
-conditions, 6 seeds each, 24,000 training ticks on a delayed-reward
-contingency (a startle, then food 16 ticks later, placed within sight
-of the squid; see Results II for the world's history), followed by
+conditions, 12 seeds each (run 9; earlier runs used 6), 24,000 training
+ticks on a delayed-reward contingency (a startle, then food 16 ticks
+later, placed within sight of the squid; ambient random startles are
+silenced during training - see Results II for the world's history),
+followed by
 held-out evaluations: object permanence, delayed-consequence
 anticipation, stress adaptation, retention of learned feeding behaviour,
 prediction telemetry and wall-clock overhead. Everything runs through

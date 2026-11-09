@@ -57,7 +57,7 @@ from src.portable_brain import TrainingConfig  # noqa: E402
 from headless.headless_trainer import HeadlessSimulation  # noqa: E402
 
 MODES = ('off', 'linear', 'transformer')
-FULL_SEEDS = [11, 22, 33, 44, 55, 66]
+FULL_SEEDS = [11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 222, 333]
 QUICK_SEEDS = [11, 22]
 
 # The training contingency: a startle, then food 16 ticks later.
@@ -70,6 +70,7 @@ CONTINGENCY_START = 150
 CONTINGENCY_INTERVAL = 700      # spaced: anxiety decays between events
 FOOD_DELAY = 16                # a longer horizon to anticipate
 NEAR_SIGHT_OFFSET = 0.2        # food lands inside the 0.32 sight radius
+AMBIENT_STARTLE_CHANCE = 0.0   # run-8 fix: stress only from the contingency
 
 
 @contextmanager
@@ -118,9 +119,14 @@ def make_sim(mode, seed, learning=True, **overrides):
     # Run-6 post-mortem: 374 gradient steps left the transformer's
     # object-permanence signal unstable across seeds. Halve the train
     # interval on top of the doubled tick budget (~1500 steps).
+    # Run-8 post-mortem: the ambient random startle chance (0.005/tick)
+    # fired ~120 startles per 24k ticks and kept anxiety pinned at 100
+    # in every condition. Training silences it: stress arrives only
+    # through the spaced contingency, so anxiety can recover.
     config = TrainingConfig(learning_enabled=learning, seed=seed,
                             predictive_mode=mode, predictive_seed=seed,
-                            predictive_train_interval=32)
+                            predictive_train_interval=32,
+                            startle_chance=AMBIENT_STARTLE_CHANCE)
     for key, value in overrides.items():
         setattr(config, key, value)
     return ExperimentSimulation(config)
@@ -402,6 +408,7 @@ def eval_retention(sim, ticks=2500):
     condition learned during training survive intact?"""
     sim.config.learning_enabled = False
     sim.config.food_spawn_chance = 0.06
+    sim.config.startle_chance = 0.0    # calm world: measure feeding, not stress
     sim.food_items.clear()
     sim.event_queue = []
     before = {k: sim.stats.get(k, 0) for k in
@@ -431,6 +438,7 @@ def run_experiment(seeds, train_ticks, quick=False):
             'food_delay': FOOD_DELAY,
             'food_placement': 'near_squid',
             'near_sight_offset': NEAR_SIGHT_OFFSET,
+            'ambient_startle_chance': AMBIENT_STARTLE_CHANCE,
         },
         'quick': quick,
     }, 'runs': {}}
@@ -573,7 +581,7 @@ def main():
     mode.add_argument('--quick', action='store_true',
                       help='Smoke run: 2 seeds, short phases (CI)')
     mode.add_argument('--full', action='store_true',
-                      help='Full run: 6 seeds x 24k ticks (the paper run)')
+                      help='Full run: 12 seeds x 24k ticks (the paper run)')
     parser.add_argument('--seeds', type=int, nargs='*', default=None)
     parser.add_argument('--ticks', type=int, default=None)
     parser.add_argument('--output', '-o', type=str,
