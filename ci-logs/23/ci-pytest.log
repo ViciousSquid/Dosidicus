@@ -1,0 +1,46 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.18, pytest-9.2.0, pluggy-1.7.0 -- /opt/hostedtoolcache/Python/3.11.18/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/Dosidicus/Dosidicus
+collecting ... collected 38 items
+
+tests/test_predictive_cognition.py::OffByDefaultTests::test_default_config_is_off PASSED [  2%]
+tests/test_predictive_cognition.py::OffByDefaultTests::test_off_runs_the_baseline_path PASSED [  5%]
+tests/test_predictive_cognition.py::OffByDefaultTests::test_off_simulation_has_no_prediction_neurons PASSED [  7%]
+tests/test_predictive_cognition.py::OffByDefaultTests::test_off_simulation_reports_off PASSED [ 10%]
+tests/test_predictive_cognition.py::OffByDefaultTests::test_old_config_dicts_still_load PASSED [ 13%]
+tests/test_predictive_cognition.py::PredictionSensorsAreSensesTests::test_plasticity_grows_from_but_never_into_predictions PASSED [ 15%]
+tests/test_predictive_cognition.py::PredictionSensorsAreSensesTests::test_propagation_never_overwrites_prediction_sensors PASSED [ 18%]
+tests/test_predictive_cognition.py::PredictionSensorsAreSensesTests::test_sensors_exist_in_brain_with_positions PASSED [ 21%]
+tests/test_predictive_cognition.py::PredictionSensorsAreSensesTests::test_sensors_registered_through_standard_interface PASSED [ 23%]
+tests/test_predictive_cognition.py::PredictionSensorsAreSensesTests::test_telemetry_populated PASSED [ 26%]
+tests/test_predictive_cognition.py::NoPrivilegedInformationTests::test_action_is_one_hot PASSED [ 28%]
+tests/test_predictive_cognition.py::NoPrivilegedInformationTests::test_hidden_food_is_absent_from_observation PASSED [ 31%]
+tests/test_predictive_cognition.py::NoPrivilegedInformationTests::test_observation_dimension PASSED [ 34%]
+tests/test_predictive_cognition.py::NoPrivilegedInformationTests::test_sensor_map_is_unsigned_and_bounded PASSED [ 36%]
+tests/test_predictive_cognition.py::NoPrivilegedInformationTests::test_visible_food_is_egocentric_and_normalised PASSED [ 39%]
+tests/test_predictive_cognition.py::TinyTransformerLearnsTests::test_causal_mask_prevents_looking_ahead PASSED [ 42%]
+tests/test_predictive_cognition.py::TinyTransformerLearnsTests::test_gradients_match_finite_differences PASSED [ 44%]
+tests/test_predictive_cognition.py::TinyTransformerLearnsTests::test_loss_decreases_on_predictable_stream PASSED [ 47%]
+tests/test_predictive_cognition.py::LinearControlTests::test_batch_training_is_a_noop PASSED [ 50%]
+tests/test_predictive_cognition.py::LinearControlTests::test_ema_updates_online PASSED [ 52%]
+tests/test_predictive_cognition.py::LinearControlTests::test_food_trace_persists_then_decays PASSED [ 55%]
+tests/test_predictive_cognition.py::CortexProtocolTests::test_delta_predictions_are_scored PASSED [ 57%]
+tests/test_predictive_cognition.py::CortexProtocolTests::test_experience_buffer_grows_per_tick PASSED [ 60%]
+tests/test_predictive_cognition.py::CortexProtocolTests::test_linear_mode_runs_through_same_interface PASSED [ 63%]
+tests/test_predictive_cognition.py::CortexProtocolTests::test_prediction_scores_against_outcomes PASSED [ 65%]
+tests/test_predictive_cognition.py::CortexProtocolTests::test_predictions_written_every_tick PASSED [ 68%]
+tests/test_predictive_cognition.py::CortexProtocolTests::test_sleep_replay_counts_steps PASSED [ 71%]
+tests/test_predictive_cognition.py::CortexProtocolTests::test_window_shape_matches_context PASSED [ 73%]
+tests/test_predictive_cognition.py::FrozenEvaluationTests::test_frozen_run_never_trains PASSED [ 76%]
+tests/test_predictive_cognition.py::FrozenEvaluationTests::test_frozen_train_call_changes_nothing PASSED [ 78%]
+tests/test_predictive_cognition.py::ReproducibilityTests::test_brain_export_loads_into_vanilla_brain PASSED [ 81%]
+tests/test_predictive_cognition.py::ReproducibilityTests::test_identical_seed_identical_run PASSED [ 84%]
+tests/test_predictive_cognition.py::ReproducibilityTests::test_layout_mismatch_is_refused PASSED [ 86%]
+tests/test_predictive_cognition.py::ReproducibilityTests::test_save_load_roundtrip PASSED [ 89%]
+tests/test_predictive_cognition.py::HostNetworkIntegrationTests::test_neurogenesis_runs_with_prediction_sensors_present PASSED [ 92%]
+tests/test_predictive_cognition.py::HostNetworkIntegrationTests::test_plasticity_can_use_prediction_sensors_as_sources PASSED [ 94%]
+tests/test_predictive_cognition.py::IncidentalMotorBirthWiringTests::test_context_motor_connections_can_be_omitted_but_other_context_remains PASSED [ 97%]
+tests/test_predictive_cognition.py::IncidentalMotorBirthWiringTests::test_headless_flag_is_opt_in PASSED [100%]
+
+============================= 38 passed in 13.23s ==============================

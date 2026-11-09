@@ -1,0 +1,56 @@
+[motor-repl] off/historical/seed22 start
+Configuration loaded from config.ini
+  food=102 approaches=117 explore=4705 idle=1146
+[motor-repl] off/no_incidental_motor_edges/seed22 start
+Configuration loaded from config.ini
+  food=21 approaches=20 explore=4963 idle=940
+[motor-repl] off/historical/seed33 start
+Configuration loaded from config.ini
+  food=4 approaches=8 explore=268 idle=161
+[motor-repl] off/no_incidental_motor_edges/seed33 start
+Configuration loaded from config.ini
+  food=136 approaches=217 explore=5725 idle=3
+[motor-repl] off/historical/seed44 start
+Configuration loaded from config.ini
+  food=2 approaches=4 explore=526 idle=3
+[motor-repl] off/no_incidental_motor_edges/seed44 start
+Configuration loaded from config.ini
+  food=128 approaches=222 explore=329 idle=5353
+[motor-repl] linear/historical/seed22 start
+Configuration loaded from config.ini
+  food=2 approaches=5 explore=336 idle=37
+[motor-repl] linear/no_incidental_motor_edges/seed22 start
+Configuration loaded from config.ini
+  food=117 approaches=240 explore=1315 idle=4360
+[motor-repl] linear/historical/seed33 start
+Configuration loaded from config.ini
+  food=9 approaches=14 explore=503 idle=5481
+[motor-repl] linear/no_incidental_motor_edges/seed33 start
+Configuration loaded from config.ini
+  food=119 approaches=296 explore=4994 idle=527
+[motor-repl] linear/historical/seed44 start
+Configuration loaded from config.ini
+  food=0 approaches=0 explore=6000 idle=0
+[motor-repl] linear/no_incidental_motor_edges/seed44 start
+Configuration loaded from config.ini
+  food=141 approaches=358 explore=4485 idle=1086
+[motor-repl] transformer/historical/seed22 start
+Configuration loaded from config.ini
+  food=3 approaches=9 explore=311 idle=36
+[motor-repl] transformer/no_incidental_motor_edges/seed22 start
+Configuration loaded from config.ini
+  food=120 approaches=292 explore=4199 idle=1385
+[motor-repl] transformer/historical/seed33 start
+Configuration loaded from config.ini
+  food=2 approaches=1 explore=5951 idle=46
+[motor-repl] transformer/no_incidental_motor_edges/seed33 start
+Configuration loaded from config.ini
+  food=111 approaches=203 explore=745 idle=4951
+[motor-repl] transformer/historical/seed44 start
+Configuration loaded from config.ini
+  food=2 approaches=3 explore=5995 idle=2
+[motor-repl] transformer/no_incidental_motor_edges/seed44 start
+Configuration loaded from config.ini
+  food=3 approaches=5 explore=1387 idle=4543
+[motor-repl] aggregate: {"linear": {"control_food": [2, 9, 0], "intervention_food": [117, 119, 141], "mean_control": 3.667, "mean_intervention": 125.667, "median_delta": 115, "n": 3, "paired_deltas": [115, 110, 141], "seeds_harmed": 0, "seeds_helped": 3}, "off": {"control_food": [102, 4, 2], "intervention_food": [21, 136, 128], "mean_control": 36, "mean_intervention": 95, "median_delta": 126, "n": 3, "paired_deltas": [-81, 132, 126], "seeds_harmed": 1, "seeds_helped": 2}, "transformer": {"control_food": [3, 2, 2], "intervention_food": [120, 111, 3], "mean_control": 2.333, "mean_intervention": 78, "median_delta": 109, "n": 3, "paired_deltas": [117, 109, 1], "seeds_harmed": 0, "seeds_helped": 3}}
+[motor-repl] results: experiments/results/motor_wiring_replication.json
