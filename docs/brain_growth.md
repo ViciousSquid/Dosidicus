@@ -790,3 +790,72 @@ its residual deficit. An increase in both arms or no
 increase would require a different interpretation.
 The first test remains **n=1**, so any positive result
 will still require independent-seed confirmation.
+
+
+## Results: run 25 — preserving innate hunger-to-eat during differentiation
+
+Run 25 (code commit `8cca376a`, published `fecb8bd0`,
+[workflow 42657961796](https://github.com/ViciousSquid/Dosidicus/actions/runs/42657961796))
+completed successfully with **40 predictive-cognition tests
+and 55 baseline headless tests / 114 subtests passing**.
+Data: `ci-logs/25/results/innate_offload_study.json`.
+
+This is an isolated seed-11, 6,000-tick matched test.
+Both arms already use the run-22 correction
+(`context_motor_autowiring=False`).
+The experimental arm additionally uses the new opt-in
+`preserve_innate_motor_offload=True` setting:
+differentiation still grows a representation and creates
+its *intentional* remedy wiring, but does **not delete**
+the original innate connection during that handover.
+Existing, non-innate connections are still eligible
+for retirement. This flag defaults **False**, preserving
+the historical engine behaviour outside the experiment.
+
+| Mode | Historical innate offload (food) | Preserve direct innate path (food) | Net change |
+|---|---:|---:|---:|
+| Off | 132 | 23 | **−109** |
+| Linear | 46 | 46 | 0 |
+| Transformer | 4 | **118** | **+114** |
+
+- **Transformer seed 11 is rescued**. Its direct
+  `hunger → act_eat` synapse survives and finishes at
+  approximately +0.383; the historical intervention
+  removes that edge and keeps only `second_opinion`
+  (a replacement pathway whose source often supplies
+  negative motor drive). Meals increase 4→118, with
+  258 selected eating actions vs 11 previously.
+- **Off seed 11 becomes worse**: preserving its original
+  hunger path lowers meals 132→23, while its hunger
+  synapse strengthens to +1.0. A positive weight can
+  nonetheless contribute negative signal when the hunger
+  neuron's activation is *below its resting value*; at
+  tick 6,000 direct hunger contributes about **−39.6**
+  to the eating neuron. The role-separation replacement
+  also remains, so simply retaining both routes creates
+  different network dynamics, not a strictly positive gain.
+- **Linear seed 11 is unchanged** at 46 meals because
+  its direct innate hunger link was not retired in the
+  historical arm. This acts as a useful internal
+  specificity check of the intervention.
+
+**Interpretation:** the causal ledger and counterfactual
+test now provide strong mechanistic evidence that an
+innate-instinct handover can suppress eating in certain
+transformer-equipped individuals, independently of the
+incidental newborn-to-motor inhibition identified in runs
+21–22. But preserving every innate edge is **not
+universally beneficial**; this intervention worsens the
+baseline squid dramatically. Do not enable it globally.
+
+**Unresolved:** These are seed-11 short-lifetime results,
+not long-term proof of learning or general predictive
+advantage. The narrow guard needs independent-seed
+replication and evaluation of the developmental trajectories.
+Run 23's independent seeds also show that the earlier
+incidental motor-wiring intervention varies by individual.
+A safer neural rule might protect only specific direct
+sensorimotor priors under well-evidenced circumstances,
+or validate that an offloaded pathway remains capable of
+driving the behaviour before retiring the original.
+That must be tested, not assumed.
