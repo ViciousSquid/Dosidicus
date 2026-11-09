@@ -189,6 +189,17 @@ def sample_growth(sim, tick, phase_idx):
         'satisfaction': round(float(squid.satisfaction), 1),
         'happiness': round(float(squid.happiness), 1),
         'sleeping': bool(squid.is_sleeping),
+        # Read-only behavioural-collapse probe. No RNG or action policy calls:
+        # reading the network after its choice cannot change any decisions.
+        'food_visible': bool(squid.food_visible),
+        'food_items': len(sim.food_items),
+        'food_seen_ticks': sim.stats.get('food_seen_ticks', 0),
+        'action_counts': dict(sim.stats.get('actions_selected') or {}),
+        'motor_activation': {
+            name: round(float(brain.state.get(name, 0.0)), 3)
+            for name in ('act_eat', 'act_move', 'act_collapse',
+                         'act_rest', 'act_flee')
+        },
     }
 
 
@@ -475,7 +486,10 @@ def write_compact_outputs(results, out_path):
         rows = ['# tick,phase,neurons,synapses,grown,deepened,'
                 'strength_sum,weight_updates,food_eaten,'
                 'food_approaches,anxiety,cleanliness,active_count,'
-                'top_actionable']
+                'top_actionable,food_seen_ticks,food_items,food_visible,'
+                'act_eat,act_move,act_collapse,act_rest,act_flee,'
+                'count_idle,count_exploring,count_eating,'
+                'count_exhausted,count_sleeping']
         events = {'births': [], 'stood_down': _empty_flow(),
                   'resolutions': _empty_flow()}
         for seed, r in sorted(runs.items()):
@@ -492,7 +506,16 @@ def write_compact_outputs(results, out_path):
                     str(s.get('food_eaten')),
                     str(s.get('food_approaches')),
                     str(s.get('anxiety')), str(s.get('cleanliness')),
-                    str(s.get('active_count')), act]))
+                    str(s.get('active_count')), act,
+                    str(s.get('food_seen_ticks', 0)),
+                    str(s.get('food_items', 0)),
+                    str(int(bool(s.get('food_visible', False)))),
+                    *[str((s.get('motor_activation') or {}).get(name, 0))
+                      for name in ('act_eat', 'act_move', 'act_collapse',
+                                   'act_rest', 'act_flee')],
+                    *[str((s.get('action_counts') or {}).get(name, 0))
+                      for name in ('idle', 'exploring', 'eating',
+                                   'exhausted', 'sleeping')]]))
             for b in r.get('births') or []:
                 events['births'].append([
                     b.get('tick'), _trunc(str(b.get('neuron')), 16),
