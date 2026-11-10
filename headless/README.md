@@ -155,3 +155,35 @@ The trained brain JSON files are fully compatible with:
 ## License
 
 Part of Dosidicus-2 project. [GPL-2.0 license](https://github.com/ViciousSquid/Dosidicus/blob/v2.6.1.0__b1218_LatestVersion/LICENSE)
+
+
+## Measuring whether learning helps: `lifetime.py`
+
+```
+python headless/lifetime.py --seeds 6 --life 20000
+```
+
+Raises squid in the tank and, at intervals through each life, scores a
+**frozen** copy of the brain - it cannot learn or grow during the test - in
+worlds it was not raised in, next to its own newborn self. Reported in the
+squid's real statistics (hunger, anxiety, happiness, health) and counts of
+things its own brain chose to do (food eaten, shelter taken, rests chosen,
+collapses). There is no combined score.
+
+Two things make the comparison mean something:
+
+- **The same world.** `TrainingConfig.world_seed` is the world's own random
+  stream - where food lands, when a startle comes, where the plants are - and
+  is drawn from identically whatever the squid does. Two brains scored on one
+  world seed met the same food at the same moments.
+- **Frozen.** `learning_enabled=False` stops plasticity, motor exploration,
+  consolidation and growth; `frozen_trial` checks afterwards that not a weight
+  or a neuron changed, and fails if one did.
+
+The tank itself: plants stand at fixed places and are seen only within sight;
+calm comes from choosing to shelter and getting there, and hiding ends a
+fright; being dropped by exhaustion costs more than lying down; wanting food
+with none in sight sends the squid looking.
+
+`action_discovery_rate` (default 0.03) is how often an unwired action neuron
+fires by itself; `action_discovery_teaching=False` is the placebo arm.

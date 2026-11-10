@@ -46,7 +46,7 @@ The project is designed to make artificial cognition visible.
 
 Instead of hiding intelligence inside millions of parameters, Dosidicus starts with just eight core neurons: seven drives and the one sense a squid cannot live without. The brain is drawn in labelled rows — the drives across the top, the motor bank underneath them (one neuron per thing the squid can do, driven by ordinary synapses rather than by a rule), and the senses below that. Every connection can be inspected. Every activation can be visualised. Every learned behaviour can be traced back to experience.
 
-As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using [STDP](https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP)), works out which of its own actions cause which consequences, and grows entirely new neurons when its existing structure cannot cope.
+As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using [STDP](https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP)), works out which of its own actions cause which consequences, tries out things it was never wired to do and keeps the ones that help, and grows an entirely new neuron when there is something it has no way to represent.
 
 And it can tell you all of it. Every synaptic change and every grown neuron records **why** — the mechanism, the evidence, the experience, the action, the consequence — and the brain tools read that record rather than reconstructing an approximation of it:
 
@@ -60,6 +60,30 @@ No two brains ever develop the same way.
 
 **Not faked:** there is [one learning engine](https://github.com/ViciousSquid/Dosidicus/blob/3.1_LatestVersion/src/plasticity.py) shared by the GUI, the headless trainer, and the test suite — the squid cannot learn differently depending on which interface watches it. Every weight change records its mechanism, evidence, and triggering experience.
 
+## Does it actually get smarter?
+
+It has to be shown, so it is measured. A squid is raised in the headless tank; at intervals a **frozen** copy of its brain - nothing about it can change - is dropped into worlds it has never seen, alongside its own newborn self, and what happens to each is recorded in the squid's real statistics.
+
+What that shows, on eight squid over a 20,000-tick life (`python headless/lifetime.py --seeds 8`):
+
+| Frozen, in unseen worlds | At birth | After 20,000 ticks |
+|---|---|---|
+| Mean anxiety | 76.1 | 57.2 |
+| Food eaten | 10.0 | 10.0 |
+| Mean hunger | 33.5 | 34.4 |
+| Mean health | 94.3 | 94.2 |
+| Neurons grown | 0 | 2 (the same two, in every squid) |
+
+Nobody told it how. Each squid saw a plant and grew a sense for one (`can_see_plant`); tried sheltering, at first for no reason; found that it helped only when it was frightened *and* a plant was in sight; had no neuron for that combination, so grew one (`anxiety_high_and_sees_plant`); and from then on hid when frightened. Cut the one synapse it learned and the ability is gone. The controls - no plants, exploring without learning from it, no exploring - each remove it too (`tests/test_learning_to_live.py`).
+
+Three rules make that possible:
+
+* **What the squid *does* is learned from what came of it.** A synapse into an action neuron is moved only when the action was tried with a cue and without it and turned out differently - never by co-activation, which can only teach a squid to do more of what it already does.
+* **A neuron is grown only for something the squid cannot represent**: a thing it perceives and has no sense for, one of its own actions it cannot tell from another, or a combination its own trials show an action depends on. Anything else it lacks is a synapse, and is left to learning.
+* **A neuron grown for a combination is silent until everything it stands for is there**, is named for what it means, and is taken back if nothing ever comes to depend on it.
+
+It is a small squid in a small tank, and that is all this claims.
+
 ## As the caretaker you will
 
 - Feed, clean and care for your squid.
@@ -70,6 +94,7 @@ No two brains ever develop the same way.
 - Watch memories form and influence future behaviour.
 - Observe fears, habits and preferences emerge.
 - Raise a brain unlike anyone else's.
+- Follow its life in **View > Journey**: what it has become, judged on what is true of its brain, and what comes next.
 
 #### Under the hood runs [**STRINg** simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview):
 
@@ -78,7 +103,9 @@ No two brains ever develop the same way.
 * [Wire your own](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) squid brain, add or erase entire behaviours
 * Fully visible neuron activations
 * Full provenance: every weight change and every new neuron records its cause
-* Capability-driven structural growth — new neurons appear when the network genuinely cannot cope, not because an event happened
+* Structural growth only for what cannot be represented — a new neuron appears for a percept, an action or a combination the brain has no neuron for, never as a patch for a drive
+* Motor exploration and outcome-taught action synapses — unwired actions are tried, and wired only when trying them with a cue and without it came out differently
+* Honest senses — a plant is something the squid sees through its view cone or does not know about
 * Action → consequence learning with temporal credit assignment
 * Dual memory system
 * Headless training mode, running the identical engine
