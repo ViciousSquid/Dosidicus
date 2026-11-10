@@ -12,11 +12,14 @@ on:
   push:
     branches:
       - 3.2.0_LatestVersion
+      - "claude/**"
     paths:
       - ".github/workflows/build-nuitka.yml"
       - "tools/macos_debug.command"
       - "tools/MACOS_DEBUG_README.txt"
       - "tools/build_macos_dmg.sh"
+      - "tools/merge_macos_universal.py"
+      - "tools/macos_smoke_test.sh"
 
 jobs:
   build:
@@ -369,4 +372,137 @@ jobs:
             Dosidicus-${{ matrix.asset }}.zip
             Dosidicus-linux.tar.gz
           if-no-files-found: error
+
+  # One DMG for every Mac. The two macOS builds above are the same game
+  # compiled for Apple Silicon and for Intel; this joins them into a single
+  # universal app (tools/merge_macos_universal.py), signs it, starts it on an
+  # Apple Silicon Mac here and on an Intel Mac in the next job, and only then
+  # publishes the DMG - so no separate universal build has to be run.
+  macos-universal:
+    name: macOS universal app (merge, sign, start on Apple Silicon)
+    needs: build
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuitka-macos-arm64
+          path: built/arm64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuitka-macos-x64
+          path: built/x64
+
+      - name: Unpack both builds
+        run: |
+          # ditto keeps the bundles' permissions and framework links.
+          ditto -x -k built/arm64/Dosidicus-macos-arm64.zip built/arm64
+          ditto -x -k built/x64/Dosidicus-macos-x64.zip built/x64
+          lipo built/arm64/Dosidicus.app/Contents/MacOS/Dosidicus -verify_arch arm64
+          lipo built/x64/Dosidicus.app/Contents/MacOS/Dosidicus -verify_arch x86_64
+
+      - name: Join them into one universal app
+        run: |
+          mkdir universal
+          python3 tools/merge_macos_universal.py \
+            built/arm64/Dosidicus.app built/x64/Dosidicus.app universal/Dosidicus.app \
+            | tee merge-summary.txt
+          {
+            echo "### macOS universal app"
+            echo '```'
+            cat merge-summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          lipo universal/Dosidicus.app/Contents/MacOS/Dosidicus -verify_arch x86_64 arm64
+          test -f universal/Dosidicus.app/Contents/MacOS/PyQt5/qt-plugins/platforms/libqcocoa.dylib
+          lipo universal/Dosidicus.app/Contents/MacOS/PyQt5/qt-plugins/platforms/libqcocoa.dylib \
+            -verify_arch x86_64 arm64
+
+      - name: Sign and verify
+        run: |
+          # Joining changes every compiled file, so every signature is redone.
+          codesign --deep --force --sign - universal/Dosidicus.app
+          codesign --verify --deep --strict --verbose=2 universal/Dosidicus.app
+
+      - name: Start it on Apple Silicon
+        run: bash tools/macos_smoke_test.sh "$PWD/universal/Dosidicus.app" arm64
+
+      - name: Create and verify the universal DMG
+        run: |
+          bash tools/build_macos_dmg.sh universal/Dosidicus.app Dosidicus-macos-universal.dmg
+          shasum -a 256 Dosidicus-macos-universal.dmg > Dosidicus-macos-universal.dmg.sha256
+
+      - name: Keep it for the Intel check
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal-candidate
+          path: |
+            Dosidicus-macos-universal.dmg
+            Dosidicus-macos-universal.dmg.sha256
+            universal/Dosidicus.app.merge.json
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload startup log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal-startup-log-arm64
+          path: smoke-macos.log
+          if-no-files-found: ignore
+
+  macos-universal-intel:
+    name: macOS universal DMG (start on Intel, publish)
+    needs: macos-universal
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-universal-candidate
+          path: candidate
+
+      - name: Start it on Intel, from the read-only disk image
+        run: |
+          cd candidate
+          shasum -a 256 -c Dosidicus-macos-universal.dmg.sha256
+          cd ..
+          hdiutil verify candidate/Dosidicus-macos-universal.dmg
+          MOUNT="$RUNNER_TEMP/dosidicus-universal"
+          mkdir -p "$MOUNT"
+          hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" candidate/Dosidicus-macos-universal.dmg
+          trap 'hdiutil detach "$MOUNT" -force || true' EXIT
+          codesign --verify --deep --strict --verbose=2 "$MOUNT/Dosidicus.app"
+          SMOKE_LOG="$GITHUB_WORKSPACE/smoke-macos.log" \
+            bash tools/macos_smoke_test.sh "$MOUNT/Dosidicus.app" x86_64
+
+      - name: Upload the universal DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuitka-macos-universal-dmg
+          path: candidate/Dosidicus-macos-universal.dmg
+          if-no-files-found: error
+
+      - name: Upload startup log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal-startup-log-x64
+          path: smoke-macos.log
+          if-no-files-found: ignore
 

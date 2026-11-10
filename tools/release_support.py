@@ -66,6 +66,8 @@ def collect_artifacts(source, target, version):
         'Dosidicus-macos-x64.zip': 'macos-x64.zip',
         'Dosidicus-macos-x64.dmg': 'macos-x64.dmg',
         'Dosidicus-macos-x64-debug.zip': 'macos-x64-debug.zip',
+        # One DMG for every Mac, joined from the two above by the build.
+        'Dosidicus-macos-universal.dmg': 'macos-universal.dmg',
         'Dosidicus-linux.tar.gz': 'linux-x64.tar.gz',
         f'dosidicus-{version}-arm64-release.apk': 'android-arm64.apk',
     }
