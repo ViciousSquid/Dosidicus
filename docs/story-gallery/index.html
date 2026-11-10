@@ -169,133 +169,290 @@ dialog#lightbox form { position: absolute; top: 8px; right: 8px; margin: 0; }
   .zoom:hover { transform: translateY(-2px); }
 }
 
+/* The internet session */
+.row.platforms { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .row.platforms { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.swatch { display: inline-block; width: 0.85em; height: 0.85em; border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.35); vertical-align: -0.08em; }
+.cast code { font-size: 0.85em; overflow-wrap: anywhere; }
+table.visits { border-collapse: collapse; margin: 1rem 0 1.5rem; width: 100%; max-width: 44rem; }
+table.visits th, table.visits td { text-align: left; padding: 0.35rem 0.9rem 0.35rem 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3); vertical-align: top; }
+table.visits td:first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+details summary { cursor: pointer; font-weight: 600; margin: 0.5rem 0; }
+pre.log { font-size: 0.8rem; line-height: 1.45; overflow-x: auto; white-space: pre-wrap;
+  overflow-wrap: anywhere; padding: 1rem; border-radius: 8px; background: rgba(128, 128, 128, 0.12);
+  max-height: 32rem; overflow-y: auto; }
+
 </style>
 
 </head>
 <body>
 <header class="hero">
-  <p class="eyebrow">Dosidicus · peer-to-peer evolution</p>
-  <h1>A life across two tanks</h1>
-  <p class="lede">Two copies of the desktop game, networked over the multiplayer plugin’s LAN protocol, and two copies
-  of the Android app linked for a visit, captured as they ran. One squid notices another tank, goes there, fights,
-  mates, and dies. Its egg then starts a new game. Every squid here is moved by its own network, and every
-  number and line of thought is from the run.</p>
-  <dl class="cast">
-    <div><dt>Ziggy</dt><dd>adventurous · the traveller</dd></div>
-    <div><dt>Inky</dt><dd>timid · the resident</dd></div>
-    <div><dt>Pip &amp; Nova</dt><dd>the Android pair</dd></div>
-  </dl>
+  <p class="eyebrow">Dosidicus · internet play</p>
+  <h1>4 squid, 4 homes, 5 minutes</h1>
+  <p class="lede">4 copies of the desktop game, each in a home of its own behind its own router,
+  found each other with friend codes and were then left alone for 5 minutes. Nothing told any squid
+  what to do. This is what happened, as it was written down while it happened: every address, code, thought,
+  message and number below is from the run.</p>
+  <dl class="cast"><div><dt>Ziggy</dt><dd>adventurous · as it hatched<br>home 1: <code>192.168.1.2:10000</code> inside, <code>100.64.1.2:10000</code> from outside<br>friend code <code>00B48-00G49-RGX7G-YA081</code></dd></div><div><dt>Inky</dt><dd>timid · <span class="swatch" style="background: rgb(120,170,255)"></span> its player’s colour<br>home 2: <code>192.168.1.2:10000</code> inside, <code>100.64.2.2:10000</code> from outside<br>friend code <code>00B48-01049-RGCQX-ARJ0X</code></dd></div><div><dt>Pesto</dt><dd>greedy · <span class="swatch" style="background: rgb(255,105,180)"></span> its player’s colour<br>home 3: <code>192.168.1.2:10000</code> inside, <code>100.64.3.2:10000</code> from outside<br>friend code <code>00B48-01G49-RGBF0-YR36H</code></dd></div><div><dt>Bolt</dt><dd>energetic · <span class="swatch" style="background: rgb(120,220,140)"></span> its player’s colour<br>home 4: <code>192.168.1.2:10000</code> inside, <code>100.64.4.2:10000</code> from outside<br>friend code <code>00B48-02049-RG3QA-1J6C1</code></dd></div></dl>
   <nav class="toc" aria-label="Chapters">
-    <a href="#aware">1 Aware</a><a href="#visit">2 Visit</a><a href="#fight">3 Fight</a><a href="#mate">4 Mate</a>
-    <a href="#dies">5 Dies</a><a href="#new-game">6 New game</a><a href="#networked">Two desktops</a>
-    <a href="#android">Android</a><a href="#nudges">What was nudged</a>
+    <a href="#apart">1 · Apart</a><a href="#codes">2 · Friend codes</a><a href="#visits">3 · Who went where</a>
+    <a href="#grew">4 · What they grew</a><a href="#believed">5 · What they came to believe</a>
+    <a href="#everywhere">6 · Every system</a><a href="#timeline">Everything, in order</a>
   </nav>
 </header>
 
 <main>
-<section id="aware" class="chapter">
-  <h2><span class="num">1</span>Ziggy becomes aware of another tank</h2>
-  <p>Inky’s game comes up on the same network. Ziggy had no way to sense another aquarium, so its brain grew one:
-  <code>aquarium_nearby</code>, the first neuron on a SOCIAL band that did not exist a moment before. Nothing is
-  pre-wired; social senses grow only from encounters.</p>
-  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-aware-tank.webp" data-caption="Ziggy hears another aquarium and grows a sense for it" aria-label="Enlarge: Ziggy hears another aquarium and grows a sense for it"><img src="img/ziggy-aware-tank.webp" width="1100" height="800" alt="Ziggy hears another aquarium and grows a sense for it" loading="lazy"></button><figcaption>Ziggy hears another aquarium and grows a sense for it</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-aware-brain.webp" data-caption="aquarium_nearby, the first neuron on Ziggy&#x27;s SOCIAL band" aria-label="Enlarge: aquarium_nearby, the first neuron on Ziggy&#x27;s SOCIAL band"><img src="img/ziggy-aware-brain.webp" width="1300" height="1100" alt="aquarium_nearby, the first neuron on Ziggy&#x27;s SOCIAL band" loading="lazy"></button><figcaption>aquarium_nearby, the first neuron on Ziggy&#x27;s SOCIAL band</figcaption></figure></div>
-  <aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.</li></ul></aside>
+<section id="apart" class="chapter">
+  <h2><span class="num">1</span>Apart</h2>
+  <p>Every home has the same private address, <code>192.168.1.2:10000</code>, as real homes do,
+  and a router that rewrites it to the router’s own outside address and lets nothing in that the home did not
+  first send to. Before any code was entered, the 4 tanks between them had heard
+  <strong>0</strong> other tanks, and a message sent unasked from one home to another home’s router got no answer.
+  Each squid was a new hatchling, alone:</p>
+  <div class="row platforms"><figure class="shot"><button class="zoom" type="button" data-full="img/home1-alone.webp" data-caption="Ziggy, a new adventurous hatchling, alone" aria-label="Enlarge: Ziggy, a new adventurous hatchling, alone"><img src="img/home1-alone.webp" width="1008" height="702" alt="Ziggy, a new adventurous hatchling, alone" loading="lazy"></button><figcaption>Ziggy, a new adventurous hatchling, alone</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home2-alone.webp" data-caption="Inky, a new timid hatchling, alone" aria-label="Enlarge: Inky, a new timid hatchling, alone"><img src="img/home2-alone.webp" width="1008" height="702" alt="Inky, a new timid hatchling, alone" loading="lazy"></button><figcaption>Inky, a new timid hatchling, alone</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home3-alone.webp" data-caption="Pesto, a new greedy hatchling, alone" aria-label="Enlarge: Pesto, a new greedy hatchling, alone"><img src="img/home3-alone.webp" width="1008" height="702" alt="Pesto, a new greedy hatchling, alone" loading="lazy"></button><figcaption>Pesto, a new greedy hatchling, alone</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home4-alone.webp" data-caption="Bolt, a new energetic hatchling, alone" aria-label="Enlarge: Bolt, a new energetic hatchling, alone"><img src="img/home4-alone.webp" width="1008" height="702" alt="Bolt, a new energetic hatchling, alone" loading="lazy"></button><figcaption>Bolt, a new energetic hatchling, alone</figcaption></figure></div>
 </section>
 
-<section id="visit" class="chapter">
-  <h2><span class="num">2</span>It decides to visit</h2>
-  <p>No rule sends it. With curiosity high, Ziggy’s own network takes it to the edge of its tank and out. Its body
-  crosses into Inky’s tank, but its brain keeps running at home. Inky’s game sends it what its body perceives,
-  and it sends back what it means to do.</p>
-  <div class="row one"><figure class="shot wide"><button class="zoom" type="button" data-full="img/ziggy-leaving.webp" data-caption="Its own network takes Ziggy to the edge of its tank" aria-label="Enlarge: Its own network takes Ziggy to the edge of its tank"><img src="img/ziggy-leaving.webp" width="1100" height="800" alt="Its own network takes Ziggy to the edge of its tank" loading="lazy"></button><figcaption>Its own network takes Ziggy to the edge of its tank</figcaption></figure></div>
-  <aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>Another aquarium is nearby and I want to explore it: I am leaving through the left side.</li></ul></aside>
+<section id="codes" class="chapter">
+  <h2><span class="num">2</span>Friend codes</h2>
+  <p>Each game asked the address server on the shared network what address it was seen at, and built its friend
+  code from the answer (the cast list above has them). The players passed the codes round: everyone entered
+  everyone else’s, 12 entries in all. The last of the 12 links through the routers came up
+  <strong>1 second</strong> after the codes were entered;
+  0 messages were refused for showing no invitation.</p>
+  <p>Within moments 4 of the 4 squid had grown a sense none of them hatched with:</p>
+  <p class="chips"><span class="chip social">aquarium_nearby</span></p>
+  <aside class="mind"><p class="mind-label">Inky’s own account</p><ul><li>It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.</li></ul></aside>
 </section>
 
-<section id="networked" class="chapter split">
-  <h2><span class="num alt">⇄</span>Two desktop games, networked</h2>
-  <p>The same moment in two separate desktop processes, talking over UDP multicast, the same as two PCs on a LAN.
-  On the left, Ziggy’s home tank stands empty while Ziggy is away. On the right, Ziggy’s body enters Inky’s tank,
-  driven from the other process.</p>
-  <div class="row two pair">
-    <figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-away-home.webp" data-caption="Ziggy’s game: its tank while Ziggy is away" aria-label="Enlarge: Ziggy’s game: its tank while Ziggy is away"><img src="img/ziggy-away-home.webp" width="1100" height="800" alt="Ziggy’s game: its tank while Ziggy is away" loading="lazy"></button><figcaption>Ziggy’s game: its tank while Ziggy is away</figcaption></figure>
-    <figure class="shot"><button class="zoom" type="button" data-full="img/inky-arrival.webp" data-caption="Inky’s game: Ziggy’s body arrives; its brain is still at home" aria-label="Enlarge: Inky’s game: Ziggy’s body arrives; its brain is still at home"><img src="img/inky-arrival.webp" width="1100" height="800" alt="Inky’s game: Ziggy’s body arrives; its brain is still at home" loading="lazy"></button><figcaption>Inky’s game: Ziggy’s body arrives; its brain is still at home</figcaption></figure>
-  </div>
+<section id="visits" class="chapter">
+  <h2><span class="num">3</span>Who went where</h2>
+  <p>Ziggy was first out, 0:02 after the codes went in.
+  3 departures in all; the most squid in one tank at once was 3.
+  Inky never left home.
+  A squid leaves when its own network takes it out, and comes home when its own rule says so; a tank whose squid
+  is out can still be visited.</p>
+  <table class="visits"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>
+  <tbody><tr><td>0:02</td><td>Ziggy</td><td>swam out of its own tank, to Pesto&#x27;s</td></tr><tr><td>0:04</td><td>Bolt</td><td>swam out of its own tank, to Pesto&#x27;s</td></tr><tr><td>0:14</td><td>Pesto</td><td>swam out of its own tank, to Ziggy&#x27;s</td></tr></tbody></table>
+  <div class="row three"><figure class="shot"><button class="zoom" type="button" data-full="img/home3-visit-2.webp" data-caption="Pesto&#x27;s tank with Bolt, Ziggy in it" aria-label="Enlarge: Pesto&#x27;s tank with Bolt, Ziggy in it"><img src="img/home3-visit-2.webp" width="1008" height="702" alt="Pesto&#x27;s tank with Bolt, Ziggy in it" loading="lazy"></button><figcaption>Pesto&#x27;s tank with Bolt, Ziggy in it</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home1-visit-3.webp" data-caption="Ziggy&#x27;s tank with Pesto in it" aria-label="Enlarge: Ziggy&#x27;s tank with Pesto in it"><img src="img/home1-visit-3.webp" width="1008" height="702" alt="Ziggy&#x27;s tank with Pesto in it" loading="lazy"></button><figcaption>Ziggy&#x27;s tank with Pesto in it</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home1-empty-2.webp" data-caption="Ziggy&#x27;s tank after it left" aria-label="Enlarge: Ziggy&#x27;s tank after it left"><img src="img/home1-empty-2.webp" width="1008" height="702" alt="Ziggy&#x27;s tank after it left" loading="lazy"></button><figcaption>Ziggy&#x27;s tank after it left</figcaption></figure></div>
+  <aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>Another aquarium is nearby and I want to explore it: I am leaving through the right side.</li></ul></aside>
 </section>
 
-<section id="fight" class="chapter">
-  <h2><span class="num">3</span>They get into a fight</h2>
-  <p>Inky is holding a rock. When Ziggy comes close, the rock between them flashes dark red: it is what they are
-  fighting over. Then the scuffle. Who starts it is each squid’s aggression, and who wins comes from each one’s
-  ability, personality, experience and condition, never a script.</p>
-  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/inky-fight-leadin.webp" data-caption="The rock they are fighting over flashes dark red" aria-label="Enlarge: The rock they are fighting over flashes dark red"><img src="img/inky-fight-leadin.webp" width="1100" height="800" alt="The rock they are fighting over flashes dark red" loading="lazy"></button><figcaption>The rock they are fighting over flashes dark red</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/inky-fight-cloud.webp" data-caption="The scuffle: one cloud over the pair" aria-label="Enlarge: The scuffle: one cloud over the pair"><img src="img/inky-fight-cloud.webp" width="1100" height="800" alt="The scuffle: one cloud over the pair" loading="lazy"></button><figcaption>The scuffle: one cloud over the pair</figcaption></figure></div>
-  <div class="row two minds"><aside class="mind"><p class="mind-label">Inky’s own account</p><ul><li>I went for Ziggy: my aggression was 85, past the 50 it takes to start a fight.</li><li>I won: my ability 135 against their 50 gave me a 88% chance.</li></ul></aside><aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>Inky came at me. I fought back with my defence at 0.</li><li>I lost: my ability 50 against their 135 gave me a 12% chance.</li></ul></aside></div>
-  <p class="game-msg"><span>Inky’s game says</span>Inky: Won a fight it started (aggression 85): ability 135 against 50, so it had a 88% chance.</p>
+<section id="grew" class="chapter">
+  <h2><span class="num">4</span>What they grew</h2>
+  <p>A squid grows a neuron only for something it has no way to represent. None of them hatched knowing that
+  other squid exist. In these 5 minutes they grew 11 neurons between them, each with the
+  reason recorded in the squid’s own words:</p>
+  <h3>Ziggy</h3><p class="chips"><span class="chip social">aquarium_nearby</span><span class="chip social">can_see_squid</span><span class="chip social">squid_nearby</span></p><aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.</li><li>Other squid encountered. I had no way to sense that, so I grew can_see_squid: the binary concept of &quot;I see another squid&quot;.</li><li>Another squid came close. I had no way to sense that, so I grew squid_nearby: the concept of &quot;how close the other squid is&quot;.</li></ul></aside><h3>Inky</h3><p class="chips"><span class="chip social">aquarium_nearby</span></p><aside class="mind"><p class="mind-label">Inky’s own account</p><ul><li>It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.</li></ul></aside><h3>Pesto</h3><p class="chips"><span class="chip social">can_see_squid</span><span class="chip social">squid_nearby</span><span class="chip social">aquarium_nearby</span><span class="chip social">social_play</span></p><aside class="mind"><p class="mind-label">Pesto’s own account</p><ul><li>Other squid encountered. I had no way to sense that, so I grew can_see_squid: the binary concept of &quot;I see another squid&quot;.</li><li>Another squid came close. I had no way to sense that, so I grew squid_nearby: the concept of &quot;how close the other squid is&quot;.</li><li>It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.</li><li>I played with another squid and had no neuron for that, so I grew social_play: the concept of &quot;playing with another squid&quot;.</li></ul></aside><h3>Bolt</h3><p class="chips"><span class="chip social">aquarium_nearby</span><span class="chip social">can_see_squid</span><span class="chip social">social_play</span></p><aside class="mind"><p class="mind-label">Bolt’s own account</p><ul><li>It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.</li><li>Other squid encountered. I had no way to sense that, so I grew can_see_squid: the binary concept of &quot;I see another squid&quot;.</li><li>I played with another squid and had no neuron for that, so I grew social_play: the concept of &quot;playing with another squid&quot;.</li></ul></aside>
+  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/home1-brain.webp" data-caption="Ziggy&#x27;s brain at the end" aria-label="Enlarge: Ziggy&#x27;s brain at the end"><img src="img/home1-brain.webp" width="1300" height="1000" alt="Ziggy&#x27;s brain at the end" loading="lazy"></button><figcaption>Ziggy&#x27;s brain at the end</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home2-brain.webp" data-caption="Inky&#x27;s brain at the end" aria-label="Enlarge: Inky&#x27;s brain at the end"><img src="img/home2-brain.webp" width="1300" height="1000" alt="Inky&#x27;s brain at the end" loading="lazy"></button><figcaption>Inky&#x27;s brain at the end</figcaption></figure></div>
 </section>
 
-<section id="mate" class="chapter">
-  <h2><span class="num">4</span>They mate</h2>
-  <p>Still in contact after the fight, the two mate: one heart beats over the pair. Inky lays an egg and, as a
-  parent, stops eating. The egg holds both parents’ weights; Ziggy’s came over the network as a gamete.</p>
-  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/inky-mating.webp" data-caption="A mating: one beating heart over the pair" aria-label="Enlarge: A mating: one beating heart over the pair"><img src="img/inky-mating.webp" width="1100" height="800" alt="A mating: one beating heart over the pair" loading="lazy"></button><figcaption>A mating: one beating heart over the pair</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/inky-egg.webp" data-caption="Inky has laid an egg, and has stopped eating" aria-label="Enlarge: Inky has laid an egg, and has stopped eating"><img src="img/inky-egg.webp" width="1100" height="800" alt="Inky has laid an egg, and has stopped eating" loading="lazy"></button><figcaption>Inky has laid an egg, and has stopped eating</figcaption></figure></div>
-  <p class="game-msg"><span>Inky’s game says</span>Inky and Ziggy produced an egg. Inky has stopped eating.</p>
-  <h3>Ziggy goes home, changed</h3>
-  <p>Tired, Ziggy goes home to sleep, by its own rule. It comes back with a social network it did not have before
-  the visit:</p>
-  <p class="chips"><span class="chip social">aquarium_nearby</span><span class="chip social">can_see_squid</span><span class="chip social">social_play</span><span class="chip social">squid_nearby</span></p>
-  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-home.webp" data-caption="Ziggy home again, asleep - changed by what happened" aria-label="Enlarge: Ziggy home again, asleep - changed by what happened"><img src="img/ziggy-home.webp" width="1100" height="800" alt="Ziggy home again, asleep - changed by what happened" loading="lazy"></button><figcaption>Ziggy home again, asleep - changed by what happened</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-home-brain.webp" data-caption="Ziggy&#x27;s brain after the visit: its social band has grown" aria-label="Enlarge: Ziggy&#x27;s brain after the visit: its social band has grown"><img src="img/ziggy-home-brain.webp" width="1300" height="1100" alt="Ziggy&#x27;s brain after the visit: its social band has grown" loading="lazy"></button><figcaption>Ziggy&#x27;s brain after the visit: its social band has grown</figcaption></figure></div>
-  <aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>I am tired: I went home to sleep.</li></ul></aside>
+<section id="believed" class="chapter">
+  <h2><span class="num">5</span>What they came to believe, and what they remember</h2>
+  <p>2 beliefs formed in the session, and 2 of them were given up again when the squid’s own later experience did not bear them out. Nothing tells a squid what is true. It notices what follows what it does, takes that for how its world works, acts on it - and can find out it was wrong.</p><div class="row minds"><aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>I think exploring makes squid go out of sight. It has happened once when I did that, and it does not usually happen otherwise.</li><li>I used to think exploring makes squid go out of sight. I have done that 5 times now and it has mostly not followed. I do not think so any more.</li></ul></aside><aside class="mind"><p class="mind-label">Bolt’s own account</p><ul><li>I think exploring makes squid go out of sight. It has happened once when I did that, and it does not usually happen otherwise.</li><li>I used to think exploring makes squid go out of sight. I have done that 5 times now and it has mostly not followed. I do not think so any more.</li></ul></aside></div>
+  <h3>Fights</h3>
+  <p>Nobody fought. A fight starts in a squid’s own grown aggression neuron, and in these 5 minutes no squid grew one: none of them went at another while its anxiety was high. 2 encounters were remembered instead:</p><aside class="mind"><p class="mind-label">The squid’s own account</p><ul><li>Pesto: Good encounter with Bolt - It felt +10.6 - their first meeting, 10s - 1</li><li>Pesto: Good encounter with Ziggy - It felt +12.5 - their first meeting, 12s - 1</li></ul></aside>
+  <h3>At the end</h3>
+  <div class="row platforms"><figure class="shot"><button class="zoom" type="button" data-full="img/home1-end.webp" data-caption="Ziggy&#x27;s tank at the end" aria-label="Enlarge: Ziggy&#x27;s tank at the end"><img src="img/home1-end.webp" width="1008" height="702" alt="Ziggy&#x27;s tank at the end" loading="lazy"></button><figcaption>Ziggy&#x27;s tank at the end</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home2-end.webp" data-caption="Inky&#x27;s tank at the end" aria-label="Enlarge: Inky&#x27;s tank at the end"><img src="img/home2-end.webp" width="1008" height="702" alt="Inky&#x27;s tank at the end" loading="lazy"></button><figcaption>Inky&#x27;s tank at the end</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home3-end.webp" data-caption="Pesto&#x27;s tank at the end" aria-label="Enlarge: Pesto&#x27;s tank at the end"><img src="img/home3-end.webp" width="1008" height="702" alt="Pesto&#x27;s tank at the end" loading="lazy"></button><figcaption>Pesto&#x27;s tank at the end</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/home4-end.webp" data-caption="Bolt&#x27;s tank at the end" aria-label="Enlarge: Bolt&#x27;s tank at the end"><img src="img/home4-end.webp" width="1008" height="702" alt="Bolt&#x27;s tank at the end" loading="lazy"></button><figcaption>Bolt&#x27;s tank at the end</figcaption></figure></div>
 </section>
 
-<section id="dies" class="chapter">
-  <h2><span class="num">5</span>Inky dies</h2>
-  <p>A parent keeps its egg and will not eat. Inky starves, and a
-  headstone marks the spot, beside the egg. Hovering over the headstone shows the epitaph:</p>
-  <div class="row one"><figure class="shot wide"><button class="zoom" type="button" data-full="img/inky-dead.webp" data-caption="Inky has died. A headstone marks where." aria-label="Enlarge: Inky has died. A headstone marks where."><img src="img/inky-dead.webp" width="1100" height="800" alt="Inky has died. A headstone marks where." loading="lazy"></button><figcaption>Inky has died. A headstone marks where.</figcaption></figure></div>
-  <blockquote class="epitaph">RIP Inky<br>Lived 1m 16s<br>Fights won: 1, lost: 0</blockquote>
+<section id="everywhere" class="chapter">
+  <h2><span class="num alt">6</span>The same game on every system</h2>
+  <p>The four homes above could have been four different computers. The game brings its own font
+  (Fio UI), its own emoji, its own widget style and one text engine, so its windows are the same size
+  and the same layout on Windows, macOS and Linux, under X11 and under Wayland. These were taken on
+  GitHub’s own machines of each kind by <code>tools/capture_platforms.py</code>; the measurements and
+  the rest of the pictures are in <code>docs/platform-screenshots</code>.</p>
+  <div class="row platforms"><figure class="shot"><button class="zoom" type="button" data-full="img/platform-windows-tank.webp" data-caption="The tank on Windows" aria-label="Enlarge: The tank on Windows"><img src="img/platform-windows-tank.webp" width="688" height="458" alt="The tank on Windows" loading="lazy"></button><figcaption>The tank on Windows</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/platform-macos-tank.webp" data-caption="The tank on macOS" aria-label="Enlarge: The tank on macOS"><img src="img/platform-macos-tank.webp" width="688" height="458" alt="The tank on macOS" loading="lazy"></button><figcaption>The tank on macOS</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/platform-linux-x11-tank.webp" data-caption="The tank on Linux, X11" aria-label="Enlarge: The tank on Linux, X11"><img src="img/platform-linux-x11-tank.webp" width="688" height="458" alt="The tank on Linux, X11" loading="lazy"></button><figcaption>The tank on Linux, X11</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/platform-linux-wayland-tank.webp" data-caption="The tank on Linux, Wayland" aria-label="Enlarge: The tank on Linux, Wayland"><img src="img/platform-linux-wayland-tank.webp" width="688" height="458" alt="The tank on Linux, Wayland" loading="lazy"></button><figcaption>The tank on Linux, Wayland</figcaption></figure></div>
+  <div class="row platforms"><figure class="shot"><button class="zoom" type="button" data-full="img/platform-windows-brain.webp" data-caption="The Brain Tool on Windows" aria-label="Enlarge: The Brain Tool on Windows"><img src="img/platform-windows-brain.webp" width="1000" height="620" alt="The Brain Tool on Windows" loading="lazy"></button><figcaption>The Brain Tool on Windows</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/platform-macos-brain.webp" data-caption="The Brain Tool on macOS" aria-label="Enlarge: The Brain Tool on macOS"><img src="img/platform-macos-brain.webp" width="1000" height="620" alt="The Brain Tool on macOS" loading="lazy"></button><figcaption>The Brain Tool on macOS</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/platform-linux-x11-brain.webp" data-caption="The Brain Tool on Linux, X11" aria-label="Enlarge: The Brain Tool on Linux, X11"><img src="img/platform-linux-x11-brain.webp" width="1000" height="620" alt="The Brain Tool on Linux, X11" loading="lazy"></button><figcaption>The Brain Tool on Linux, X11</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/platform-linux-wayland-brain.webp" data-caption="The Brain Tool on Linux, Wayland" aria-label="Enlarge: The Brain Tool on Linux, Wayland"><img src="img/platform-linux-wayland-brain.webp" width="1000" height="620" alt="The Brain Tool on Linux, Wayland" loading="lazy"></button><figcaption>The Brain Tool on Linux, Wayland</figcaption></figure></div>
 </section>
 
-<section id="new-game" class="chapter">
-  <h2><span class="num">6</span>A new game starts</h2>
-  <p>The egg hatches, and that is a new game. There is no way out, just as a game starts with no save. The
-  hatchling begins with a newborn brain overlaid with half of each parent’s weights:
-  <strong>24</strong> synapses inherited from Inky and Ziggy, each recorded in the brain’s ledger with the
-  parent it came from. It has no memories, and its parent’s headstone stays in the tank.</p>
-  <div class="row three"><figure class="shot"><button class="zoom" type="button" data-full="img/inky-hatching.webp" data-caption="Inky’s egg hatches: a new game, with no way out" aria-label="Enlarge: Inky’s egg hatches: a new game, with no way out"><img src="img/inky-hatching.webp" width="1100" height="800" alt="Inky’s egg hatches: a new game, with no way out" loading="lazy"></button><figcaption>Inky’s egg hatches: a new game, with no way out</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/inky-hatchling.webp" data-caption="The hatchling, beside its parent’s headstone" aria-label="Enlarge: The hatchling, beside its parent’s headstone"><img src="img/inky-hatchling.webp" width="1100" height="800" alt="The hatchling, beside its parent’s headstone" loading="lazy"></button><figcaption>The hatchling, beside its parent’s headstone</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/inky-hatchling-brain.webp" data-caption="A newborn brain, overlaid with half of each parent’s weights" aria-label="Enlarge: A newborn brain, overlaid with half of each parent’s weights"><img src="img/inky-hatchling-brain.webp" width="1300" height="1100" alt="A newborn brain, overlaid with half of each parent’s weights" loading="lazy"></button><figcaption>A newborn brain, overlaid with half of each parent’s weights</figcaption></figure></div>
+<section id="timeline" class="chapter">
+  <h2>Everything, in order</h2>
+  <p>152 things were written down between the codes going in and the end of the session
+  (3 arrival, 2 belief, 12 entered, 11 grew, 12 heard, 3 left, 12 link, 2 memory, 73 message, 2 revised, 20 thought). All of them:</p>
+  <details><summary>The whole session, line by line</summary>
+  <pre class="log"> 0:00  Bolt   Squid is hatching!
+ 0:00  Ziggy  Squid is hatching!
+ 0:00  Inky   Squid is hatching!
+ 0:00  Pesto  Squid is hatching!
+ 0:00  Bolt   Multiplayer active! Node ID: squid_2d717a
+ 0:00  Inky   Multiplayer active! Node ID: squid_6d549b
+ 0:00  Pesto  Multiplayer active! Node ID: squid_e0b365
+ 0:00  Ziggy  Multiplayer active! Node ID: squid_469ec0
+ 0:00  Ziggy  Press D to open the Decorations window
+ 0:00  Inky   Press D to open the Decorations window
+ 0:00  Bolt   Press D to open the Decorations window
+ 0:00  Pesto  Press D to open the Decorations window
+ 0:00  Bolt   🏆
+ 0:00  Ziggy  Squid is sleeping...
+ 0:00  Ziggy  😴 The squid woke up feeling refreshed!
+ 0:00  Pesto  ✨ It knows what one of its actions leads to
+ 0:00  Inky   ✨ It knows what one of its actions leads to
+ 0:00  Bolt   ✨ It knows what one of its actions leads to
+ 0:00  Ziggy  Squid is sleeping...
+ 0:00  Ziggy  ✨ It knows what one of its actions leads to
+ 0:00  Ziggy  😴 The squid woke up feeling refreshed!
+ 0:00  Ziggy  Squid is sleeping...
+ 0:00  Ziggy  😴 The squid woke up feeling refreshed!
+ 0:00  Bolt   entered Ziggy&#x27;s friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Bolt   entered Inky&#x27;s friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Ziggy  entered Inky&#x27;s friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Bolt   entered Pesto&#x27;s friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Ziggy  entered Pesto&#x27;s friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Ziggy  entered Bolt&#x27;s friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Pesto  entered Ziggy&#x27;s friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Inky   entered Ziggy&#x27;s friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Inky   entered Pesto&#x27;s friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Inky   entered Bolt&#x27;s friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Pesto  entered Inky&#x27;s friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Pesto  entered Bolt&#x27;s friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.
+ 0:00  Ziggy  hears the tank at 100.64.2.2:10000 through its router
+ 0:00  Ziggy  hears the tank at 100.64.3.2:10000 through its router
+ 0:00  Inky   hears the tank at 100.64.3.2:10000 through its router
+ 0:00  Ziggy  now knows of another aquarium (Inky&#x27;s)
+ 0:00  Ziggy  now knows of another aquarium (Pesto&#x27;s)
+ 0:00  Inky   now knows of another aquarium (Pesto&#x27;s)
+ 0:00  Bolt   hears the tank at 100.64.1.2:10000 through its router
+ 0:00  Bolt   hears the tank at 100.64.2.2:10000 through its router
+ 0:00  Bolt   hears the tank at 100.64.3.2:10000 through its router
+ 0:00  Bolt   now knows of another aquarium (Ziggy&#x27;s)
+ 0:00  Bolt   now knows of another aquarium (Inky&#x27;s)
+ 0:00  Bolt   now knows of another aquarium (Pesto&#x27;s)
+ 0:00  Ziggy  hears the tank at 100.64.4.2:10000 through its router
+ 0:00  Inky   hears the tank at 100.64.1.2:10000 through its router
+ 0:00  Inky   hears the tank at 100.64.4.2:10000 through its router
+ 0:00  Pesto  hears the tank at 100.64.1.2:10000 through its router
+ 0:00  Pesto  hears the tank at 100.64.2.2:10000 through its router
+ 0:00  Pesto  hears the tank at 100.64.4.2:10000 through its router
+ 0:01  Inky   grew the neuron aquarium_nearby - It sensed another aquarium nearby
+ 0:01  Inky   It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.
+ 0:01  Bolt   grew the neuron aquarium_nearby - It sensed another aquarium nearby
+ 0:01  Bolt   It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.
+ 0:01  Ziggy  grew the neuron aquarium_nearby - It sensed another aquarium nearby
+ 0:01  Ziggy  It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.
+ 0:02  Ziggy  Another aquarium is nearby and I want to explore it: I am leaving through the right side.
+ 0:02  Ziggy  Ziggy is visiting Pesto&#x27;s tank
+ 0:02  Pesto  Ziggy arrived in this tank
+ 0:02  Ziggy  swam out of its own tank to visit another - Pesto&#x27;s
+ 0:02  Ziggy  🏆
+ 0:03  Ziggy  grew the neuron can_see_squid - Other squid encountered!
+ 0:03  Ziggy  Other squid encountered. I had no way to sense that, so I grew can_see_squid: the binary concept of &quot;I see another squid&quot;.
+ 0:04  Bolt   Another aquarium is nearby and I want to explore it: I am leaving through the left side.
+ 0:04  Pesto  grew the neuron can_see_squid - Other squid encountered!
+ 0:04  Pesto  Other squid encountered. I had no way to sense that, so I grew can_see_squid: the binary concept of &quot;I see another squid&quot;.
+ 0:04  Bolt   Bolt is visiting Pesto&#x27;s tank
+ 0:04  Bolt   swam out of its own tank to visit another - Pesto&#x27;s
+ 0:04  Pesto  Bolt arrived in this tank
+ 0:04  Pesto  now knows of another aquarium (Ziggy&#x27;s)
+ 0:04  Inky   now knows of another aquarium (Ziggy&#x27;s)
+ 0:05  Inky   Squid is sleeping...
+ 0:05  Bolt   grew the neuron can_see_squid - Other squid encountered!
+ 0:05  Bolt   Other squid encountered. I had no way to sense that, so I grew can_see_squid: the binary concept of &quot;I see another squid&quot;.
+ 0:05  Inky   now knows of another aquarium (Bolt&#x27;s)
+ 0:05  Pesto  now knows of another aquarium (Bolt&#x27;s)
+ 0:05  Pesto  now knows of another aquarium (Inky&#x27;s)
+ 0:05  Ziggy  now knows of another aquarium (Bolt&#x27;s)
+ 0:06  Inky   😴 The squid woke up feeling refreshed!
+ 0:06  Inky   Squid is sleeping...
+ 0:06  Pesto  grew the neuron squid_nearby - Another squid came close
+ 0:06  Pesto  Another squid came close. I had no way to sense that, so I grew squid_nearby: the concept of &quot;how close the other squid is&quot;.
+ 0:06  Ziggy  grew the neuron squid_nearby - Another squid came close
+ 0:06  Ziggy  Another squid came close. I had no way to sense that, so I grew squid_nearby: the concept of &quot;how close the other squid is&quot;.
+ 0:07  Inky   😴 The squid woke up feeling refreshed!
+ 0:07  Inky   Squid is sleeping...
+ 0:07  Pesto  grew the neuron aquarium_nearby - It sensed another aquarium nearby
+ 0:07  Pesto  It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.
+ 0:07  Inky   🏆
+ 0:08  Inky   😴 The squid woke up feeling refreshed!
+ 0:08  Inky   ✨ It has learned something about its world
+ 0:08  Inky   ✨ It knows another aquarium is out there
+ 0:08  Bolt   ✨ It has learned something about its world
+ 0:08  Pesto  ✨ It has learned something about its world
+ 0:08  Bolt   ✨ It does something it was not born able to do
+ 0:08  Bolt   ✨ It knows another aquarium is out there
+ 0:08  Bolt   ✨ It has met another squid
+ 0:08  Pesto  ✨ It does something it was not born able to do
+ 0:08  Ziggy  ✨ It has learned something about its world
+ 0:08  Pesto  ✨ It knows another aquarium is out there
+ 0:08  Ziggy  ✨ It does something it was not born able to do
+ 0:08  Pesto  ✨ It has met another squid
+ 0:08  Bolt   grew the neuron social_play - It played with another squid and had no neuron for that
+ 0:08  Bolt   I played with another squid and had no neuron for that, so I grew social_play: the concept of &quot;playing with another squid&quot;.
+ 0:08  Ziggy  ✨ It knows another aquarium is out there
+ 0:08  Ziggy  ✨ It has met another squid
+ 0:09  Pesto  grew the neuron social_play - It played with another squid and had no neuron for that
+ 0:09  Pesto  I played with another squid and had no neuron for that, so I grew social_play: the concept of &quot;playing with another squid&quot;.
+ 0:11  Ziggy  I think exploring makes squid go out of sight. It has happened once when I did that, and it does not usually happen otherwise.
+ 0:11  Ziggy  has come to believe: exploring makes squid go out of sight
+ 0:12  Pesto  🏆
+ 0:14  Pesto  Another aquarium is nearby and I want to explore it: I am leaving through the left side.
+ 0:14  Pesto  Pesto is visiting Ziggy&#x27;s tank
+ 0:14  Ziggy  Pesto arrived in this tank
+ 0:14  Pesto  swam out of its own tank to visit another - Ziggy&#x27;s
+ 0:14  Pesto  Your squid remembers a good encounter with Ziggy.
+ 0:14  Pesto  Your squid remembers a good encounter with Bolt.
+ 0:14  Pesto  That good encounter with Ziggy went well (felt +12.5): I am more drawn to squid, even ones I do not know - and of other aquariums.
+ 0:14  Pesto  That good encounter with Bolt went well (felt +10.6): I am more drawn to squid, even ones I do not know - and of other aquariums.
+ 0:14  Pesto  Good encounter with Bolt - It felt +10.6 - their first meeting, 10s - 1
+ 0:14  Pesto  Good encounter with Ziggy - It felt +12.5 - their first meeting, 12s - 1
+ 0:16  Bolt   🏆
+ 0:19  Bolt   I think exploring makes squid go out of sight. It has happened once when I did that, and it does not usually happen otherwise.
+ 0:19  Bolt   has come to believe: exploring makes squid go out of sight
+ 0:41  Ziggy  I used to think exploring makes squid go out of sight. I have done that 5 times now and it has mostly not followed. I do not think so any more.
+ 0:41  Ziggy  changed its mind: exploring makes squid go out of sight
+ 0:49  Bolt   I used to think exploring makes squid go out of sight. I have done that 5 times now and it has mostly not followed. I do not think so any more.
+ 0:49  Bolt   changed its mind: exploring makes squid go out of sight
+ 0:57  Ziggy  🏆
+ 0:57  Pesto  🏆
+ 0:59  Inky   Squid is sleeping...
+ 1:00  Inky   😴 The squid woke up feeling refreshed!
+ 1:00  Inky   Squid is sleeping...
+ 1:01  Inky   😴 The squid woke up feeling refreshed!
+ 1:01  Inky   Squid is sleeping...
+ 1:02  Inky   😴 The squid woke up feeling refreshed!
+ 1:05  Inky   🏆
+ 1:38  Inky   Squid is sleeping...
+ 1:39  Inky   😴 The squid woke up feeling refreshed!
+ 2:07  Bolt   Press D to open the Decorations window
+ 2:54  Pesto  Press D to open the Decorations window
+ 3:23  Inky   Press D to open the Decorations window
+ 3:42  Inky   Squid is sleeping...
+ 3:43  Inky   😴 The squid woke up feeling refreshed!
+ 3:43  Inky   Squid is sleeping...
+ 3:44  Inky   😴 The squid woke up feeling refreshed!
+ 3:44  Inky   Squid is sleeping...
+ 3:45  Inky   😴 The squid woke up feeling refreshed!
+ 4:28  Ziggy  Press D to open the Decorations window</pre></details>
 </section>
 
-<section id="android" class="chapter">
-  <h2><span class="num alt">▣</span>An Android multiplayer session</h2>
-  <p>Two copies of the Android app (its Kivy UI and engine, phone-sized), each in its own process. Pip hosts, and
-  Nova finds Pip and connects. Nova’s body swims in Pip’s tank while its brain stays on Nova’s phone, which says
-  so. Pip, spoiling for a fight, scuffles with it, and Pip’s brain grows its own SOCIAL band:</p>
-  <p class="chips"><span class="chip social">can_see_squid</span><span class="chip social">social_fight</span><span class="chip social">social_play</span><span class="chip social">squid_nearby</span></p>
-  <div class="phones">
-    <figure class="shot"><button class="zoom" type="button" data-full="img/android-nova-home.webp" data-caption="Nova at home" aria-label="Enlarge: Nova at home"><img src="img/android-nova-home.webp" width="440" height="900" alt="Nova at home" loading="lazy"></button><figcaption>Nova at home</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-nova-found.webp" data-caption="Nova finds Pip nearby" aria-label="Enlarge: Nova finds Pip nearby"><img src="img/android-nova-found.webp" width="440" height="900" alt="Nova finds Pip nearby" loading="lazy"></button><figcaption>Nova finds Pip nearby</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-nova-connected.webp" data-caption="Connected: a neural visit link" aria-label="Enlarge: Connected: a neural visit link"><img src="img/android-nova-connected.webp" width="440" height="900" alt="Connected: a neural visit link" loading="lazy"></button><figcaption>Connected: a neural visit link</figcaption></figure>
-    <figure class="shot"><button class="zoom" type="button" data-full="img/android-pip-connected.webp" data-caption="Connected: a neural visit link" aria-label="Enlarge: Connected: a neural visit link"><img src="img/android-pip-connected.webp" width="440" height="900" alt="Connected: a neural visit link" loading="lazy"></button><figcaption>Connected: a neural visit link</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-pip-visitor.webp" data-caption="Pip&#x27;s phone: Nova&#x27;s body in Pip&#x27;s tank" aria-label="Enlarge: Pip&#x27;s phone: Nova&#x27;s body in Pip&#x27;s tank"><img src="img/android-pip-visitor.webp" width="440" height="900" alt="Pip&#x27;s phone: Nova&#x27;s body in Pip&#x27;s tank" loading="lazy"></button><figcaption>Pip&#x27;s phone: Nova&#x27;s body in Pip&#x27;s tank</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-nova-away.webp" data-caption="Nova&#x27;s phone while Nova is visiting: its brain runs here, its body is in Pip&#x27;s tank" aria-label="Enlarge: Nova&#x27;s phone while Nova is visiting: its brain runs here, its body is in Pip&#x27;s tank"><img src="img/android-nova-away.webp" width="440" height="900" alt="Nova&#x27;s phone while Nova is visiting: its brain runs here, its body is in Pip&#x27;s tank" loading="lazy"></button><figcaption>Nova&#x27;s phone while Nova is visiting: its brain runs here, its body is in Pip&#x27;s tank</figcaption></figure>
-    <figure class="shot"><button class="zoom" type="button" data-full="img/android-pip-fight.webp" data-caption="A scuffle on Android: one cloud over the pair" aria-label="Enlarge: A scuffle on Android: one cloud over the pair"><img src="img/android-pip-fight.webp" width="440" height="900" alt="A scuffle on Android: one cloud over the pair" loading="lazy"></button><figcaption>A scuffle on Android: one cloud over the pair</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-pip-brain.webp" data-caption="Pip&#x27;s brain on Android: its SOCIAL band, grown from the visit" aria-label="Enlarge: Pip&#x27;s brain on Android: its SOCIAL band, grown from the visit"><img src="img/android-pip-brain.webp" width="440" height="900" alt="Pip&#x27;s brain on Android: its SOCIAL band, grown from the visit" loading="lazy"></button><figcaption>Pip&#x27;s brain on Android: its SOCIAL band, grown from the visit</figcaption></figure>
-  </div>
-  <p class="note">Google Nearby needs two phones with real radios, so for this capture a loopback socket stands in
-  for it. It delivers the same events in the same order (peer found, connection initiated, accepted, connected,
-  bytes) behind the same <code>NearbyManager</code> calls. Everything above the transport is the app as shipped.</p>
-</section>
-
-<section id="nudges" class="chapter disclosure">
-  <h2>What was nudged</h2>
-  <p>A lifetime has to fit in a few minutes, and the scenes have to happen while the camera is on. So the capture
-  scripts set some drives and timings and log each change. They never choose an action for a squid. Every nudge,
-  as logged:</p>
-  <ol><li>Ziggy kept playful and unafraid while visiting (act_play 85, flee/rest/shelter 0, anxiety 30, fed and rested)</li><li>A night compressed: Ziggy&#x27;s sleepiness set to 100 once it had mated, so it goes home to sleep by its own rule</li><li>Ziggy&#x27;s player switched multiplayer off once Ziggy was home, so the story can follow Inky</li><li>A rock put in Inky’s tentacles and held (carry time raised to 60 s)</li><li>Inky placed mid-tank and held still, facing Ziggy, while the two are close</li><li>Inky alarmed and aggressive for the scene (anxiety 75, aggression 85)</li><li>Mating chance (2% per visit) made certain after the fight</li><li>Starvation compressed: Inky’s hunger set to 100 and health to 1.5 (a parent loses 0.1 health a second once starving)</li><li>Android: Pip&#x27;s aggression raised to 85 so the two scuffle</li><li>Android: Nova kept playful and unafraid while visiting (act_play 85, flee/rest 0, anxiety 25)</li></ol>
+<section id="chosen" class="chapter disclosure">
+  <h2>What was chosen, and what was not</h2>
+  <ol>
+    <li>Chosen, as four players would: each squid’s name and personality, and the colour three of them were
+    given on the About tab. A squid’s colour goes with it, so it is the same colour in every tank it visits.</li>
+    <li>Not touched: any drive, any timing, any chance. The squid were new hatchlings with the drives the game
+    gave them, time ran at the game’s own speed, nobody fed or cleaned, and the chance of mating was the game’s
+    own (a squid has to be an hour old before it can at all).</li>
+    <li>The “internet” is a private one made on a single machine out of Linux network namespaces: real address
+    translation and real routing, but not real home routers. These routers keep a tank’s port the same whoever
+    it talks to, which is what most home routers do and what makes “both players enter each other’s code”
+    work. A router that gives every destination a different port would need the port forwarded instead.</li>
+    <li>What this session showed is missing: two visitors in the same tank sense the tank’s own squid, but not
+    yet each other.</li>
+  </ol>
 </section>
 
 <section class="chapter how">
-  <h2>How these were made</h2>
+  <h2>How this was made</h2>
   <ul>
-    <li><strong>Desktop:</strong> <code>tools/capture_story.py</code> runs two real game processes (offscreen Qt)
-    with the multiplayer plugin on its multicast protocol, and screenshots each window.</li>
-    <li><strong>Android:</strong> <code>tools/capture_android.py</code> runs the Kivy app twice under a virtual
-    display and presses the buttons a player would: Host on one phone, Find and Connect on the other.</li>
-    <li>The game messages and thoughts quoted here are copied from each run’s log, not written for the page:
-    <code>docs/story-gallery/source/build.py</code> builds the page from the two runs’ JSON.</li>
+    <li><code>tools/internet_session.py</code> builds the homes and routers, starts one real game process in
+    each home (offscreen Qt), passes the friend codes round, and then only watches, writing every event to
+    <code>session.json</code> and saving each window as it goes.</li>
+    <li><code>docs/story-gallery/source/build.py</code> builds this page from that file. The thoughts and game
+    messages are copied from the run, not written for the page.</li>
+    <li>Run it again and the story is a different one: nothing here is scripted.</li>
   </ul>
 </section>
 </main>

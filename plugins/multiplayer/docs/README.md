@@ -1,5 +1,10 @@
 # Multiplayer: how squid live together
 
+**See it happen: the [story gallery](../../../docs/story-gallery/README.md)** -
+four squid in four homes, linked by friend codes over the internet and left
+alone for five minutes, with every thought, neuron and visit as it was
+recorded ([the full page](../../../docs/story-gallery/index.html)).
+
 Players enable the possibility of encounters. Squid make their own decisions.
 Evolution emerges from the consequences.
 

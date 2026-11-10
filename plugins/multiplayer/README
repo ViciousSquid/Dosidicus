@@ -1,11 +1,18 @@
 # 🦑 Multiplayer
 
-Lets a squid swim out of its tank and into somebody else's, over the LAN. The
+**See it happen: the story gallery, `docs/story-gallery/README.md`** - four
+squid in four homes, linked by friend codes over the internet and left alone
+for five minutes (the full page is `docs/story-gallery/index.html`).
+
+Lets a squid swim out of its tank and into somebody else's, on the home
+network or over the internet. The
 two squid can perceive each other, act on what they perceive, and remember the
 individual afterwards.
 
-**Experimental.** LAN only — no internet transport, no matchmaking, no NAT
-traversal. Not enabled at startup (`auto_load_blacklist` in `plugin_manager.py`);
+**Experimental.** On a home network tanks find each other by themselves. Over
+the internet two players exchange friend codes (Plugins > Multiplayer >
+Friends), or add each other's IP address; there is no matchmaking and no
+server in between. Not enabled at startup (`auto_load_blacklist` in `plugin_manager.py`);
 turn it on from the Plugin manager.
 
 ## Rules and risks
