@@ -287,6 +287,36 @@ class ConfigManager:
         self.config.set('Multiplayer', 'risk_notice_shown', str(bool(shown)))
         self._save_config()
 
+    def get_multiplayer_friends(self):
+        """Tanks the player linked to over the internet, as
+        [(ip, port, invitation)] - so a friend added once is still a friend
+        the next time the game is started."""
+        raw = self.config.get('Multiplayer', 'friends', fallback='')
+        friends = []
+        for entry in raw.split(','):
+            parts = entry.strip().split(':')
+            if len(parts) < 2:
+                continue
+            try:
+                friends.append((parts[0], int(parts[1]),
+                                int(parts[2]) if len(parts) > 2 else 0))
+            except ValueError:
+                continue
+        return friends
+
+    def set_multiplayer_friends(self, friends):
+        if not self.config.has_section('Multiplayer'):
+            self.config.add_section('Multiplayer')
+        self.config.set('Multiplayer', 'friends', ','.join(
+            f"{ip}:{int(port)}:{int(invitation)}" for ip, port, invitation in friends))
+        self._save_config()
+
+    def get_multiplayer_stun_server(self):
+        """host:port of the server asked "what is my address?" when the
+        player wants a friend code. Empty turns the question off."""
+        return self.config.get('Multiplayer', 'stun_server',
+                               fallback='stun.l.google.com:19302').strip()
+
     def get_facts_enabled(self):
         return self.config.getboolean('Facts', 'enabled', fallback=True)
 

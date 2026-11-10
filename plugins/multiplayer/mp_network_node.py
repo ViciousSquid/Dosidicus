@@ -13,12 +13,22 @@ import logging
 
 from .mp_constants import (MULTICAST_GROUP, MULTICAST_PORT, MAX_PACKET_SIZE,
                            RECEIVE_BUFFER_SIZE, MAX_MESSAGE_BYTES)
+from . import friend_link
+
+#: How many tanks this one will hold a direct link to at once. A tank holds
+#: its own squid and up to three visitors, so this is room for every one of
+#: them and a few friends besides.
+MAX_DIRECT_PEERS = 8
 
 
 class NetworkNode:
-    def __init__(self, node_id=None, logger=None):
+    def __init__(self, node_id=None, logger=None, port=None):
         """
         Represents a networked node in the multiplayer system.
+
+        `port` is the UDP port this tank listens on. Everything on a home
+        network uses the one default; another is only for a second tank on
+        the same machine, or a router that forwards a different one.
 
         Args:
             node_id (str, optional): Unique identifier for this node.
@@ -34,6 +44,22 @@ class NetworkNode:
         except ImportError:
             self.node_id = node_id or f"squid_{uuid.uuid4().hex[:8]}"
             self.utils = None # Mark utils as unavailable
+
+        self.port = int(port or MULTICAST_PORT)
+
+        # ---- friends over the internet (plugins/multiplayer/friend_link.py) ----
+        # A home network needs none of this: tanks there hear each other by
+        # multicast, as they always have. A friend elsewhere has to be reached
+        # directly, at an address one player gave the other.
+        #: (ip, port) -> {'invitation', 'added', 'last_heard', 'name', 'theirs'}
+        self.direct_peers = {}
+        #: What a stranger has to show before this tank will listen to it.
+        #: Carried in this tank's friend code; a new one makes the old code useless.
+        self.invitation = friend_link.new_invitation()
+        #: (ip, port) this tank is seen at from outside, once it has asked.
+        self.public_endpoint = None
+        self._public_endpoint_found = threading.Event()
+        self.packets_refused = 0
 
         self.socket = None
         self.initialized = False # Socket structure initialized (IP_ADD_MEMBERSHIP etc.)
@@ -252,8 +278,8 @@ class NetworkNode:
             # 10001, so it never heard anything. SO_REUSEADDR (set above) allows
             # multiple processes to share a UDP multicast port on Windows.
             try:
-                self.socket.bind(('', MULTICAST_PORT))
-                self.logger.info(f"Socket bound successfully to port {MULTICAST_PORT}.")
+                self.socket.bind(('', self.port))
+                self.logger.info(f"Socket bound successfully to port {self.port}.")
             except OSError as bind_error:
                 self.logger.error(
                     f"Could not bind to port {MULTICAST_PORT}: {bind_error}. "
@@ -315,6 +341,15 @@ class NetworkNode:
 
             try:
                 raw_data, addr = self.socket.recvfrom(RECEIVE_BUFFER_SIZE)
+
+                if raw_data and friend_link.looks_like_stun(raw_data):
+                    # The answer to "what address do you see me at?" - asked
+                    # only when the player wanted a friend code.
+                    mapped = friend_link.stun_mapped_address(raw_data)
+                    if mapped is not None:
+                        self.public_endpoint = mapped
+                        self._public_endpoint_found.set()
+                    continue
 
                 if raw_data:
                     # Use the thread-safe queue for passing data to the main thread.
@@ -508,6 +543,8 @@ class NetworkNode:
                     sent_ok = True
                 except OSError as e_send:
                     self.logger.warning(f"[MCAST] Send on interface {iface_ip} failed: {e_send}")
+            if self._send_to_friends(message_data, data_to_send):
+                sent_ok = True
             if sent_ok:
                 self.messages_sent += 1
 
@@ -570,6 +607,8 @@ class NetworkNode:
                     sent_ok = True
                 except OSError as e_send:
                     self.logger.warning(f"[MCAST] Batch send on interface {iface_ip} failed: {e_send}")
+            if self._send_to_friends(batch_data, data_to_send):
+                sent_ok = True
             if self.debug_mode:
                 self.logger.debug(f"Sent batch ({len(data_to_send)} bytes, {len(messages)} msgs) on {len(send_ips)} interface(s).")
             return sent_ok
@@ -580,6 +619,147 @@ class NetworkNode:
         except Exception as e:
             self.logger.error(f"Error sending message batch: {e}", exc_info=self.debug_mode)
         return False
+
+    # ------------------------------------------------------------------
+    # Friends over the internet
+    # ------------------------------------------------------------------
+    def _encode(self, message_data: dict) -> bytes:
+        if self.use_compression:
+            if self.utils and hasattr(self.utils, 'compress_message'):
+                return self.utils.compress_message(message_data)
+            return zlib.compress(json.dumps(message_data).encode('utf-8'))
+        return json.dumps(message_data).encode('utf-8')
+
+    def _send_to_friends(self, message_data: dict, encoded: bytes) -> bool:
+        """Send one message straight to every friend's tank.
+
+        The same message everyone on the home network gets by multicast. A
+        friend whose invitation we hold is shown it with every message, so
+        their tank goes on listening to us however our address changes.
+        """
+        if not self.direct_peers or self.socket is None:
+            return False
+        sent = False
+        for address, peer in list(self.direct_peers.items()):
+            data = encoded
+            if peer.get('invitation'):
+                data = self._encode(dict(message_data, invite=peer['invitation']))
+            try:
+                self.socket.sendto(data, address)
+                sent = True
+            except OSError as exc:
+                if self.debug_mode:
+                    self.logger.debug(f"[FRIEND] send to {address} failed: {exc}")
+        return sent
+
+    def add_friend(self, ip: str, port: int = None, invitation: int = 0,
+                   name: str = '') -> tuple:
+        """Open a direct link to a friend's tank. Returns its (ip, port).
+
+        Adding a friend is also what makes this tank listen to them: traffic
+        from the internet is only ever heard from an address the player
+        added, or from someone showing this tank's own invitation.
+        """
+        address = (str(ip), int(port or friend_link.DEFAULT_PORT))
+        if address not in self.direct_peers and len(self.direct_peers) >= MAX_DIRECT_PEERS:
+            raise ValueError(f"already linked to {MAX_DIRECT_PEERS} tanks")
+        peer = self.direct_peers.setdefault(address, {
+            'added': time.time(), 'last_heard': 0.0, 'theirs': False})
+        peer['invitation'] = int(invitation or peer.get('invitation') or 0)
+        if name:
+            peer['name'] = name
+        return address
+
+    def remove_friend(self, ip: str, port: int = None) -> bool:
+        if port is None:
+            gone = [a for a in self.direct_peers if a[0] == ip]
+        else:
+            gone = [a for a in self.direct_peers if a == (ip, int(port))]
+        for address in gone:
+            del self.direct_peers[address]
+        return bool(gone)
+
+    def _admit(self, addr, message_dict: dict) -> bool:
+        """Is this tank listening to whoever sent this?
+
+        Anything from this machine or this home network is heard, as it
+        always was. From the internet, a sender is heard only if the player
+        added their address, or if they show this tank's invitation - the
+        number in its friend code. Showing it is also how they are added, so
+        one player giving the other a code is enough for both tanks to talk.
+        A stranger who merely finds the port is not answered at all.
+        """
+        try:
+            ip, port = addr[0], int(addr[1])
+        except (TypeError, ValueError, IndexError):
+            return False
+        now = time.time()
+        known = self.direct_peers.get((ip, port))
+        if known is None:
+            # The same friend from a different port: routers re-map them.
+            for address, peer in list(self.direct_peers.items()):
+                if address[0] == ip:
+                    del self.direct_peers[address]
+                    self.direct_peers[(ip, port)] = known = peer
+                    break
+        if known is not None:
+            known['last_heard'] = now
+            return True
+        shown = message_dict.get('invite')
+        if (isinstance(shown, int) and not isinstance(shown, bool)
+                and shown == self.invitation
+                and len(self.direct_peers) < MAX_DIRECT_PEERS):
+            # Linked back, wherever they are: a friend on the same network or
+            # the same VPN is answered directly too, since plenty of networks
+            # carry no multicast at all.
+            self.direct_peers[(ip, port)] = {
+                'added': now, 'last_heard': now, 'invitation': 0, 'theirs': True}
+            self.logger.info(f"[FRIEND] {ip}:{port} joined with this tank's friend code.")
+            return True
+        return friend_link.is_local_address(ip)
+
+    def find_public_endpoint(self, server: str = 'stun.l.google.com',
+                             server_port: int = 19302, timeout: float = 2.5):
+        """Ask a public STUN server what address this tank is seen at.
+
+        Sent from the tank's own socket, so the port in the answer is the one
+        a friend's tank has to send to. Twenty bytes go out and they say
+        nothing about the player. Returns (ip, port), or None if there was no
+        answer - offline, or the server is blocked.
+        """
+        if self.socket is None:
+            return None
+        self._public_endpoint_found.clear()
+        try:
+            target = (socket.gethostbyname(server), int(server_port))
+            for _ in range(3):
+                self.socket.sendto(friend_link.stun_request(), target)
+                if self._public_endpoint_found.wait(timeout / 3.0):
+                    break
+        except OSError as exc:
+            self.logger.info(f"[FRIEND] could not ask {server} for this tank's address: {exc}")
+            return None
+        return self.public_endpoint if self._public_endpoint_found.is_set() else None
+
+    def friend_code(self, public: bool = True) -> str:
+        """This tank's friend code.
+
+        Built from the address it is seen at from outside if that is known
+        (find_public_endpoint), otherwise from its address on the home
+        network - which is the right code for a friend on the same network or
+        the same VPN, and no use to anyone else.
+        """
+        if public and self.public_endpoint:
+            ip, port = self.public_endpoint
+        else:
+            ip, port = self.local_ip, self.port
+        return friend_link.encode_friend_code(ip, port, self.invitation)
+
+    def new_friend_code(self) -> str:
+        """Throw the old invitation away. Whoever joined with it stays linked;
+        nobody new can use the old code."""
+        self.invitation = friend_link.new_invitation()
+        return self.friend_code()
 
     def receive_messages(self):
         """
@@ -668,6 +848,11 @@ class NetworkNode:
             # Critical filter: Ignore messages from self
             if final_sender_node_id == self.node_id:
                 self.packets_dropped_self += 1
+                continue
+
+            # From the internet, only a friend is heard (see _admit).
+            if not self._admit(addr, message_dict):
+                self.packets_refused += 1
                 continue
 
             # ── Deduplication ────────────────────────────────────────────────────────

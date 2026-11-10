@@ -347,9 +347,11 @@ def build_journey(facts: Dict[str, Any]) -> List[Chapter]:
                       lambda f: f.get('multiplayer_on', False) or f.get('met_a_squid', False),
                       players_part=True),
             Milestone('hears', "It knows another aquarium is out there",
-                      "Another player's tank has to be reachable on your "
-                      "network. The first time one is heard, your squid grows "
-                      "a sense for it; whether that draws it out or keeps it "
+                      "Another player's tank has to be reachable: on your own "
+                      "network they find each other; for a friend elsewhere, "
+                      "swap friend codes in Plugins > Multiplayer > Friends. "
+                      "The first time a tank is heard, your squid grows a "
+                      "sense for it; whether that draws it out or keeps it "
                       "home is its temperament, and then its experience.",
                       "It has grown aquarium_nearby.",
                       lambda f: f.get('hears_aquarium', False) or f.get('met_a_squid', False)),

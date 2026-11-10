@@ -364,3 +364,48 @@ host-resolved consequences above.
 
 Neural rock throwing, impact replay protection, protocol 4 and Android remote-mind visits:
 see [docs/rocks.md](docs/rocks.md).
+
+
+Playing with a friend over the internet
+---------------------------------------
+On one home network, tanks find each other by themselves. A friend somewhere
+else has to be told where your tank is:
+
+  1. Both of you enable Multiplayer (Plugins > Plugin Manager) and accept its
+     warning.
+  2. Plugins > Multiplayer > Friends (internet play)...
+  3. Press "Get my code" and send the 20-character code to your friend - by
+     chat, by voice, however you like. They do the same.
+  4. Each of you types the other's code into "Add a friend" and presses
+     Connect. "Linked tanks" shows "connected" when the two can hear each
+     other.
+
+That is all the players do. Linking tanks only makes a meeting POSSIBLE: each
+squid grows a sense for the other aquarium and decides for itself whether to
+go, what to do when it gets there, and when to come home. A tank holds its own
+squid and up to three visitors - four squid at once.
+
+You can also type an IP address (1.2.3.4 or 1.2.3.4:10000) instead of a code.
+An address carries no invitation, so the other player has to add yours too.
+
+What a friend code is. It contains the internet address your tank is seen at,
+its port, and an invitation - a number only someone holding the code knows.
+Your tank ignores anyone on the internet who does not show that invitation
+(or whose address you did not add yourself). "New code" replaces the
+invitation, so the old code stops working; friends already linked stay linked.
+Because it contains your address, give it only to people you would give your
+address to. "Get my code" finds that address by asking a public STUN server
+(stun.l.google.com by default; config.ini [Multiplayer] stun_server, empty to
+turn it off) one twenty-byte question that says nothing about you. Nothing is
+sent anywhere until you press it.
+
+If the tanks do not connect. Home routers only let in traffic from somewhere
+your game has just sent to. Both players entering each other's code makes each
+game send first, which opens the way on most routers. If it still does not
+work, the player being joined should forward UDP port 10000 on their router
+(then only they need to share a code). A few routers and most mobile
+connections cannot be got through either way.
+
+It is peer to peer: there is no server, no account, and nothing is stored
+anywhere but on the two computers. Friends you add are remembered in
+config.ini [Multiplayer] friends.
