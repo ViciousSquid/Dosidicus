@@ -683,6 +683,7 @@ class Squid:
         if self.startled_icon is not None:
             self.ui.scene.removeItem(self.startled_icon)
             self.startled_icon = None
+            self.place_head_icon()          # whichever icon was waiting takes its place
 
     def show_neurogenesis_icon(self):
         """Show the neurogenesis (ng.png) icon above the squid's head"""
@@ -697,6 +698,7 @@ class Squid:
         if self.ng_icon is not None:
             self.ui.scene.removeItem(self.ng_icon)
             self.ng_icon = None
+            self.place_head_icon()          # whichever icon was waiting takes its place
 
     #: The gap between the top of the squid and the bottom of an icon above
     #: its head, in pixels of the tank as designed (drawn at the tank's scale).
@@ -717,17 +719,21 @@ class Squid:
         return found
 
     def place_head_icon(self, icon=None):
-        """Put the icons above the squid's head just above it - and out of
-        sight while the squid itself is (away visiting another tank).
+        """Show ONE icon above the squid's head, just above it - and none
+        while the squid itself is out of sight (away visiting another tank).
 
-        Every head icon (neurogenesis, startled, sick, curious and the rest)
-        is placed here, together: their bottom edges a small gap above the
-        squid, side by side and centred on it when there is more than one.
-        They used to be pinned a fixed 100 pixels above it by their top edge
-        - right for a full-size icon on the screen the game was designed on,
-        and floating further above the squid the smaller the tank was drawn
-        - each on top of the other, and some were moved less often than the
-        squid, so they trailed behind it.
+        Several things can be true of a squid at once (it has just grown a
+        neuron and it is curious), and each has an icon. Only one is shown at
+        a time: the first that applies of sick, startled, neurogenesis, then
+        the other states (the order of _head_icons). The rest stay hidden
+        until it is their turn.
+
+        The icon's bottom edge sits a small gap above the squid, centred on
+        it. Icons used to be pinned a fixed 100 pixels above it by their top
+        edge - right for a full-size icon on the screen the game was designed
+        on, and floating further above the squid the smaller the tank was
+        drawn - one on top of another, and some were moved less often than
+        the squid, so they trailed behind it.
         """
         from .display_scaling import DisplayScaling
         icons = self._head_icons()
@@ -736,15 +742,13 @@ class Squid:
         if not icons:
             return
         gap = DisplayScaling.points(self.HEAD_ICON_GAP)
-        between = max(2, gap // 2)
-        widths = [each.pixmap().width() for each in icons]
-        x = self.squid_x + self.squid_width / 2.0 - (sum(widths) + between * (len(icons) - 1)) / 2.0
         body = getattr(self, 'squid_item', None)
-        visible = bool(body.isVisible()) if body is not None else True
-        for each, width in zip(icons, widths):
-            each.setPos(int(round(x)), self.squid_y - gap - each.pixmap().height())
-            each.setVisible(visible)
-            x += width + between
+        in_tank = bool(body.isVisible()) if body is not None else True
+        for index, each in enumerate(icons):
+            pixmap = each.pixmap()
+            each.setPos(int(round(self.squid_x + self.squid_width / 2.0 - pixmap.width() / 2.0)),
+                        self.squid_y - gap - pixmap.height())
+            each.setVisible(in_tank and index == 0)     # the first, and only it
 
     def set_in_tank(self, present):
         """Show or hide the squid's body - and with it everything drawn

@@ -60,6 +60,10 @@ class MentalStateManager:
             if state.icon_item is not None:
                 self.scene.removeItem(state.icon_item)
                 state.icon_item = None
+                # Whichever icon was waiting behind this one takes its place.
+                place = getattr(self.squid, 'place_head_icon', None)
+                if callable(place):
+                    place()
 
     def update_icon_position(self, icon_item):
         # Just above the squid's head, where every head icon goes - and

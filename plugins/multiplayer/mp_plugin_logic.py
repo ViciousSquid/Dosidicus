@@ -1188,6 +1188,11 @@ class MultiplayerPlugin:
             return
         self.disable()
 
+    def _resident_is_away(self) -> bool:
+        """Is this tank's own squid out visiting another tank?"""
+        mind = getattr(self, 'visitor_mind', None)
+        return bool(mind is not None and getattr(mind.perception, 'away', False))
+
     def update_encounters(self) -> None:
         """Open, feed and close encounters. Called on the sync tick.
 
@@ -1221,11 +1226,20 @@ class MultiplayerPlugin:
             else:
                 session.note_item_taken()
 
+        # A squid that is out visiting is not in its own tank. Whoever is in
+        # that tank is not with it, and nothing that happens there is its
+        # experience: it opens no encounter, and one it was in ended when it
+        # swam out. (It used to go on "meeting" a visitor to its empty tank,
+        # and came to remember an encounter with a squid it had never seen.)
+        away = self._resident_is_away()
         present = {}
         for presence in self.conspecific_view.presences.values():
-            if now - presence.last_update > 3.0:
+            if away or now - presence.last_update > 3.0:
                 continue
             present[presence.uuid] = presence
+        if away:
+            for uuid_key in list(self.open_encounters):
+                self.close_encounter(uuid_key, drives, now)
 
         self._perceive_visitors(squid, present)
 

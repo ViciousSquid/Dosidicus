@@ -48,78 +48,90 @@ def _restore(saved):
     D._scale_factor, D._ratio, D._small_screen, D._window_base = saved
 
 
-def test_every_head_icon_sits_just_above_the_squid_at_any_tank_size():
+def test_the_head_icon_sits_just_above_the_squid_at_any_tank_size():
     for screen in ((2880, 1920), (2560, 1440), (1920, 1080)):
         saved = _with_screen(*screen)
         try:
             scene = QtWidgets.QGraphicsScene()
             squid = _squid(scene)
             icon_image = D.to_points(QtGui.QPixmap(72, 90))          # ng.png, sick.png, curious.png
-            places = []
             for name in ('ng_icon', 'startled_icon', 'sick_icon_item'):
+                squid.ng_icon = squid.startled_icon = squid.sick_icon_item = None
                 icon = scene.addPixmap(icon_image)
                 setattr(squid, name, icon)
-            squid.update_head_icon_positions()
-            for name in ('ng_icon', 'startled_icon', 'sick_icon_item'):
-                icon = getattr(squid, name)
-                bottom = icon.y() + icon.pixmap().height()
-                gap = squid.squid_y - bottom
-                places.append((icon.x(), icon.y()))
+                squid.update_head_icon_positions()
+                gap = squid.squid_y - (icon.y() + icon.pixmap().height())
                 # A small gap, the same share of the tank on every screen -
                 # not the 54 pixels it floated at on a 1080p screen.
                 assert gap == D.points(10) and 0 < gap <= 10, (screen, name, gap)
-            assert len({y for _x, y in places}) == 1                 # all at one height
-            assert len({x for x, _y in places}) == 3                 # side by side, not stacked
-            left = min(x for x, _y in places)
-            right = max(x for x, _y in places) + icon_image.width()
-            assert abs((left + right) / 2 - (squid.squid_x + squid.squid_width / 2)) <= 1
+                centre = icon.x() + icon.pixmap().width() / 2
+                assert abs(centre - (squid.squid_x + squid.squid_width / 2)) <= 1
+                assert icon.isVisible()
         finally:
             _restore(saved)
 
 
-def test_the_curious_and_sick_icons_are_placed_the_same_way():
+def test_only_one_icon_is_shown_above_the_head_at_a_time():
+    """A squid can be curious and have just grown a neuron at once. One icon
+    is shown - the first that applies of sick, startled, neurogenesis, then
+    the other states - and the rest wait."""
     from src.mental_states import MentalStateManager
     scene = QtWidgets.QGraphicsScene()
     squid = _squid(scene)
     manager = MentalStateManager(squid, scene)
     squid.mental_state_manager = manager
-    manager.set_state('sick', True)
-    sick = manager.mental_states['sick'].icon_item
-    ng = scene.addPixmap(sick.pixmap())
+    manager.set_state('curious', True)
+    curious = manager.mental_states['curious'].icon_item
+    squid.update_head_icon_positions()
+    assert curious.isVisible()                               # alone: shown
+
+    ng = scene.addPixmap(curious.pixmap())                   # ...then it grows a neuron
     squid.ng_icon = ng
     squid.update_head_icon_positions()
-    assert ng.y() == sick.y()                    # the same height above the head
-    assert ng.x() != sick.x()                    # beside each other
-    # One of them alone sits exactly over the middle of the squid.
-    manager.set_state('sick', False)
-    squid.update_head_icon_positions()
+    assert ng.isVisible() and not curious.isVisible()        # one icon, not two
     centre = ng.x() + ng.pixmap().width() / 2
     assert abs(centre - (squid.squid_x + squid.squid_width / 2)) <= 1
-    # And when the squid moves, every one of them moves with it at once.
-    manager.set_state('curious', True)
-    squid.squid_x += 90
+
+    startled = scene.addPixmap(curious.pixmap())             # ...and something startles it
+    squid.startled_icon = startled
     squid.update_head_icon_positions()
-    curious = manager.mental_states['curious'].icon_item
-    middle = (min(ng.x(), curious.x()) + max(ng.x(), curious.x()) + ng.pixmap().width()) / 2
-    assert abs(middle - (squid.squid_x + squid.squid_width / 2)) <= 1
+    assert [i.isVisible() for i in (startled, ng, curious)] == [True, False, False]
+
+    sick = scene.addPixmap(curious.pixmap())                 # sick comes before everything
+    squid.sick_icon_item = sick
+    squid.update_head_icon_positions()
+    assert [i.isVisible() for i in (sick, startled, ng, curious)] == [True, False, False, False]
+
+    # As each passes, the next takes its place - in the same spot.
+    scene.removeItem(sick); squid.sick_icon_item = None
+    scene.removeItem(startled); squid.startled_icon = None
+    squid.update_head_icon_positions()
+    assert ng.isVisible() and not curious.isVisible()
+    scene.removeItem(ng); squid.ng_icon = None
+    squid.squid_x += 90                                      # and it moves with the squid
+    squid.update_head_icon_positions()
+    assert curious.isVisible()
+    centre = curious.x() + curious.pixmap().width() / 2
+    assert abs(centre - (squid.squid_x + squid.squid_width / 2)) <= 1
+    assert sum(1 for i in squid._head_icons() if i.isVisible()) == 1
 
 
-def test_a_squid_that_swims_out_takes_its_head_icons_with_it():
+def test_a_squid_that_swims_out_takes_its_head_icon_with_it():
     from src.mental_states import MentalStateManager
     scene = QtWidgets.QGraphicsScene()
     squid = _squid(scene)
     manager = MentalStateManager(squid, scene)
     squid.mental_state_manager = manager
-    manager.set_state('sick', True)
+    manager.set_state('curious', True)
     squid.ng_icon = scene.addPixmap(QtGui.QPixmap(72, 90))
     squid.update_head_icon_positions()
-    sick = manager.mental_states['sick'].icon_item
-    assert squid.ng_icon.isVisible() and sick.isVisible()
+    curious = manager.mental_states['curious'].icon_item
+    assert squid.ng_icon.isVisible() and not curious.isVisible()
     squid.set_in_tank(False)                     # it has left for another tank
     assert not squid.squid_item.isVisible()
-    assert not squid.ng_icon.isVisible() and not sick.isVisible()
+    assert not squid.ng_icon.isVisible() and not curious.isVisible()
     squid.set_in_tank(True)                      # and come home
-    assert squid.ng_icon.isVisible() and sick.isVisible()
+    assert squid.ng_icon.isVisible() and not curious.isVisible()
     # Both ways out of the tank, and both ways back, go through it.
     for name in ('src/squid.py', 'plugins/multiplayer/visitor_mind.py',
                  'plugins/multiplayer/mp_plugin_logic.py'):
