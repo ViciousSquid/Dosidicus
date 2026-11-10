@@ -59,7 +59,7 @@ def _layout(widget):
     return found
 
 
-def capture(output, label):
+def capture(output, label, brain_size=None):
     from test_lan_round_trip import _setup, _shutdown
     output = output.resolve()
     shots = output / 'shots'
@@ -156,6 +156,9 @@ def capture(output, label):
         elif number == 1:
             if not brain_window.isVisible():
                 brain_window.show()
+            if brain_size:                          # a size every runner's screen can hold
+                brain_window.resize(*brain_size)
+                notes['brain_resized_to'] = list(brain_size)
             if ui.statistics_window is None or not ui.statistics_window.isVisible():
                 ui.toggle_statistics_window()
             journey = getattr(ui, 'journey_window', None)
@@ -399,6 +402,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('output', type=Path, nargs='?')
     parser.add_argument('--label', default=sys.platform)
+    parser.add_argument('--brain-size', default='',
+                        help='WIDTHxHEIGHT: open the Brain Tool at this size instead of its '
+                             'own (which a small screen cuts down)')
     parser.add_argument('--compare', type=Path, nargs='+')
     parser.add_argument('--report', type=Path)
     parser.add_argument('--publish', type=Path, nargs='+',
@@ -410,4 +416,5 @@ if __name__ == '__main__':
         sys.exit(compare(args.compare, args.report))
     if not args.output:
         parser.error('an output folder is needed')
-    sys.exit(capture(args.output, args.label))
+    size = tuple(int(v) for v in args.brain_size.lower().split('x')) if args.brain_size else None
+    sys.exit(capture(args.output, args.label, size))

@@ -85,11 +85,11 @@ jobs:
 
       - name: Photograph the game (Windows)
         if: matrix.label == 'windows'
-        run: python tools/capture_platforms.py captured --label windows
+        run: python tools/capture_platforms.py captured --brain-size 1000x620 --label windows
 
       - name: Photograph the game (macOS)
         if: matrix.label == 'macos'
-        run: python tools/capture_platforms.py captured --label macos
+        run: python tools/capture_platforms.py captured --brain-size 1000x620 --label macos
 
       - name: Photograph the game (Linux, X11)
         if: matrix.label == 'linux-x11'
@@ -97,7 +97,7 @@ jobs:
           xvfb-run -a -s "-screen 0 1920x1080x24" bash -c '
             openbox >/dev/null 2>&1 &
             sleep 2
-            python tools/capture_platforms.py captured --label linux-x11'
+            python tools/capture_platforms.py captured --brain-size 1000x620 --label linux-x11'
 
       - name: Photograph the game (Linux, Wayland)
         if: matrix.label == 'linux-wayland'
@@ -114,7 +114,7 @@ jobs:
           # No X server is running in this job: the game can only be on Wayland.
           env -u DISPLAY QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-capture \
             XDG_SESSION_TYPE=wayland \
-            python tools/capture_platforms.py captured --label linux-wayland
+            python tools/capture_platforms.py captured --brain-size 1000x620 --label linux-wayland
 
       - name: Keep the pictures
         if: always()

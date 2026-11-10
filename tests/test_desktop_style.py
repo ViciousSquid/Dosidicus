@@ -33,6 +33,10 @@ def _installed():
 
 def _restore(before):
     font, palette, style = before
+    rules = getattr(_APP, '_dosidicus_layout_rules', None)
+    if rules is not None:
+        _APP.removeEventFilter(rules)
+        _APP._dosidicus_layout_rules = None
     _APP.setStyle(QtWidgets.QStyleFactory.create(style) or QtWidgets.QStyleFactory.create('Fusion'))
     _APP.setPalette(palette)
     _APP.setFont(font)
@@ -171,3 +175,54 @@ def test_both_ways_into_the_game_set_the_style_before_any_window():
     for match in re.finditer(r'QtWidgets\.QApplication\(sys\.argv\)', text):
         before = text[:match.start()]
         assert before.rfind('prepare_qt()') > before.rfind('def ')
+
+
+def test_fusions_sizes_are_written_out_as_it_gives_them_at_96_dpi():
+    """A Mac multiplies Fusion's sizes by 96/72. The table the game uses
+    instead must be exactly what Fusion gives where nothing is multiplied -
+    here, on Linux at 96 DPI (run in a process of its own, prepared as the
+    game prepares)."""
+    if sys.platform == 'darwin':
+        return
+    import json
+    import subprocess
+    script = ("import json, sys; sys.path.insert(0, %r);"
+              "from PyQt5 import QtWidgets; from src import desktop_style as d;"
+              "d.prepare_qt(); app = QtWidgets.QApplication([]);"
+              "f = QtWidgets.QStyleFactory.create('Fusion'); S = QtWidgets.QStyle;"
+              "print(json.dumps({n: f.pixelMetric(getattr(S, n)) for n in d.METRICS}))" % str(ROOT))
+    env = dict(os.environ, QT_QPA_PLATFORM='offscreen')
+    out = subprocess.run([sys.executable, '-c', script], env=env, capture_output=True,
+                         text=True, timeout=120, check=True).stdout
+    assert json.loads(out.strip().splitlines()[-1]) == desktop_style.METRICS
+
+
+def test_a_message_box_is_laid_out_and_sized_the_same_way_everywhere():
+    before = _installed()
+    try:
+        box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Question, 'Dosidicus',
+                                    'Let the squid go out to other tanks?',
+                                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        box.setInformativeText('What happens to it out there cannot be undone.')
+        box.show()
+        _APP.processEvents()
+        grid = box.layout()
+        assert grid.contentsMargins().left() == grid.contentsMargins().top() == 11
+        assert grid.horizontalSpacing() == grid.verticalSpacing() == 6
+        label = box.findChild(QtWidgets.QLabel, 'qt_msgbox_label')
+        assert not label.font().bold() and label.font().family() == 'Fio UI'
+        buttons = box.findChild(QtWidgets.QDialogButtonBox)
+        position = grid.getItemPosition(grid.indexOf(buttons))
+        assert position[1] == 0 and position[3] == grid.columnCount()     # under everything
+        assert box.size() == desktop_style.message_box_size(box)
+        # Qt's own built-in picture, not the system's.
+        icon = _APP.style().standardIcon(QtWidgets.QStyle.SP_MessageBoxQuestion)
+        assert not icon.isNull()
+        box.close()
+    finally:
+        _restore(before)
+
+
+def test_one_text_engine_is_asked_for_on_windows_and_a_mac():
+    text = (ROOT / 'src' / 'desktop_style.py').read_text(encoding='utf-8')
+    assert "fontengine=freetype" in text and "DOSIDICUS_NATIVE_TEXT" in text
