@@ -7,7 +7,7 @@ does is in MultiplayerPlugin and friend_link.py; this is only the window.
 import threading
 import time
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 class FriendsDialog(QtWidgets.QDialog):
@@ -29,17 +29,34 @@ class FriendsDialog(QtWidgets.QDialog):
         font.setPointSize(font.pointSize() + 4)
         font.setBold(True)
         self.code.setFont(font)
-        box.addWidget(self.code)
+        self.code.setToolTip("Click to select the whole code; Ctrl+C copies it.")
+        self.code.installEventFilter(self)          # a click selects all of it
+        # The code and its Copy button side by side: the code is for sending
+        # to someone, so copying it is the first thing a player wants.
+        code_row = QtWidgets.QHBoxLayout()
+        code_row.addWidget(self.code, 1)
+        self.copy_button = QtWidgets.QPushButton(self.COPY_LABEL)
+        self.copy_button.setToolTip("Copy your friend code to the clipboard, "
+                                    "ready to paste into a message.")
+        self.copy_button.setMinimumHeight(self.code.sizeHint().height())
+        self.copy_button.setEnabled(False)          # nothing to copy yet
+        self.copy_button.clicked.connect(self.copy_code)
+        self.code.textChanged.connect(
+            lambda text: self.copy_button.setEnabled(bool(text.strip())))
+        code_row.addWidget(self.copy_button)
+        box.addLayout(code_row)
+        self._copied_timer = QtCore.QTimer(self)
+        self._copied_timer.setSingleShot(True)
+        self._copied_timer.timeout.connect(
+            lambda: self.copy_button.setText(self.COPY_LABEL))
         row = QtWidgets.QHBoxLayout()
         self.get_button = QtWidgets.QPushButton("Get my code")
         self.get_button.clicked.connect(self.get_code)
-        self.copy_button = QtWidgets.QPushButton("Copy")
-        self.copy_button.clicked.connect(self.copy_code)
         self.new_button = QtWidgets.QPushButton("New code")
         self.new_button.setToolTip("Make the old code useless. Friends already "
                                    "linked stay linked.")
         self.new_button.clicked.connect(self.new_code)
-        for button in (self.get_button, self.copy_button, self.new_button):
+        for button in (self.get_button, self.new_button):
             row.addWidget(button)
         box.addLayout(row)
         self.code_note = QtWidgets.QLabel(
@@ -109,10 +126,31 @@ class FriendsDialog(QtWidgets.QDialog):
                                          name="FriendCode", daemon=True)
         self._finding.start()
 
+    COPY_LABEL = "Copy code"
+    COPIED_LABEL = "Copied"
+
+    def eventFilter(self, obj, event):
+        if obj is self.code and event.type() == QtCore.QEvent.MouseButtonRelease:
+            if self.code.text() and not self.code.hasSelectedText():
+                self.code.selectAll()
+        return super().eventFilter(obj, event)
+
     def copy_code(self):
-        if self.code.text():
-            QtWidgets.QApplication.clipboard().setText(self.code.text())
-            self.status.setText("Code copied.")
+        """Put the friend code on the clipboard. True if there was one."""
+        code = self.code.text().strip()
+        if not code:
+            self.status.setText("There is no code yet - press 'Get my code' first.")
+            return False
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.setText(code)
+        if clipboard.supportsSelection():           # X11: middle-click pastes it too
+            clipboard.setText(code, QtGui.QClipboard.Selection)
+        self.code.selectAll()
+        self.copy_button.setText(self.COPIED_LABEL)
+        self._copied_timer.start(2000)
+        self.status.setText("Friend code copied to the clipboard - paste it "
+                            "into a message to your friend.")
+        return True
 
     def new_code(self):
         self.code.setText(self.plugin.new_friend_code())
