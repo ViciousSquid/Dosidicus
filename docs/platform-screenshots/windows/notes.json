@@ -188,9 +188,22 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 16,
+    "anxiety": 14,
     "happiness": 100,
     "neurons": 19
   },
-  "seconds": 57.8
+  "scale": {
+    "tank_scale": 0.5123,
+    "squid": [
+      129,
+      75
+    ],
+    "tank_window": [
+      688,
+      458
+    ],
+    "squid_share_of_width": 0.1875,
+    "food": 33
+  },
+  "seconds": 57.2
 }
