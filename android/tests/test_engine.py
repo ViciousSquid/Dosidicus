@@ -281,6 +281,17 @@ b.perceive('squid_in_view', 100.)
 assert b.enhanced_neurogenesis.observe_social() == 'can_see_squid'
 assert learn_from_encounter(b, -20., 'hostile', 'Guest')
 assert 'warier of squid' in b.social_thoughts[-1][1]
+# The network the desktop game uses, as staged for the phone: a tank goes
+# on it, gets a friend code, and is told by another aquarium's heartbeat.
+from dosidicus_mobile.engine.tank_link import TankLink
+import socket
+probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); probe.bind(('127.0.0.1', 0))
+port = probe.getsockname()[1]; probe.close()
+link = TankLink(s, port=port, stun_server='')
+assert link.start()
+assert len(link.friend_code().replace('-', '')) == 15
+assert s.squid.can_venture and s.squid.why_not_venturing() == 'it senses no other aquarium'
+link.stop()
 assert 'PyQt5' not in sys.modules and 'kivy' not in sys.modules
 '''
     result = subprocess.run([sys.executable, '-c', code], cwd=staged,

@@ -736,6 +736,31 @@ class NetworkNode:
             return True
         return friend_link.is_local_address(ip)
 
+    @staticmethod
+    def _message_digest(message_dict: dict, raw_data: bytes) -> bytes:
+        """What makes two datagrams the same message.
+
+        Byte for byte, usually: the copies that arrive once per interface are
+        identical. But a friend who is also on the home network is reached
+        twice - by multicast, and directly with the invitation added - and
+        those two copies differ only in that one field. Taken as two
+        messages, one squid asking to come in was admitted twice, and went on
+        following a visit its host had already replaced. So a message that
+        shows an invitation is compared without it.
+        """
+        if 'invite' in message_dict:
+            try:
+                plain = {key: value for key, value in message_dict.items() if key != 'invite'}
+                raw_data = json.dumps(plain, sort_keys=True).encode('utf-8')
+            except (TypeError, ValueError):
+                pass
+        else:
+            try:
+                raw_data = json.dumps(message_dict, sort_keys=True).encode('utf-8')
+            except (TypeError, ValueError):
+                pass
+        return hashlib.blake2b(raw_data, digest_size=16).digest()
+
     def _note_wrong_invitation(self, shown: int, now: float) -> None:
         """A stranger showed an invitation that is not this tank's."""
         wrong = self._wrong_invitations
@@ -902,7 +927,7 @@ class NetworkNode:
                 k: v for k, v in self._seen_message_ids.items()
                 if _now - v < self._dedup_ttl
             }
-            msg_dedup_key = (final_sender_node_id, hashlib.blake2b(raw_data, digest_size=16).digest())
+            msg_dedup_key = (final_sender_node_id, self._message_digest(message_dict, raw_data))
             if msg_dedup_key in self._seen_message_ids:
                 self.packets_dropped_duplicate += 1
                 if self.debug_mode:

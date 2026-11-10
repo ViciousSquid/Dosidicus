@@ -267,6 +267,27 @@ class TwoTanksLinkedDirectly(unittest.TestCase):
             time.sleep(0.02)
         return got
 
+    def test_a_friend_reached_two_ways_is_heard_once(self):
+        """A friend on the same network is reached by multicast and, with
+        the invitation added, directly: the same message, differing in that
+        one field. Taken as two, a squid asking to come in was admitted
+        twice. Two different messages are still two."""
+        self.theirs.add_friend('127.0.0.1', self.mine.port)
+        message = {'node_id': 'squid_mine', 'timestamp': 1760958000.25, 'type': 'squid_exit',
+                   'payload': {'payload': {'node_id': 'squid_mine', 'direction': 'right'}}}
+        target = ('127.0.0.1', self.theirs.port)
+        self.mine.socket.sendto(self.mine._encode(message), target)
+        self.mine.socket.sendto(self.mine._encode(dict(message, invite=4242)), target)
+        deadline, got = time.time() + 2.0, []
+        while time.time() < deadline:
+            got += [m for m, _addr in self.theirs.receive_messages()]
+            time.sleep(0.02)
+        self.assertEqual([m['type'] for m in got], ['squid_exit'])
+        self.assertEqual(self.theirs.packets_dropped_duplicate, 1)
+
+        self.mine.socket.sendto(self.mine._encode(dict(message, timestamp=1760958003.5)), target)
+        self.assertEqual([m['type'] for m in self._heard(self.theirs)], ['squid_exit'])
+
     def test_entering_a_friends_code_links_both_tanks(self):
         code = self.theirs.friend_code()                 # they read it out...
         where = fl.parse_friend(code)                    # ...I type it in

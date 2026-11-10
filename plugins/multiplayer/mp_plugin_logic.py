@@ -1902,6 +1902,19 @@ class MultiplayerPlugin:
             # refused visitor cannot enter.
             visitor_identity = SquidIdentity.from_payload(
                 exit_payload_inner.get('identity') or {})
+            # Already here, from that same tank: its home did not hear the
+            # answer and is asking again. Say yes again - and nothing else.
+            # Admitting it a second time gave it a second visit, and its
+            # home went on following the first.
+            visitor_uuid = getattr(visitor_identity, 'uuid', '') or ''
+            if (visitor_uuid and self.host_body is not None
+                    and visitor_uuid in self.host_body.visitors
+                    and self.visit_node_ids.get(visitor_uuid) == source_node_id):
+                if self.network_node:
+                    self.network_node.send_message('visit_response', {
+                        'accepted': True, 'reason': REASON_ACCEPTED,
+                        'peer_uuid': visitor_uuid, 'to': source_node_id})
+                return True
             current = len(self.host_body.visitors) if self.host_body else 0
             if self._resident_is_dead():
                 # Nobody to visit: the tank is waiting for its egg to hatch.

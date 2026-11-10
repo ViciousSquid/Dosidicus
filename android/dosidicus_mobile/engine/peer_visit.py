@@ -1,8 +1,15 @@
-"""Nearby transport adapter for the shared remote-mind encounter protocol.
+"""One visit, on the shared remote-mind encounter protocol.
 
 Only identity, perception, motor intents and physical consequences cross this
 link. The visitor's brain, memory and learning stay on its originating device.
 Local preview visitors are separate and never used as a network fallback.
+
+A visit does not care what carries it. Over Nearby (ui/nearby.py) it packs
+each message into its own small envelope and is opened with a `hello`. Over
+the tank link (engine/tank_link.py) - the desktop game's own network
+protocol, which is how a phone's squid and a computer's visit each other -
+the link does the asking and admitting and hands each message straight in
+(`post`, `admit`, `handle`).
 """
 import json
 import time
@@ -90,9 +97,18 @@ class World:
 
 
 class PeerVisit:
-    """One consented Nearby link. Transport callbacks execute on the UI thread."""
-    def __init__(self, sim, send, hosting=False, clock=time.time):
+    """One consented visit. Transport callbacks execute on the UI thread.
+
+    `send` takes the bytes of one packet (Nearby). With `post` instead, each
+    message is handed over as (kind, payload) and the carrier wraps it.
+    `link_timeout` is how long the link may be silent before the visit is
+    given up; None leaves that to the shared HostBody, which gives a silent
+    visitor VISIT_ABANDON_TIMEOUT as a desktop host does.
+    """
+    def __init__(self, sim, send=None, hosting=False, clock=time.time, *,
+                 post=None, link_timeout=LINK_TIMEOUT):
         self.sim, self.send_bytes, self.hosting, self.clock = sim, send, hosting, clock
+        self.post, self.link_timeout = post, link_timeout
         config = sim.lifecycle_config
         self.host = HostBody(World(sim, self), clock=clock,
                              mating_chance=config['mating_chance'],
@@ -127,35 +143,69 @@ class PeerVisit:
         return True
 
     def send(self, kind, payload):
+        if self.post is not None:
+            return bool(self.post(kind, payload))
         data = json.dumps({'protocol': ENCOUNTER_PROTOCOL_VERSION,
                            'kind': kind, 'payload': payload}, allow_nan=False).encode()
         self.send_bytes(data)
         return True
 
     def receive(self, data):
+        """One Nearby packet."""
         if self.closed or len(data) > 16384:
             return False
         try:
             packet = json.loads(data)
             if packet.get('protocol') != ENCOUNTER_PROTOCOL_VERSION:
                 return False
-            kind, payload = packet['kind'], packet['payload']
+            return self.handle(packet['kind'], packet['payload'])
+        except (ValueError, TypeError, KeyError):
+            return False
+
+    def admit(self, identity, x=80., y=None, facing=None):
+        """Host: give this visitor a body in the tank. True if it now has one."""
+        if not self.host or self.actor is not None or identity is None:
+            return False
+        if y is None:
+            y = self.sim.tank_size[1] / 2
+        visit_id = new_visit_id(self.sim.squid.uuid, identity.uuid)
+        self.actor = self.host.admit(identity, visit_id, float(x), float(y))
+        if facing in ('left', 'right'):
+            self.actor.facing = facing
+        self.body = self.sim.add_visitor({'squid': {
+            'uuid': identity.uuid, 'personality': identity.personality,
+            'tint_color': list(identity.tint) if getattr(identity, 'tint', None) else None}},
+            identity.name, remote=True)
+        self.body.update(x=self.actor.x, y=self.actor.y, uuid=identity.uuid,
+                         dir=self.actor.facing, report=self.report, peer_visit=self)
+        self.session = EncounterSession(identity, drive_snapshot(self.sim.squid), clock=self.clock)
+        return True
+
+    def send_frame(self):
+        """Host: tell the visitor what it can see, and what has happened to it."""
+        if not (self.host and self.actor) or self.closed:
+            return False
+        self.send('perception_frame', self.host.build_frame(self.actor).to_payload())
+        for consequence in self.host.drain_consequences(self.actor):
+            self.send('consequence', consequence.to_payload())
+        return True
+
+    def handle(self, kind, payload):
+        """One message of the visit, whatever carried it. False if refused."""
+        if self.closed:
+            return False
+        try:
             if kind == 'hello':
                 identity = SquidIdentity.from_payload(payload.get('identity', {}))
                 if identity is None or bool(payload.get('hosting')) == self.hosting:
                     return False
                 if self.host and self.actor is None:
-                    visit_id = new_visit_id(self.sim.squid.uuid, identity.uuid)
-                    self.actor = self.host.admit(identity, visit_id, 80., self.sim.tank_size[1]/2)
-                    self.body = self.sim.add_visitor({'squid': {'uuid': identity.uuid,
-                        'personality': identity.personality}}, identity.name, remote=True)
-                    self.body.update(x=self.actor.x, y=self.actor.y, uuid=identity.uuid,
-                                     report=self.report, peer_visit=self)
-                    self.session = EncounterSession(identity, drive_snapshot(self.sim.squid), clock=self.clock)
+                    self.admit(identity)
             elif self.host and self.actor:
                 if kind == 'action_intent':
                     intent = ActionIntent.from_payload(payload)
-                    if not self.host.apply_intent(self.actor, intent):
+                    if intent.visit_id != self.actor.visit_id \
+                            or not self.host.apply_intent(self.actor, intent):
                         return False
                 elif kind == 'visit_end':
                     end = VisitEnd.from_payload(payload)
@@ -180,9 +230,11 @@ class PeerVisit:
                     self.close(notify=False)
                 else:
                     return False
+            else:
+                return False
             self.last_received = self.clock()
             return True
-        except (ValueError, TypeError, KeyError, ProtocolError):
+        except (ValueError, TypeError, KeyError, AttributeError, ProtocolError):
             return False
 
     def _on_mating(self, actor, mating_id):
@@ -215,7 +267,8 @@ class PeerVisit:
     def tick(self, dt):
         if self.closed:
             return
-        if self.clock() - self.last_received > LINK_TIMEOUT:
+        if self.link_timeout is not None \
+                and self.clock() - self.last_received > self.link_timeout:
             self.close()
             return
         self.elapsed += dt
@@ -235,10 +288,7 @@ class PeerVisit:
                 v.update(x=actor.x, y=actor.y, dir=actor.facing)
             v['carried_rock'] = actor.held_item.data['id'] if actor.held_item else None
             self.sim._carry_rock(v)
-            frame = self.host.build_frame(actor)
-            self.send('perception_frame', frame.to_payload())
-            for consequence in self.host.drain_consequences(actor):
-                self.send('consequence', consequence.to_payload())
+            self.send_frame()
             if v['leaving']:
                 self.close()
         elif self.mind:

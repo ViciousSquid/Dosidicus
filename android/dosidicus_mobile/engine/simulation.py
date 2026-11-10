@@ -70,6 +70,9 @@ class Simulation:
         self.visitors = []
         self._visitor_minds = {}  # local preview brains only
         self.peer_visits = []
+        #: This tank's place on the network, while multiplayer is on
+        #: (engine/tank_link.py). Not saved: a link is made, never loaded.
+        self.tank_link = None
         from types import SimpleNamespace
         self.brain_window = SimpleNamespace(brain_widget=self.squid.brain)
         self.squid.statistics = self.stats
@@ -1228,6 +1231,10 @@ class Simulation:
         self.visitor_event = None
         self.squid._last_dt = dt
         squid = self.squid
+        # The network first, and whatever state the tank is in: a tank whose
+        # squid has died still has to answer "no" to a squid at its door.
+        if self.tank_link is not None:
+            self.tank_link.tick(dt)
 
         # Dead: the world waits, then a new life begins in this tank.
         if squid.lifecycle.is_dead:

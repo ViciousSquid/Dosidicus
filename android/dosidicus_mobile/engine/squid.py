@@ -85,6 +85,11 @@ class Squid:
         self._last_dt = 0.0
         self.plant_targets = []
         self._flee_dir = (1.0, 0.0)
+        # Other tanks (engine/tank_link.py). can_venture is the link saying
+        # multiplayer is on; at_side is the side of the tank the squid has
+        # taken itself to, where the link asks another tank to let it in.
+        self.can_venture = False
+        self.at_side = None
 
     # ----------------------------------------------------------------- stats
     CORE_STATS = ("hunger", "happiness", "cleanliness", "sleepiness",
@@ -292,6 +297,7 @@ class Squid:
 
     def _execute(self, decision, food_items, can_see_food=None):
         self.is_fleeing = decision == 'fleeing'
+        self.at_side = None          # only while it is venturing out, below
         if decision == "eating" and food_items:
             target = min(food_items, key=lambda f: self._dist(f["x"], f["y"]))
             self.move_towards(target["x"], target["y"])
@@ -320,8 +326,11 @@ class Squid:
                 self.move_erratically()
                 self.status = "playing"
         elif decision == "exploring":
-            self.move_randomly()
-            self.status = "exploring"
+            if self.is_venturing():
+                self.venture_out()
+            else:
+                self.move_randomly()
+                self.status = "exploring"
         else:
             self.status = "sleeping peacefully" if self.is_sleeping else "resting"
         return self.status
@@ -384,6 +393,43 @@ class Squid:
             dy = -dy
         self._wander_vector = (dx, dy)
         self._step(dx, dy, 1.0)
+
+    # ------------------------------------------------- going to another tank
+    @property
+    def tint_color(self):
+        """Its colour as the desktop keeps it (0-255), which is what its
+        identity carries to another tank: a pink squid is pink there too."""
+        return [int(round(c * 255)) for c in self.color_tint[:3]] if self.color_tint else None
+
+    def why_not_venturing(self):
+        """None if its own network is taking it out of the tank - the
+        desktop's rule, from the desktop's code (src/venturing.py)."""
+        from src.venturing import why_not
+        if not self.can_venture:
+            return 'multiplayer is off'
+        return why_not(self.brain.state, self.brain.weights,
+                       fleeing=bool(self.is_fleeing),
+                       chasing_food=self.status.startswith(("approaching food", "eyeing")),
+                       can_visit=bool(self.lifecycle.can_visit))
+
+    def is_venturing(self):
+        return self.why_not_venturing() is None
+
+    #: The tank's sides are this far in: as close as a squid gets to them.
+    SIDE_MARGIN = 30
+
+    def venture_out(self):
+        """Exploring, drawn by another aquarium: swim for the nearer side of
+        the tank. Reaching it is all the squid does - asking the other tank
+        is the link's job (TankLink._ask_to_visit)."""
+        from src.venturing import way_out
+        width = self.tank_size[0]
+        side, _beyond = way_out(self.x, self.y, 0.0, 0.0, width)
+        edge = self.SIDE_MARGIN if side == 'left' else width - self.SIDE_MARGIN
+        self._step(edge - self.x if abs(edge - self.x) > 1.0 else (-1.0 if side == 'left' else 1.0),
+                   0.0, 1.0)
+        self.status = "venturing out"
+        self.at_side = side if abs(self.x - edge) <= 1.0 else None
 
     def move_slowly(self):
         self._step(random.uniform(-1, 1), random.uniform(-0.3, 0.3), 0.4)
