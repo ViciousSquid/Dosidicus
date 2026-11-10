@@ -10,8 +10,8 @@ Compared with **windows**:
 
 | System | Text measurements | Window sizes | Widgets in the same place (fixed windows) | Pixels that differ |
 |---|---|---|---|---|
-| linux-x11 | identical | identical | 70 of 70 | brain-1 0.9%, brain-2 3.5%, brain-3 2.3%, brain-4 0.6%, brain-5 0.8%, brain-6 0.9%, brain-7 0.8%, brain-8 1.1%, journey 5.2%, main 1.1%, menu 2.5%, message 3.1%, splash 0.4%, statistics 2.0% |
-| linux-wayland | identical | identical | 70 of 70 | brain-1 0.9%, brain-2 2.1%, brain-3 2.4%, brain-4 0.6%, brain-5 0.9%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.2%, main 1.1%, menu 2.5%, message 3.6%, splash 0.4%, statistics 2.0% |
+| linux-x11 | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 4.6%, brain-3 1.7%, brain-4 0.6%, brain-5 1.2%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.2%, main 1.2%, menu 2.5%, message 3.1%, splash 0.4%, statistics 1.6% |
+| linux-wayland | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 6.5%, brain-3 1.7%, brain-4 0.4%, brain-5 0.5%, brain-6 0.9%, brain-7 0.8%, brain-8 1.1%, journey 5.2%, main 1.2%, menu 2.5%, message 3.6%, splash 0.4%, statistics 1.5% |
 
 Fixed windows: splash, main, statistics, message, menu, brain-1. The other Brain Tool tabs list what one particular squid has learned, so their contents differ between any two runs.
 
@@ -78,6 +78,14 @@ Taken by `tools/capture_platforms.py` on GitHub's own machines (`.github/workflo
 **linux-x11**
 
 ![The whole screen on linux-x11](linux-x11/screen.png)
+
+## Which font draws what
+
+| System | A brain emoji in Fio UI text | On the Brain Designer button | The reset arrow |
+|---|---|---|---|
+| windows | Dosidicus Emoji | Dosidicus Line Emoji | IBM Plex Mono |
+| linux-x11 | Dosidicus Emoji | Dosidicus Line Emoji | IBM Plex Mono |
+| linux-wayland | Dosidicus Emoji | Dosidicus Line Emoji | IBM Plex Mono |
 
 ## Each machine
 

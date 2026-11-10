@@ -85,6 +85,73 @@
     ]
   },
   "problems": [],
+  "fonts": {
+    "Fio UI": {
+      "listed": true,
+      "resolves_to": "Fio UI",
+      "exact": false,
+      "brain_drawn_by": [
+        "Dosidicus Emoji"
+      ],
+      "arrow_drawn_by": [
+        "IBM Plex Mono"
+      ],
+      "letter_drawn_by": [
+        "Fio UI,ibm plex mono,dosidicus emoji"
+      ]
+    },
+    "IBM Plex Mono": {
+      "listed": true,
+      "resolves_to": "IBM Plex Mono",
+      "exact": false,
+      "brain_drawn_by": [
+        "Dosidicus Emoji"
+      ],
+      "arrow_drawn_by": [
+        "IBM Plex Mono,dosidicus emoji"
+      ],
+      "letter_drawn_by": [
+        "IBM Plex Mono,dosidicus emoji"
+      ]
+    },
+    "Dosidicus Emoji": {
+      "listed": true,
+      "resolves_to": "Dosidicus Emoji",
+      "exact": false,
+      "brain_drawn_by": [
+        "Dosidicus Emoji"
+      ],
+      "arrow_drawn_by": [
+        "DejaVu Sans Mono"
+      ],
+      "letter_drawn_by": [
+        "DejaVu Sans Mono"
+      ]
+    },
+    "Dosidicus Line Emoji": {
+      "listed": true,
+      "resolves_to": "Dosidicus Line Emoji",
+      "exact": false,
+      "brain_drawn_by": [
+        "Dosidicus Line Emoji"
+      ],
+      "arrow_drawn_by": [
+        "DejaVu Sans Mono"
+      ],
+      "letter_drawn_by": [
+        "DejaVu Sans Mono"
+      ]
+    }
+  },
+  "font_substitutes": {
+    "Fio UI": [
+      "ibm plex mono",
+      "dosidicus emoji"
+    ],
+    "IBM Plex Mono": [
+      "dosidicus emoji"
+    ]
+  },
   "brain_resized_to": [
     1000,
     620
@@ -120,9 +187,9 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 14,
+    "anxiety": 16,
     "happiness": 100,
     "neurons": 19
   },
-  "seconds": 59.4
+  "seconds": 58.9
 }
