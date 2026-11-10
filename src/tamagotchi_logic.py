@@ -1663,6 +1663,7 @@ class TamagotchiLogic:
                 # in the network before the output bindings and the decision
                 # engine read it, so whether the squid acts on it is decided
                 # the way everything it does is decided.
+                self._notice_journey()
                 discovery = getattr(bw, 'action_discovery', None)
                 if discovery is not None:
                     try:
@@ -2125,6 +2126,30 @@ class TamagotchiLogic:
         # Debug output if in debug mode
         if self.debug_mode:
             print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
+
+    def _notice_journey(self) -> None:
+        """Tell the player when the squid reaches a new stage of its life.
+
+        Read every few seconds from what is true of the squid (life_journey);
+        nothing is awarded here, only noticed. Whatever it had already
+        reached when the game started is not announced again.
+        """
+        self._journey_ticks = getattr(self, '_journey_ticks', 0) + 1
+        if self._journey_ticks % 10:
+            return
+        try:
+            from .life_journey import JourneyTracker, gather_facts
+            tracker = getattr(self, '_journey', None)
+            if tracker is None:
+                tracker = self._journey = JourneyTracker()
+            for milestone in tracker.update(gather_facts(self)):
+                self.show_message(f"✨ {milestone.title}")
+                manager = getattr(self, 'plugin_manager', None)
+                if manager is not None:
+                    manager.trigger_hook('on_journey_milestone', key=milestone.key,
+                                         title=milestone.title, squid=self.squid)
+        except Exception as e:
+            print(f"[Journey] could not be read: {type(e).__name__}: {e}")
 
     def _note_learned_action(self, bw) -> bool:
         """If the squid has just started one of its LEARNED actions - going to

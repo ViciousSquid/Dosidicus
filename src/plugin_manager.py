@@ -137,6 +137,8 @@ class PluginManager:
         # The squid fought another squid; fired once per fight by the
         # multiplayer plugin, for both the host's resident and the visitor
         self.register_hook("on_fight")
+        # A stage of the squid's life reached (src/life_journey.py).
+        self.register_hook("on_journey_milestone")
 
         # Simulation hooks
         self.register_hook("pre_update")

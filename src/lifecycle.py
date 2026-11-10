@@ -97,6 +97,10 @@ DEFAULT_CONFIG = {
     # A squid sick for this many seconds of play without medicine dies of
     # it. Medicine starts the count again.
     'sickness_seconds': 600.0,
+    # Seconds of life before a squid can count as grown up - which it must be
+    # before it can breed. Age is half of it; the other half is having learned
+    # from its own life (src/life_journey.is_mature).
+    'maturity_seconds': 3600.0,
 }
 
 _ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')

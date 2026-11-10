@@ -416,7 +416,7 @@ class HostBody:
 
         No branch here reads the visitor's state, because the host has none
         of it. Eligibility is about the RESIDENT, whose world this is: at
-        home, alive, and not already a parent.
+        home, alive, grown up, and not already a parent.
         """
         if actor.mating_rolled:
             return
@@ -455,6 +455,13 @@ class HostBody:
             return False
         # A resident that is itself away visiting is not in this tank.
         if getattr(resident, 'is_transitioning', False):
+            return False
+        # Only a grown squid breeds: one that is old enough and has learned
+        # from its own life (src/life_journey.is_mature). The squid says so
+        # itself; a body with no such notion - a test double, an older build -
+        # is taken at its word as before.
+        mature = getattr(resident, 'is_mature', None)
+        if callable(mature) and not mature():
             return False
         return bool(getattr(resident, 'can_move', True))
 

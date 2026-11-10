@@ -759,11 +759,15 @@ class AchievementsPlugin:
     def _check_age_achievements(self):
         if not self.squid:
             return
+        # The squid's age is kept by its statistics, across sessions. This
+        # used to read squid.birth_time / squid.age_hours, neither of which
+        # exists, so no age achievement could ever unlock.
         age_hours = 0
-        if hasattr(self.squid, 'birth_time'):
+        statistics = getattr(self.squid, 'statistics', None)
+        if statistics is not None and hasattr(statistics, 'get_total_age_seconds'):
+            age_hours = statistics.get_total_age_seconds() / 3600
+        elif hasattr(self.squid, 'birth_time'):
             age_hours = (time.time() - self.squid.birth_time) / 3600
-        elif hasattr(self.squid, 'age_hours'):
-            age_hours = self.squid.age_hours
 
         if age_hours >= 1:
             self.unlock_achievement("age_1_hour")

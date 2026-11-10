@@ -1419,6 +1419,17 @@ class Squid:
             return self._cached_can_see_food
         return len(self.get_visible_food()) > 0
 
+    def is_mature(self) -> bool:
+        """Grown up: old enough, and having learned from its own life.
+
+        The one thing a squid has to be before it can breed. Judged by
+        src/life_journey.is_mature on what is true of this squid now - its
+        age, the consequences it has worked out, the actions it has learned.
+        """
+        from .life_journey import gather_facts, is_mature
+        return is_mature(gather_facts(getattr(self, 'tamagotchi_logic', None),
+                                      squid=self))
+
     def can_see_plant(self) -> bool:
         """Is a plant in the view cone right now? (Cached from the vision worker.)
 

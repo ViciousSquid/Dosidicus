@@ -39,6 +39,8 @@ translations = {
     "brain_designer": "Brain Designer",
     "decorations": "Decorations",
     "statistics": "Statistics",
+    "journey": "Journey",
+    "journey_title": "Your squid's journey",
     "brain_tool": "Brain Tool",
     "neuron_lab": "Neuron Laboratory",
     "task_manager": "Task Manager",

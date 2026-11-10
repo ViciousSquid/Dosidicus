@@ -1634,6 +1634,12 @@ class Ui:
         self.stats_window_action.triggered.connect(self.toggle_statistics_window)
         view_menu.addAction(self.stats_window_action)
 
+        # Where this squid is in its life, and what comes next.
+        self.journey_action = QtWidgets.QAction(
+            loc.get("journey", default="Journey"), self.window)
+        self.journey_action.triggered.connect(self.toggle_journey_window)
+        view_menu.addAction(self.journey_action)
+
         self.brain_action = QtWidgets.QAction(loc.get("brain_tool"), self.window)
         self.brain_action.setCheckable(True)
         self.brain_action.triggered.connect(self.toggle_brain_window)
@@ -1900,6 +1906,21 @@ class Ui:
         self.enhanced_neuron_inspector_instance.update_neuron_list()
         if self.enhanced_neuron_inspector_instance.neuron_combo.count() > 0:
             self.enhanced_neuron_inspector_instance.update_info()
+
+    def toggle_journey_window(self):
+        """Show or hide the squid's journey (src/life_journey.py)."""
+        logic = getattr(self, 'tamagotchi_logic', None)
+        if logic is None:
+            return
+        window = getattr(self, 'journey_window', None)
+        if window is None or window.logic is not logic:
+            from .journey_window import JourneyWindow
+            window = self.journey_window = JourneyWindow(logic, self.window)
+        if window.isVisible():
+            window.hide()
+        else:
+            window.show()
+            window.raise_()
 
     def toggle_statistics_window(self):
         if self.statistics_window is None:
