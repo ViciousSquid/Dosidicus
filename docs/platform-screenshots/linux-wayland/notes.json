@@ -161,14 +161,14 @@
       458
     ],
     "brain_tool": [
-      516,
-      10,
+      519,
+      40,
       1300,
-      980
+      920
     ],
     "decorations": [
       1517,
-      689,
+      661,
       382,
       310
     ]
@@ -208,7 +208,7 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 15,
+    "anxiety": 16,
     "happiness": 100,
     "neurons": 19
   },
@@ -225,5 +225,5 @@
     "squid_share_of_width": 0.1875,
     "food": 33
   },
-  "seconds": 63.8
+  "seconds": 63.0
 }
