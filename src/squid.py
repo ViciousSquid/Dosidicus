@@ -702,26 +702,49 @@ class Squid:
     #: its head, in pixels of the tank as designed (drawn at the tank's scale).
     HEAD_ICON_GAP = 10
 
-    def place_head_icon(self, icon):
-        """Put an icon just above the squid's head - and out of sight while
-        the squid itself is (away visiting another tank).
+    def _head_icons(self):
+        """Every icon now showing above the head, in a fixed order."""
+        icons = [getattr(self, 'sick_icon_item', None), getattr(self, 'startled_icon', None),
+                 getattr(self, 'ng_icon', None)]
+        manager = getattr(self, 'mental_state_manager', None)
+        for state in (getattr(manager, 'mental_states', None) or {}).values():
+            icons.append(getattr(state, 'icon_item', None))
+        seen, found = set(), []
+        for icon in icons:
+            if icon is not None and id(icon) not in seen:
+                seen.add(id(icon))
+                found.append(icon)
+        return found
+
+    def place_head_icon(self, icon=None):
+        """Put the icons above the squid's head just above it - and out of
+        sight while the squid itself is (away visiting another tank).
 
         Every head icon (neurogenesis, startled, sick, curious and the rest)
-        is placed here, so they all sit at the same height: their bottom edge
-        a small gap above the squid, centred on it. They used to be pinned a
-        fixed 100 pixels above it by their top edge - right for a full-size
-        icon on the screen the game was designed on, and floating further and
-        further above the squid the smaller the tank was drawn.
+        is placed here, together: their bottom edges a small gap above the
+        squid, side by side and centred on it when there is more than one.
+        They used to be pinned a fixed 100 pixels above it by their top edge
+        - right for a full-size icon on the screen the game was designed on,
+        and floating further above the squid the smaller the tank was drawn
+        - each on top of the other, and some were moved less often than the
+        squid, so they trailed behind it.
         """
-        if icon is None:
-            return
         from .display_scaling import DisplayScaling
-        pixmap = icon.pixmap()
-        icon.setPos(self.squid_x + self.squid_width // 2 - pixmap.width() // 2,
-                    self.squid_y - DisplayScaling.points(self.HEAD_ICON_GAP) - pixmap.height())
+        icons = self._head_icons()
+        if icon is not None and all(icon is not other for other in icons):
+            icons.append(icon)
+        if not icons:
+            return
+        gap = DisplayScaling.points(self.HEAD_ICON_GAP)
+        between = max(2, gap // 2)
+        widths = [each.pixmap().width() for each in icons]
+        x = self.squid_x + self.squid_width / 2.0 - (sum(widths) + between * (len(icons) - 1)) / 2.0
         body = getattr(self, 'squid_item', None)
-        if body is not None:
-            icon.setVisible(bool(body.isVisible()))
+        visible = bool(body.isVisible()) if body is not None else True
+        for each, width in zip(icons, widths):
+            each.setPos(int(round(x)), self.squid_y - gap - each.pixmap().height())
+            each.setVisible(visible)
+            x += width + between
 
     def set_in_tank(self, present):
         """Show or hide the squid's body - and with it everything drawn
@@ -755,12 +778,7 @@ class Squid:
         # getattr guards: the icon attributes are set in __init__, but this runs
         # from move_squid, which tests and headless runs drive against a squid
         # built without the graphics attributes.
-        if getattr(self, 'sick_icon_item', None) is not None:
-            self.update_sick_icon_position()
-        if getattr(self, 'startled_icon', None) is not None:
-            self.update_startled_icon_position()
-        if getattr(self, 'ng_icon', None) is not None:
-            self.update_neurogenesis_icon_position()
+        self.place_head_icon()       # all of them, together (see there)
 
     def load_poop_images(self):
         from .display_scaling import DisplayScaling

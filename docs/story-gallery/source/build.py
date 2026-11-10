@@ -405,5 +405,66 @@ if args.fragment:
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
     + page.replace('<header class="hero">', '</head>\n<body>\n<header class="hero">', 1)
     + '</body>\n</html>\n')
+
+
+# ------------------------------------------------- the same story for GitHub
+# GitHub shows a folder's README, not its index.html: the short version, with
+# the pictures, for anyone who arrives there.
+def md_images(keys, limit=4):
+    cells = [f'![{shots[k]["caption"]}](img/{k}.webp)' for k in keys if k in SIZES][:limit]
+    if not cells:
+        return ''
+    return '| ' + ' | '.join(cells) + ' |\n|' + '---|' * len(cells) + '\n'
+
+
+md = [f'# {len(players)} squid, {len(players)} homes, {minutes:g} minutes', '',
+      f'{len(players)} copies of the desktop game, each in a home of its own behind its own router, '
+      f'found each other with friend codes and were then left alone for {minutes:g} minutes. Nothing '
+      'told any squid what to do. Every address, code, thought and number here is from the run.', '',
+      '**The full page, with every picture and the whole session line by line, is '
+      '[index.html](index.html)** (open it in a browser).', '',
+      '| Squid | Personality | Colour | Home address | Seen from outside as | Friend code |',
+      '|---|---|---|---|---|---|']
+for p in players:
+    colour = 'rgb({},{},{})'.format(*p['colour']) if p.get('colour') else 'as it hatched'
+    md.append(f"| {p['name']} | {p['personality']} | {colour} | `{p['private_address']}` | "
+              f"`{p['seen_from_outside_as']}` | `{p['friend_code']}` |")
+md += ['', '## Apart, then linked', '',
+       f'Before any code was entered the tanks had heard {heard_before} other tanks between them. '
+       f'Everyone entered everyone else’s code; the last of the {len(links)} links through the routers '
+       f'came up {last_link:.0f} s later.', '',
+       md_images([f"home{p['home']}-alone" for p in players]),
+       '## Who went where', '', '| When | Who | What |', '|---|---|---|']
+for ev in sorted(left + homecomings, key=lambda x: x['at']):
+    if ev['kind'] == 'left':
+        where = ev['line'].rsplit(' - ', 1)[-1] if ' - ' in ev['line'] else 'another tank'
+        md.append(f"| {clock(ev)} | {ev['who']} | swam out of its own tank, to {where} |")
+    else:
+        md.append(f"| {clock(ev)} | {ev['who']} | came home |")
+md += ['', md_images(shots_like('visit') + shots_like('empty'), 3),
+       '## What they grew', '']
+for name in names:
+    neurons = [ev['neuron'] for ev in events('grew', name)]
+    md.append(f"- **{name}**: " + (', '.join(f'`{n}`' for n in neurons) if neurons else 'nothing new'))
+md += ['', '## What they came to believe', '']
+for ev in beliefs:
+    md.append(f"- {clock(ev)} {ev['who']} {ev['text']}")
+for ev in revised:
+    md.append(f"- {clock(ev)} {ev['who']} {ev['text']}")
+if not beliefs:
+    md.append('Nothing, in this session.')
+md += ['', '## Fights', '']
+if fights:
+    md += [f"- {clock(ev)} {ev['who']}: {ev['text']}" for ev in fights]
+else:
+    md.append('Nobody fought in this session.')
+md += ['', md_images([f"home{p['home']}-end" for p in players]),
+       '---', '',
+       'Made by `tools/internet_session.py` (the session) and '
+       '`docs/story-gallery/source/build.py` (this page and index.html). Nothing was nudged: '
+       'only each squid’s name, personality and colour were chosen. The “internet” is a private one '
+       'made on one machine out of network namespaces - real address translation, not real home '
+       'routers.', '']
+(OUT / 'README.md').write_text('\n'.join(md))
 total = sum(p.stat().st_size for p in (OUT / 'img').iterdir())
 print('ok', len(SIZES), 'images', round(total / 1024), 'KiB')

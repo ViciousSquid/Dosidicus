@@ -31,7 +31,7 @@ def _squid(scene):
                             squid_item=body, HEAD_ICON_GAP=Squid.HEAD_ICON_GAP,
                             ng_icon=None, startled_icon=None, sick_icon_item=None,
                             mental_state_manager=None)
-    for name in ('place_head_icon', 'set_in_tank', 'update_head_icon_positions',
+    for name in ('_head_icons', 'place_head_icon', 'set_in_tank', 'update_head_icon_positions',
                  'update_neurogenesis_icon_position', 'update_startled_icon_position',
                  'update_sick_icon_position'):
         setattr(squid, name, getattr(Squid, name).__get__(squid))
@@ -68,9 +68,11 @@ def test_every_head_icon_sits_just_above_the_squid_at_any_tank_size():
                 # A small gap, the same share of the tank on every screen -
                 # not the 54 pixels it floated at on a 1080p screen.
                 assert gap == D.points(10) and 0 < gap <= 10, (screen, name, gap)
-                centre = icon.x() + icon.pixmap().width() / 2
-                assert abs(centre - (squid.squid_x + squid.squid_width / 2)) <= 1
-            assert len(set(places)) == 1                             # all at one height
+            assert len({y for _x, y in places}) == 1                 # all at one height
+            assert len({x for x, _y in places}) == 3                 # side by side, not stacked
+            left = min(x for x, _y in places)
+            right = max(x for x, _y in places) + icon_image.width()
+            assert abs((left + right) / 2 - (squid.squid_x + squid.squid_width / 2)) <= 1
         finally:
             _restore(saved)
 
@@ -86,7 +88,20 @@ def test_the_curious_and_sick_icons_are_placed_the_same_way():
     ng = scene.addPixmap(sick.pixmap())
     squid.ng_icon = ng
     squid.update_head_icon_positions()
-    assert (ng.x(), ng.y()) == (sick.x(), sick.y())
+    assert ng.y() == sick.y()                    # the same height above the head
+    assert ng.x() != sick.x()                    # beside each other
+    # One of them alone sits exactly over the middle of the squid.
+    manager.set_state('sick', False)
+    squid.update_head_icon_positions()
+    centre = ng.x() + ng.pixmap().width() / 2
+    assert abs(centre - (squid.squid_x + squid.squid_width / 2)) <= 1
+    # And when the squid moves, every one of them moves with it at once.
+    manager.set_state('curious', True)
+    squid.squid_x += 90
+    squid.update_head_icon_positions()
+    curious = manager.mental_states['curious'].icon_item
+    middle = (min(ng.x(), curious.x()) + max(ng.x(), curious.x()) + ng.pixmap().width()) / 2
+    assert abs(middle - (squid.squid_x + squid.squid_width / 2)) <= 1
 
 
 def test_a_squid_that_swims_out_takes_its_head_icons_with_it():
