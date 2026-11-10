@@ -22,6 +22,10 @@ on:
       - "tools/macos_smoke_test.sh"
       - "tests/test_macos_runtime.py"
       - "src/macos_runtime.py"
+      # The game loads its fonts as it starts: a font a system refuses is a
+      # build that does not start there.
+      - "src/fonts/**"
+      - "tools/subset_emoji_font.py"
 
 jobs:
   build:
