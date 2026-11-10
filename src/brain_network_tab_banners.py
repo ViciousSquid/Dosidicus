@@ -72,7 +72,7 @@ class BindingOverlay(QtWidgets.QWidget):
             }
             QLabel {
                 color: #1b5e20;  /* Dark green text for contrast */
-                font-family: 'Consolas', 'Courier New', monospace;
+                font-family: IBM Plex Mono;
                 font-size: 9pt;
             }
         """)

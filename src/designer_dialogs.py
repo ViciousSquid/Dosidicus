@@ -37,7 +37,7 @@ class SparseNetworkDialog(QDialog):
         
         # Header
         header = QLabel("Generate Random Neural Connections")
-        header.setFont(QFont("Arial", 12, QFont.Bold))
+        header.setFont(QFont("Fio UI", 12, QFont.Bold))
         header.setAlignment(Qt.AlignCenter)
         layout.addWidget(header)
         
@@ -146,7 +146,7 @@ class SparseNetworkDialog(QDialog):
         self.preview_text.setMaximumHeight(150)
         self.preview_text.setStyleSheet("""
             QTextEdit {
-                font-family: monospace;
+                font-family: IBM Plex Mono;
                 font-size: 9pt;
                 background-color: #f5f5f5;
             }
@@ -322,7 +322,7 @@ class ActivationEditorDialog(QDialog):
         
         # Header
         name_label = QLabel(self.neuron_name.replace('_', ' ').title())
-        name_label.setFont(QFont("Arial", 11, QFont.Bold))
+        name_label.setFont(QFont("Fio UI", 11, QFont.Bold))
         name_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(name_label)
         

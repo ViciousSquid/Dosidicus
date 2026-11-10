@@ -1,0 +1,172 @@
+name: Platform screenshots
+
+# The running game, photographed on Windows, macOS, Linux/X11 and
+# Linux/Wayland, and the four compared: text measurements, window sizes and
+# the place of every widget must agree (tools/capture_platforms.py).
+# The pictures and the comparison are committed to docs/platform-screenshots.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "claude/**"
+    paths:
+      - ".github/workflows/platform-screenshots.yml"
+      - "tools/capture_platforms.py"
+      - "src/desktop_style.py"
+      - "src/fonts/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: platform-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: windows
+            os: windows-latest
+          - label: macos
+            os: macos-latest
+          - label: linux-x11
+            os: ubuntu-24.04
+          - label: linux-wayland
+            os: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Lay the game out for one screen on every machine, whatever it has.
+      DOSIDICUS_SCREEN: 1920x1080
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install the game's dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Linux display servers and Qt's libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb openbox weston fonts-noto-color-emoji \
+            libegl1 libgl1 libdbus-1-3 libfontconfig1 libxkbcommon-x11-0 \
+            libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xkb1 \
+            libxcb-shape0 libxcb-xfixes0 libxcb-sync1 libxcb-shm0 libxcb-util1 \
+            libwayland-client0 libwayland-cursor0 libwayland-egl1
+
+      - name: A 1920x1080 screen (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { Set-DisplayResolution -Width 1920 -Height 1080 -Force } catch { Write-Host "Could not set the resolution: $_" }
+          Add-Type -AssemblyName System.Windows.Forms
+          Write-Host ([System.Windows.Forms.Screen]::PrimaryScreen.Bounds)
+
+      - name: Photograph the game (Windows)
+        if: matrix.label == 'windows'
+        run: python tools/capture_platforms.py captured --label windows
+
+      - name: Photograph the game (macOS)
+        if: matrix.label == 'macos'
+        run: python tools/capture_platforms.py captured --label macos
+
+      - name: Photograph the game (Linux, X11)
+        if: matrix.label == 'linux-x11'
+        run: |
+          xvfb-run -a -s "-screen 0 1920x1080x24" bash -c '
+            openbox >/dev/null 2>&1 &
+            sleep 2
+            python tools/capture_platforms.py captured --label linux-x11'
+
+      - name: Photograph the game (Linux, Wayland)
+        if: matrix.label == 'linux-wayland'
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
+          mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --width=1920 --height=1080 \
+            --socket=wayland-capture > weston.log 2>&1 &
+          for i in $(seq 1 30); do
+            [ -S "$XDG_RUNTIME_DIR/wayland-capture" ] && break
+            sleep 1
+          done
+          test -S "$XDG_RUNTIME_DIR/wayland-capture" || { cat weston.log; exit 1; }
+          # No X server is running in this job: the game can only be on Wayland.
+          env -u DISPLAY QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-capture \
+            XDG_SESSION_TYPE=wayland \
+            python tools/capture_platforms.py captured --label linux-wayland
+
+      - name: Keep the pictures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-${{ matrix.label }}
+          path: |
+            captured/shots
+            captured/screen.png
+            captured/notes.json
+            captured/layout.json
+          if-no-files-found: warn
+
+  publish:
+    name: Compare and commit
+    needs: capture
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install pillow numpy
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: captured
+          pattern: platform-*
+
+      - name: Compare the four and lay out the page
+        run: |
+          python tools/capture_platforms.py --publish docs/platform-screenshots \
+            captured/platform-windows captured/platform-macos \
+            captured/platform-linux-x11 captured/platform-linux-wayland
+          cat docs/platform-screenshots/README.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the pictures
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/platform-screenshots
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit"
+            exit 0
+          fi
+          git commit -m "Platform screenshots from the runners [skip ci]"
+          git pull --rebase origin "$BRANCH"
+          git push origin "HEAD:$BRANCH"

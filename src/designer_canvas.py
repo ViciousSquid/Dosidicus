@@ -234,7 +234,7 @@ class ConnectorNeuronItem(QGraphicsItem):
         painter.drawPolygon(polygon)
         
         # Draw WHITE 'c' inside
-        font = QFont("Arial", int(self.radius * 0.7))
+        font = QFont("Fio UI", int(self.radius * 0.7))
         font.setBold(True)
         painter.setFont(font)
         painter.setPen(QColor(255, 255, 255))  # WHITE text
@@ -634,7 +634,7 @@ class BrainCanvas(QGraphicsView):
 
             label = QGraphicsTextItem(layer.name)
             label.setDefaultTextColor(QColor(*border[:3]))
-            label.setFont(QFont("Arial", 11, QFont.Bold))
+            label.setFont(QFont("Fio UI", 11, QFont.Bold))
             label.setPos(-380, rect_top + 5)
             label.setZValue(-9)
             self.scene.addItem(label)
@@ -667,7 +667,7 @@ class BrainCanvas(QGraphicsView):
             display = name.replace('_', ' ').title()
             label = QGraphicsTextItem(display)
             label.setDefaultTextColor(QColor(40, 40, 50))
-            label.setFont(QFont("Arial", 8, QFont.Bold))
+            label.setFont(QFont("Fio UI", 8, QFont.Bold))
             
             # Center text horizontally relative to body center (0,0)
             w = label.boundingRect().width()
@@ -702,7 +702,7 @@ class BrainCanvas(QGraphicsView):
             display = name.replace('_', ' ').title()
             label = QGraphicsTextItem(display)
             label.setDefaultTextColor(QColor(40, 40, 50))
-            label.setFont(QFont("Arial", 9, QFont.Bold))
+            label.setFont(QFont("Fio UI", 9, QFont.Bold))
             
             w = label.boundingRect().width()
             label.setPos(-w / 2, self.NEURON_RADIUS + 5)
@@ -756,7 +756,7 @@ class BrainCanvas(QGraphicsView):
         
         label = QGraphicsTextItem(display)
         label.setDefaultTextColor(QColor(40, 40, 50))
-        label.setFont(QFont("Arial", 9, QFont.Bold))
+        label.setFont(QFont("Fio UI", 9, QFont.Bold))
         
         # Center text horizontally relative to body center (0,0)
         w = label.boundingRect().width()

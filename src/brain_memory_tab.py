@@ -26,7 +26,7 @@ class MemoryTab(BrainBaseTab):
         
         # Create sub-tabs for different memory types
         self.memory_subtabs = QtWidgets.QTabWidget()
-        self.memory_subtabs.setFont(QtGui.QFont("Arial", 12))
+        self.memory_subtabs.setFont(QtGui.QFont("Fio UI", 12))
         
         # Short-term memory tab
         self.stm_tab = QtWidgets.QWidget()

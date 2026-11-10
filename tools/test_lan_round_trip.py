@@ -45,7 +45,10 @@ def _setup(folder):
     folder.mkdir(parents=True, exist_ok=True)
     for name in ('images', 'plugins'):
         if not (folder / name).exists():
-            (folder / name).symlink_to(ROOT / name, target_is_directory=True)
+            try:
+                (folder / name).symlink_to(ROOT / name, target_is_directory=True)
+            except OSError:             # Windows without the right to link
+                shutil.copytree(ROOT / name, folder / name)
     if not (folder / 'config.ini').exists():
         shutil.copyfile(ROOT / 'config.ini', folder / 'config.ini')
     os.chdir(folder)
@@ -57,7 +60,10 @@ def _setup(folder):
         config_init(self, str(folder / 'config.ini') if config_filename == 'config.ini'
                     else config_filename)
     ConfigManager.__init__ = isolated_config
-    app = QtWidgets.QApplication([])
+    from src.desktop_style import prepare_qt, install_style
+    prepare_qt()                        # the game's own font and style,
+    app = QtWidgets.QApplication([])    # as main.py sets them up
+    install_style(app)
     for method in ('information', 'warning', 'critical'):
         setattr(QtWidgets.QMessageBox, method, staticmethod(lambda *a, **k: 0))
     # These disposable test squids consent to irreversible visits.

@@ -77,20 +77,79 @@ def test_a_retina_mac_is_sized_in_real_pixels_and_drawn_in_points():
     a small 1080p screen: the window shrank while sprites kept their pixel
     size in points, twice their size on screen."""
     from src.display_scaling import DisplayScaling as D
-    saved = (D._scale_factor, D._ratio, D._small_screen)
+    saved = (D._scale_factor, D._ratio, D._small_screen, D._window_base)
     try:
         D.initialize(1512, 982, 2.0)
         assert not D._small_screen                       # 3024x1964 real pixels
         assert abs(D.get_scale_factor() - (1964 / 1920) / 2) < 1e-6
         assert (D.scale(1344), D.scale(936)) == (687, 478)   # the window, in points
-        assert D.squid_scale() == 0.5 and D.points(64) == 32
+        assert D.window_size() == (687, 478)
+        # Half size in points - and the 2% by which this screen is larger
+        # than the one the game was designed on.
+        assert abs(D.squid_scale() - 0.5 * 1964 / 1920) < 1e-6 and D.points(64) == 33
         pixmap = QtGui.QPixmap(64, 48)
-        assert (D.to_points(pixmap).width(), D.to_points(pixmap).height()) == (32, 24)
-        # Where Qt draws in pixels nothing changes.
-        D.initialize(1920, 1080, 1.0)
-        assert D._small_screen and D.squid_scale() == 0.7 and D.points(64) == 64
-        assert D.to_points(pixmap) is pixmap
-        before = min(1920 / 2880, 1080 / 1920) * 0.85          # the factor as it always was
-        assert (D.scale(1440), D.scale(960)) == (int(1440 * before), int(960 * before))
+        assert (D.to_points(pixmap).width(), D.to_points(pixmap).height()) == (33, 25)
+        # On the screen it was designed for, nothing is scaled at all.
+        D.initialize(2880, 1920, 1.0)
+        assert D.window_size() == (1344, 936) and D.tank_scale() == 1.0
+        assert D.to_points(pixmap) is pixmap and D.points(64) == 64
     finally:
-        D._scale_factor, D._ratio, D._small_screen = saved
+        D._scale_factor, D._ratio, D._small_screen, D._window_base = saved
+
+
+def test_a_squid_takes_the_same_share_of_its_tank_on_every_screen():
+    """The tank is one picture, drawn larger or smaller: the squid, the food
+    and the rocks are scaled with the window. (On a 1080p screen the window
+    was drawn at 48% of its design, the squid at 70% and food at full size -
+    a squid half as tall as its tank.)"""
+    from src.display_scaling import DisplayScaling as D
+    saved = (D._scale_factor, D._ratio, D._small_screen, D._window_base)
+    try:
+        shares = []
+        for width, height, ratio in ((2880, 1920, 1.0), (1920, 1080, 1.0), (2560, 1440, 1.0),
+                                     (3840, 2160, 1.0), (1366, 768, 1.0), (1512, 982, 2.0),
+                                     (1280, 720, 1.5)):
+            D.initialize(width, height, ratio)
+            window_width, _window_height = D.window_size()
+            squid = 253 * D.squid_scale()                # left1.png is 253 wide
+            food = D.points(64)
+            shares.append((squid / window_width, food / window_width))
+        design = shares[0]
+        assert abs(design[0] - 253 / 1344) < 1e-9
+        for squid_share, food_share in shares[1:]:
+            assert abs(squid_share - design[0]) < 0.002
+            assert abs(food_share - design[1]) < 0.003
+        D.initialize(1920, 1080, 1.0)
+        assert D.window_size() == (688, 458)                 # as it always was
+        assert abs(D.squid_scale() - 688.5 / 1344) < 1e-3    # not 0.7
+    finally:
+        D._scale_factor, D._ratio, D._small_screen, D._window_base = saved
+
+
+def test_feed_clean_and_medicine_share_the_whole_width_of_the_window():
+    from src.ui import Ui
+
+    class Tank:
+        TANK_TOP = Ui.TANK_TOP
+        window_width = 688
+        _button_height, _button_spacing = 28, 9
+        action_buttons = []
+
+    tank = Tank()
+
+    class Proxy:
+        def setPos(self, x, y):
+            self.x, self.y = x, y
+    tank.action_buttons = [(QtWidgets.QPushButton(name), Proxy())
+                           for name in ('FEED', 'CLEAN', 'MEDICINE')]
+    Ui.layout_action_buttons(tank)
+    widths = {button.width() for button, _ in tank.action_buttons}
+    assert widths == {217} and all(b.height() == 28 for b, _ in tank.action_buttons)
+    left = tank.action_buttons[0][1].x
+    right = tank.action_buttons[-1][1].x + 217
+    assert left == 9 and 688 - right in (9, 10)             # edge to edge, one gap each end
+    assert all(0 < proxy.y and proxy.y + 28 <= Ui.TANK_TOP for _, proxy in tank.action_buttons)
+    # ... and again when the window is made wider.
+    tank.window_width = 1000
+    Ui.layout_action_buttons(tank)
+    assert {button.width() for button, _ in tank.action_buttons} == {321}

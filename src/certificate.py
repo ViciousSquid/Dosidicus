@@ -43,7 +43,7 @@ class SquidCertificateWindow(QtWidgets.QDialog):
         <head>
             <style>
                 body {{
-                    font-family: 'Times New Roman', Times, serif;
+                    font-family: Fio UI;
                     margin: 0;
                     padding: 0;
                     background-color: #f9f7e8;
@@ -88,7 +88,7 @@ class SquidCertificateWindow(QtWidgets.QDialog):
                 }}
                 .name {{
                     font-size: 64px;  /* Increased from 50px */
-                    font-family: 'Brush Script MT', cursive;
+                    font-family: Fio UI Light; font-style: italic;
                     color: #333;
                     margin: 20px 0;
                     text-decoration: underline;

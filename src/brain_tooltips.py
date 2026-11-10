@@ -103,7 +103,7 @@ class EnhancedBrainTooltips:
         
         return f"""
         <div style='background-color: black; color: white; padding: 1px; 
-                    font-family: Arial; font-size: 30px; font-weight: bold; 
+                    font-family: Fio UI; font-size: 30px; font-weight: bold; 
                     border-radius: 1px; min-width: 60px; text-align: center;'>
             {val_display}
         </div>
@@ -175,7 +175,7 @@ class EnhancedBrainTooltips:
         # Minimal black rectangle with white text (matching weight overlay style)
         return f"""
         <div style='background-color: black; color: white; padding: 10px; 
-                    font-family: Arial; font-size: 28px; font-weight: bold; 
+                    font-family: Fio UI; font-size: 28px; font-weight: bold; 
                     border-radius: 5px; min-width: 60px; text-align: center;'>
             {val_display}
         </div>

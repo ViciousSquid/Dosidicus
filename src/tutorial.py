@@ -19,7 +19,7 @@ class TutorialManager:
     def get_tutorial_font_sizes(self, base_title_size=12, base_body_size=11):
         """Determine font sizes for tutorial text, increasing by 2 for ~1920x1080 resolution"""
         from .display_scaling import DisplayScaling
-        screen_width = QtWidgets.QApplication.primaryScreen().size().width()
+        screen_width = DisplayScaling.screen_pixels(QtWidgets.QApplication.primaryScreen())[0]
         
         if 1800 <= screen_width <= 2000:
             title_font_size = DisplayScaling.font_size(base_title_size + 2)
@@ -77,7 +77,7 @@ class TutorialManager:
         
         title_text = QtWidgets.QGraphicsTextItem("⚠️")
         title_text.setDefaultTextColor(QtGui.QColor(255, 215, 0))
-        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setFont(QtGui.QFont("Fio UI", title_font_size, QtGui.QFont.Bold))
         title_text.setPos(20, banner_y + 10)
         title_text.setZValue(2001)
         setattr(title_text, '_is_tutorial_element', True)
@@ -87,7 +87,7 @@ class TutorialManager:
         # Use localised text
         info_text = QtWidgets.QGraphicsTextItem(self.loc.get("tutorial_step1_text"))
         info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setFont(QtGui.QFont("Fio UI", body_font_size))
         info_text.setPos(20, banner_y + 35)
         info_text.setTextWidth(win_width - 150)
         info_text.setZValue(2001)
@@ -152,7 +152,7 @@ class TutorialManager:
             self.tutorial_elements.append(banner)
 
             from .display_scaling import DisplayScaling
-            screen_width = QtWidgets.QApplication.primaryScreen().size().width()
+            screen_width = DisplayScaling.screen_pixels(QtWidgets.QApplication.primaryScreen())[0]
             if screen_width <= 1920:
                 title_base_size = 14
                 body_base_size = 13
@@ -163,7 +163,7 @@ class TutorialManager:
 
             title_text = QtWidgets.QGraphicsTextItem("🧠")
             title_text.setDefaultTextColor(QtGui.QColor(135, 206, 250))
-            title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+            title_text.setFont(QtGui.QFont("Fio UI", title_font_size, QtGui.QFont.Bold))
             title_text.setPos(20, banner_y + 10)
             title_text.setZValue(2001)
             setattr(title_text, '_is_tutorial_element', True)
@@ -172,7 +172,7 @@ class TutorialManager:
 
             info_text = QtWidgets.QGraphicsTextItem(self.loc.get("tutorial_step2_text"))
             info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-            info_text.setFont(QtGui.QFont("Arial", body_font_size))
+            info_text.setFont(QtGui.QFont("Fio UI", body_font_size))
             info_text.setPos(20, banner_y + 35)
             info_text.setTextWidth(win_width - 150)
             info_text.setZValue(2001)
@@ -231,7 +231,7 @@ class TutorialManager:
         
         title_text = QtWidgets.QGraphicsTextItem("🔄")
         title_text.setDefaultTextColor(QtGui.QColor(200, 150, 255))
-        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setFont(QtGui.QFont("Fio UI", title_font_size, QtGui.QFont.Bold))
         title_text.setPos(20, banner_y + 10)
         title_text.setZValue(2001)
         setattr(title_text, '_is_tutorial_element', True)
@@ -240,7 +240,7 @@ class TutorialManager:
         
         info_text = QtWidgets.QGraphicsTextItem(self.loc.get("tutorial_step3_text"))
         info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setFont(QtGui.QFont("Fio UI", body_font_size))
         info_text.setPos(20, banner_y + 35)
         info_text.setTextWidth(win_width - 150)
         info_text.setZValue(2001)
@@ -312,7 +312,7 @@ class TutorialManager:
         
         title_text = QtWidgets.QGraphicsTextItem("🧬")
         title_text.setDefaultTextColor(QtGui.QColor(144, 238, 144))
-        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setFont(QtGui.QFont("Fio UI", title_font_size, QtGui.QFont.Bold))
         title_text.setPos(20, banner_y + 10)
         title_text.setZValue(2001)
         setattr(title_text, '_is_tutorial_element', True)
@@ -321,7 +321,7 @@ class TutorialManager:
         
         info_text = QtWidgets.QGraphicsTextItem(self.loc.get("tutorial_step4_text"))
         info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setFont(QtGui.QFont("Fio UI", body_font_size))
         info_text.setPos(20, banner_y + 35)
         info_text.setTextWidth(win_width - 150)
         info_text.setZValue(2001)
@@ -387,7 +387,7 @@ class TutorialManager:
         
         title_text = QtWidgets.QGraphicsTextItem("🤔")
         title_text.setDefaultTextColor(QtGui.QColor(222, 184, 135))
-        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setFont(QtGui.QFont("Fio UI", title_font_size, QtGui.QFont.Bold))
         title_text.setPos(20, banner_y + 10)
         title_text.setZValue(2001)
         setattr(title_text, '_is_tutorial_element', True)
@@ -396,7 +396,7 @@ class TutorialManager:
         
         info_text = QtWidgets.QGraphicsTextItem(self.loc.get("tutorial_step5_text"))
         info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setFont(QtGui.QFont("Fio UI", body_font_size))
         info_text.setPos(20, banner_y + 35)
         info_text.setTextWidth(win_width - 150)
         info_text.setZValue(2001)
@@ -467,7 +467,7 @@ class TutorialManager:
         
         title_text = QtWidgets.QGraphicsTextItem("🌿 ")
         title_text.setDefaultTextColor(QtGui.QColor(173, 216, 230))
-        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setFont(QtGui.QFont("Fio UI", title_font_size, QtGui.QFont.Bold))
         title_text.setPos(20, banner_y + 10)
         title_text.setZValue(2001)
         setattr(title_text, '_is_tutorial_element', True)
@@ -476,7 +476,7 @@ class TutorialManager:
         
         info_text = QtWidgets.QGraphicsTextItem(self.loc.get("tutorial_step6_text"))
         info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setFont(QtGui.QFont("Fio UI", body_font_size))
         info_text.setPos(20, banner_y + 35)
         info_text.setTextWidth(win_width - 150)
         info_text.setZValue(2001)
@@ -531,7 +531,7 @@ class TutorialManager:
         
         title_text = QtWidgets.QGraphicsTextItem("✨")
         title_text.setDefaultTextColor(QtGui.QColor(147, 112, 219))
-        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setFont(QtGui.QFont("Fio UI", title_font_size, QtGui.QFont.Bold))
         title_text.setPos(20, banner_y + 10)
         title_text.setZValue(2001)
         setattr(title_text, '_is_tutorial_element', True)
@@ -540,7 +540,7 @@ class TutorialManager:
         
         info_text = QtWidgets.QGraphicsTextItem(self.loc.get("tutorial_step7_text"))
         info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setFont(QtGui.QFont("Fio UI", body_font_size))
         info_text.setPos(20, banner_y + 35)
         info_text.setTextWidth(win_width - 150)
         info_text.setZValue(2001)

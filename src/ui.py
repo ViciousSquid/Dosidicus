@@ -359,7 +359,7 @@ class ComputeBackendOverlay:
         backend = get_backend()
         label, bg_color, text_color = self._style_for(backend.name)
 
-        font = QtGui.QFont("Courier New", DisplayScaling.scale(self._FONT_SIZE))
+        font = QtGui.QFont("IBM Plex Mono", DisplayScaling.scale(self._FONT_SIZE))
         font.setBold(True)
 
         # Measure text so the pill sizes itself to its content
@@ -444,16 +444,10 @@ class Ui:
         from .display_scaling import DisplayScaling
         DisplayScaling.initialize_for(screen)
         
-        if DisplayScaling.screen_pixels(screen)[0] <= 1920:
-            base_width = 1440
-            base_height = 960
-        else:
-            base_width = 1344
-            base_height = 936
-
-        self.window.setMinimumSize(DisplayScaling.scale(base_width), DisplayScaling.scale(base_height))
-        self.window_width = DisplayScaling.scale(base_width)
-        self.window_height = DisplayScaling.scale(base_height)
+        # The tank's size on this screen; everything in it is drawn at the
+        # same scale (DisplayScaling.tank_scale).
+        self.window_width, self.window_height = DisplayScaling.window_size()
+        self.window.setMinimumSize(self.window_width, self.window_height)
         self.window.setWindowTitle("Dosidicus")
         self.window.resize(self.window_width, self.window_height)
 
@@ -763,7 +757,7 @@ class Ui:
         self.scene.addItem(banner)
         title_text = QtWidgets.QGraphicsTextItem("🧠 NEURAL NETWORK")
         title_text.setDefaultTextColor(QtGui.QColor(135, 206, 250))
-        title_text.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
+        title_text.setFont(QtGui.QFont("Fio UI", 12, QtGui.QFont.Bold))
         title_text.setPos(20, win_height - banner_height + 10)
         title_text.setZValue(2001)
         setattr(title_text, '_is_tutorial_element', True)
@@ -773,7 +767,7 @@ class Ui:
             "The network adapts and learns as the squid interacts with his environment."
         )
         info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        info_text.setFont(QtGui.QFont("Arial", 11))
+        info_text.setFont(QtGui.QFont("Fio UI", 11))
         info_text.setPos(20, win_height - banner_height + 35)
         info_text.setTextWidth(win_width - 150)
         info_text.setZValue(2001)
@@ -1031,7 +1025,7 @@ class Ui:
 
         self.feeding_message = QtWidgets.QGraphicsTextItem(loc.get("feed_msg"))
         self.feeding_message.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        self.feeding_message.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.feeding_message.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
         self.feeding_message.setPos(0, self.window_height - 75)
         self.feeding_message.setTextWidth(self.window_width)
         self.feeding_message.setHtml(f'<div style="text-align: center;">{loc.get("feed_msg")}</div>')
@@ -1040,14 +1034,14 @@ class Ui:
 
         self.points_label = QtWidgets.QGraphicsTextItem(loc.get("points") + ":")
         self.points_label.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        self.points_label.setFont(QtGui.QFont("Arial", 12))
+        self.points_label.setFont(QtGui.QFont("Fio UI", 12))
         self.points_label.setPos(self.window_width - 255, 10)
         self.points_label.setZValue(2)
         self.scene.addItem(self.points_label)
 
         self.points_value_label = QtWidgets.QGraphicsTextItem("0")
         self.points_value_label.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        self.points_value_label.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
+        self.points_value_label.setFont(QtGui.QFont("Fio UI", 12, QtGui.QFont.Bold))
         self.points_value_label.setPos(self.window_width - 95, 10)
         self.points_value_label.setZValue(2)
         self.scene.addItem(self.points_value_label)
@@ -1104,44 +1098,56 @@ class Ui:
             from .config_manager import ConfigManager
             config = ConfigManager()
             display_config = config.get_display_config()
-            button_width = display_config['button_width']
             button_height = display_config['button_height']
             button_spacing = display_config['button_spacing']
             button_font_size = display_config['button_font_size']
         except Exception as e:
             print(f"Warning: Could not load display config, using defaults: {e}")
-            button_width = 140
-            button_height = 50
+            button_height = 60
             button_spacing = 20
             button_font_size = 16
         
-        button_width = DisplayScaling.scale(button_width)
-        button_height = DisplayScaling.scale(button_height)
-        button_spacing = DisplayScaling.scale(button_spacing)
+        self._button_height = DisplayScaling.scale(button_height)
+        self._button_spacing = DisplayScaling.scale(button_spacing)
         button_font_size = DisplayScaling.font_size(button_font_size)
-        
-        total_width = (button_width * 3) + (button_spacing * 2)
-        start_x = (self.window_width - total_width) / 2
-        y_pos = DisplayScaling.scale(15)
-        
+
         loc = Localization.instance()
         button_configs = [
             (loc.get("feed_btn"), "#C8E6C9", "#4CAF50", "feed_action"),
             (loc.get("clean_btn"), "#B3E5FC", "#2196F3", "clean_action"),
             (loc.get("medicine_btn"), "#FFCDD2", "#F44336", "medicine_action")
         ]
-        
+
         self.action_buttons = []
-        for i, (text, hover_color, pressed_color, action_name) in enumerate(button_configs):
-            x_pos = start_x + (i * (button_width + button_spacing))
+        for text, hover_color, pressed_color, action_name in button_configs:
             button = ActionButton(text, hover_color, pressed_color, button_font_size)
-            button.setFixedSize(button_width, button_height)
             button.action_name = action_name
             proxy = self.scene.addWidget(button)
-            proxy.setPos(x_pos, y_pos)
             proxy.setZValue(10000)
             self.action_buttons.append((button, proxy))
-        
+        self.layout_action_buttons()
+
+    #: The strip above the tank's box, which the buttons sit in.
+    TANK_TOP = 50
+
+    def layout_action_buttons(self):
+        """Feed, Clean and Medicine across the whole width of the window, in
+        three equal parts - and again whenever the window is resized."""
+        buttons = getattr(self, 'action_buttons', None)
+        if not buttons:
+            return
+        from .display_scaling import DisplayScaling
+        spacing = self._button_spacing
+        height = self._button_height
+        count = len(buttons)
+        width = max(1, int((self.window_width - spacing * (count + 1)) / count))
+        # Centred in the strip above the tank where they fit in it; on a
+        # large screen they are taller than the strip and start near the top.
+        y_pos = max(DisplayScaling.scale(4), (self.TANK_TOP - height) // 2)
+        for index, (button, proxy) in enumerate(buttons):
+            button.setFixedSize(width, height)
+            proxy.setPos(spacing + index * (width + spacing), y_pos)
+
     def connect_action_buttons(self):
         if not hasattr(self, 'action_buttons'):
             return
@@ -1185,7 +1191,7 @@ class Ui:
                 loc = Localization.instance()
                 dirty_text = QtWidgets.QGraphicsTextItem(loc.get("dirty"))
                 dirty_text.setDefaultTextColor(QtGui.QColor(101, 67, 33))
-                font = QtGui.QFont("Arial", font_size, QtGui.QFont.Bold)
+                font = QtGui.QFont("Fio UI", font_size, QtGui.QFont.Bold)
                 dirty_text.setFont(font)
                 dirty_text.setPos(x, y)
                 dirty_text.setZValue(1000)
@@ -1283,7 +1289,7 @@ class Ui:
             setattr(background, '_is_pause_message', True)
             self.scene.addItem(background)
 
-            pause_font = QtGui.QFont("Arial", DisplayScaling.font_size(24), QtGui.QFont.Bold)
+            pause_font = QtGui.QFont("Fio UI", DisplayScaling.font_size(24), QtGui.QFont.Bold)
             pause_text = self.scene.addText(loc.get("paused_msg"), pause_font)
             pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
             pause_text.setZValue(1002)
@@ -1294,7 +1300,7 @@ class Ui:
             pause_text_y = (win_height - text_rect.height()) / 2 - DisplayScaling.scale(30)
             pause_text.setPos(pause_text_x, pause_text_y)
 
-            sub_font = QtGui.QFont("Arial", DisplayScaling.font_size(14))
+            sub_font = QtGui.QFont("Fio UI", DisplayScaling.font_size(14))
             sub_text = self.scene.addText(loc.get("paused_sub"), sub_font)
             sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
             sub_text.setZValue(1002)
@@ -1347,7 +1353,7 @@ class Ui:
         setattr(background, '_is_pause_message', True)
         self.scene.addItem(background)
 
-        pause_text = self.scene.addText(loc.get("paused_msg"), QtGui.QFont("Arial", 24, QtGui.QFont.Bold))
+        pause_text = self.scene.addText(loc.get("paused_msg"), QtGui.QFont("Fio UI", 24, QtGui.QFont.Bold))
         pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
         pause_text.setZValue(1002)
         setattr(pause_text, '_is_pause_message', True)
@@ -1356,7 +1362,7 @@ class Ui:
         pause_text_y = (win_height - text_rect.height()) / 2 - 30
         pause_text.setPos(pause_text_x, pause_text_y)
 
-        sub_text = self.scene.addText(loc.get("paused_sub"), QtGui.QFont("Arial", 14))
+        sub_text = self.scene.addText(loc.get("paused_sub"), QtGui.QFont("Fio UI", 14))
         sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
         sub_text.setZValue(1002)
         setattr(sub_text, '_is_pause_message', True)
@@ -1375,6 +1381,7 @@ class Ui:
         self.cleanliness_overlay.setRect(50, 50, self.window_width - 100, self.window_height - 100)
         self.feeding_message.setPos(0, self.window_height - 75)
         self.feeding_message.setTextWidth(self.window_width)
+        self.layout_action_buttons()
         self.points_label.setPos(self.window_width - 265, 10)
         self.points_value_label.setPos(self.window_width - 95, 10)
         self.debug_text.setPos(self.window_width - 60, self.window_height - 60)
@@ -1426,7 +1433,7 @@ class Ui:
         message_item = QtWidgets.QGraphicsTextItem(message)
         message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))
         from .display_scaling import DisplayScaling
-        font = QtGui.QFont("Verdana", DisplayScaling.font_size(12), QtGui.QFont.Bold)
+        font = QtGui.QFont("Fio UI", DisplayScaling.font_size(12), QtGui.QFont.Bold)
         message_item.setFont(font)
         message_item.setTextWidth(self.window_width)
         text_height = message_item.boundingRect().height()
@@ -1573,7 +1580,7 @@ class Ui:
         score_text = QtWidgets.QGraphicsTextItem(text)
         score_text.setDefaultTextColor(color)
         from .display_scaling import DisplayScaling
-        font = QtGui.QFont("Arial", DisplayScaling.font_size(16), QtGui.QFont.Bold)
+        font = QtGui.QFont("Fio UI", DisplayScaling.font_size(16), QtGui.QFont.Bold)
         score_text.setFont(font)
         text_width = score_text.boundingRect().width()
         score_text.setPos(center_x - text_width / 2, top_y)

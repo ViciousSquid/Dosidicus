@@ -216,9 +216,13 @@ class BrainDesignerWindow(QMainWindow):
         except Exception:
             screen = None
         if screen is not None:
-            avail = screen.availableGeometry()
-            min_w = min(min_w, int(avail.width() * 0.9))
-            min_h = min(min_h, int(avail.height() * 0.85))
+            try:
+                from .desktop_style import usable_size
+            except ImportError:
+                from desktop_style import usable_size
+            usable_width, usable_height = usable_size(screen)
+            min_w = min(min_w, int(usable_width * 0.9))
+            min_h = min(min_h, int(usable_height * 0.85))
         self.setMinimumSize(min_w, min_h)
 
     def setup_ui(self):
@@ -1320,7 +1324,13 @@ def main():
     """Main entry point for the Brain Designer application."""
     from PyQt5.QtWidgets import QApplication
     
+    try:
+        from .desktop_style import prepare_qt, install_style
+    except ImportError:
+        from desktop_style import prepare_qt, install_style
+    prepare_qt()
     app = QApplication(sys.argv)
+    install_style(app)
     app.setApplicationName("Brain Designer (Beta)")
     app.setOrganizationName("Dosidicus")
     

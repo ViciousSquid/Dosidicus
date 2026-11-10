@@ -474,7 +474,7 @@ class BrainRenderWorker(QThread):
         from .brain_constants import (display_rows, ROW_BAND_COLORS,
                                       row_label_anchor)
 
-        label_font = QFont("Arial", 11)
+        label_font = QFont("Fio UI", 11)
         label_font.setBold(True)
         label_font.setLetterSpacing(QFont.PercentageSpacing, 130)
         painter.setFont(label_font)
@@ -808,7 +808,7 @@ class BrainRenderWorker(QThread):
                                       neuron_row_color, reveal_scale)
 
         # Set up default font
-        font = QFont("Arial", state.neuron_label_font_size)
+        font = QFont("Fio UI", state.neuron_label_font_size)
         font.setBold(True)
         painter.setFont(font)
         fm = painter.fontMetrics()
@@ -897,7 +897,7 @@ class BrainRenderWorker(QThread):
                 # [NEW] Draw Symbol inside Binary Neuron
                 symbol = "✓" if is_active else "✗"
                 painter.save()
-                symbol_font = QFont("Arial", int(size * 0.7))
+                symbol_font = QFont("Fio UI", int(size * 0.7))
                 symbol_font.setBold(True)
                 painter.setFont(symbol_font)
                 painter.setPen(QColor(0, 0, 0))
@@ -971,7 +971,7 @@ class BrainRenderWorker(QThread):
                     self._draw_polygon(painter, x, y, 6, radius, color, rotation=0)
 
                 painter.save()
-                c_font = QFont("Arial", int(14 * scale))
+                c_font = QFont("Fio UI", int(14 * scale))
                 c_font.setBold(True)
                 painter.setFont(c_font)
                 
@@ -1042,7 +1042,7 @@ class BrainRenderWorker(QThread):
         view = abs(painter.worldTransform().m11()) or 1.0
         floor_px = self.MIN_CAPTION_PX * (0.75 if is_grown_neuron(name) else 1.0)
         floor_pt = floor_px * 72.0 / 96.0 / view
-        label_font = QFont("Arial")
+        label_font = QFont("Fio UI")
         label_font.setPointSizeF(max(effective_size * scale, floor_pt))
         label_font.setBold(True)
         painter.setFont(label_font)

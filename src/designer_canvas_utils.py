@@ -107,7 +107,7 @@ class WiringPreviewItem(QGraphicsItem):
             mid = (self.start_pos + self.end_pos) / 2
             
             # Background
-            font = QFont("Arial", 10, QFont.Bold)
+            font = QFont("Fio UI", 10, QFont.Bold)
             painter.setFont(font)
             fm = QFontMetrics(font)
             
@@ -183,7 +183,7 @@ class ActivationBadge(QGraphicsItem):
         
         # Text
         painter.setPen(Qt.white if color.lightness() < 150 else Qt.black)
-        painter.setFont(QFont("Arial", 8, QFont.Bold))
+        painter.setFont(QFont("Fio UI", 8, QFont.Bold))
         painter.drawText(rect, Qt.AlignCenter, text)
 
 
@@ -234,7 +234,7 @@ class ConnectionStrengthIndicator(QGraphicsItem):
         
         # Weight text
         painter.setPen(Qt.white)
-        painter.setFont(QFont("Arial", 9, QFont.Bold))
+        painter.setFont(QFont("Fio UI", 9, QFont.Bold))
         text = f"{self.weight:+.2f}"
         painter.drawText(QRectF(-50, -14, 100, 14), Qt.AlignCenter, text)
 

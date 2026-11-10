@@ -69,8 +69,10 @@ def _image(*parts) -> str:
     return os.path.join(*parts)
 
 
-#: A heavy monospace, as in the mockup: the first of these the system has.
-MONOSPACE = ('Consolas', 'Menlo', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New')
+#: A heavy monospace, as in the mockup: the game's own (src/fonts), so the
+#: splash is the same on every system; the rest only if that failed to load.
+MONOSPACE = ('IBM Plex Mono', 'Consolas', 'Menlo', 'DejaVu Sans Mono', 'Liberation Mono',
+             'Courier New')
 
 
 def _monospace_family() -> str:

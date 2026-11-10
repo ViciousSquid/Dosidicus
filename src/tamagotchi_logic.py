@@ -3000,7 +3000,7 @@ class TamagotchiLogic:
             # Create a new QGraphicsTextItem for the message
             message_item = QtWidgets.QGraphicsTextItem(message)
             message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))  # White text
-            message_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+            message_item.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
             message_item.setPos(0, self.user_interface.window_height - 75)  # Position the message higher
             message_item.setTextWidth(self.user_interface.window_width)
             message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 5px;">{message}</div>')

@@ -340,7 +340,7 @@ class RemoteEntityManager:
             self.scene.addItem(id_text)
         id_text.setPlainText(self._label(node_id, squid_data_payload))
         id_text.setDefaultTextColor(QtGui.QColor(200,200,200,200))
-        id_text.setFont(QtGui.QFont("Arial", 8))
+        id_text.setFont(QtGui.QFont("Fio UI", 8))
         id_text.setZValue(6) 
         id_text.setVisible(self.show_labels)
 
@@ -350,7 +350,7 @@ class RemoteEntityManager:
             self.scene.addItem(status_text)
         status_text.setPlainText("ENTERING...") 
         status_text.setDefaultTextColor(QtGui.QColor(255,255,0)) 
-        status_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        status_text.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
         status_text.setZValue(6)
         status_text.setVisible(self.show_labels)
         
@@ -408,7 +408,7 @@ class RemoteEntityManager:
         if status_item:
             status_item.setPlainText("ENTERING...")
             status_item.setDefaultTextColor(QtGui.QColor(255,255,0)) 
-            status_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+            status_item.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
             status_item.setVisible(self.show_labels) 
         
         id_item = remote_squid_info.get('id_text')
@@ -463,7 +463,7 @@ class RemoteEntityManager:
                 status_text_item.setPlainText(new_status_from_payload.upper())
                 if remote_squid_info.get('was_arrival_text', False) or "ENTERING" in status_text_item.toPlainText(): 
                     status_text_item.setDefaultTextColor(QtGui.QColor(200,200,200,230)) 
-                    status_text_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Normal)) 
+                    status_text_item.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Normal)) 
                     remote_squid_info['was_arrival_text'] = False
             status_text_item.setVisible(self.show_labels)
         
@@ -908,7 +908,7 @@ class RemoteEntityManager:
         if status_text_item:
             current_status=squid_display_data.get('data',{}).get('status','visiting').upper()
             if squid_display_data.get('was_arrival_text',False) and current_status not in ["ENTERING...","ARRIVING...",squid_display_data.get('data',{}).get('status','visiting').upper()]:
-                status_text_item.setDefaultTextColor(QtGui.QColor(200,200,200,230)); status_text_item.setFont(QtGui.QFont("Arial",10,QtGui.QFont.Normal))
+                status_text_item.setDefaultTextColor(QtGui.QColor(200,200,200,230)); status_text_item.setFont(QtGui.QFont("Fio UI",10,QtGui.QFont.Normal))
                 status_text_item.setPlainText(squid_display_data.get('data',{}).get('status','visiting')); squid_display_data['was_arrival_text']=False
             status_text_item.setZValue(visual_item.zValue()+1 if visual_item else 6)
 

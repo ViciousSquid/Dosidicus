@@ -139,7 +139,7 @@ class NetworkTab(BrainBaseTab):
         values_box.setSpacing(10)
 
         font_size_values = DisplayScaling.font_size(10)
-        value_font = QtGui.QFont("Arial", font_size_values)
+        value_font = QtGui.QFont("Fio UI", font_size_values)
         value_font.setBold(True)
 
         # Add the global cooldown label
@@ -811,7 +811,7 @@ class ExperienceBufferDialog(QtWidgets.QDialog):
                 'reward': '#4CAF50'
             }.get(exp.trigger_type, '#757575')
             type_item.setForeground(QtGui.QColor(type_color))
-            type_item.setFont(QtGui.QFont("Arial", 9, QtGui.QFont.Bold))
+            type_item.setFont(QtGui.QFont("Fio UI", 9, QtGui.QFont.Bold))
             self.table.setItem(i, 0, type_item)
             
             # Pattern column

@@ -14,6 +14,12 @@ class DisplayScaling:
     DESIGN_WIDTH = 2880
     DESIGN_HEIGHT = 1920
 
+    #: The tank window as designed, on the design screen - and the slightly
+    #: larger share of the screen it takes on one no wider than 1920.
+    DESIGN_WINDOW = (1344, 936)
+    SMALL_WINDOW = (1440, 960)
+    _window_base = DESIGN_WINDOW
+
     # Default scale factor (1.0 means no scaling)
     _scale_factor = 1.0
     #: Real pixels per point on the game's screen (2 on a Retina Mac).
@@ -30,6 +36,7 @@ class DisplayScaling:
         height_ratio = current_height / cls.DESIGN_HEIGHT
         base_scale_factor = min(width_ratio, height_ratio)
         
+        cls._window_base = cls.SMALL_WINDOW if current_width <= 1920 else cls.DESIGN_WINDOW
         cls._small_screen = current_width <= 1920 and current_height <= 1080
         if cls._small_screen:
             cls._scale_factor = base_scale_factor * 0.85 / cls._ratio
@@ -41,25 +48,48 @@ class DisplayScaling:
     @classmethod
     def initialize_for(cls, screen, available=False):
         """Initialise from a QScreen: its size (or available area) and ratio."""
-        size = screen.availableGeometry() if available else screen.size()
-        cls.initialize(size.width(), size.height(), screen.devicePixelRatio())
+        # The same on every system for the same screen: the screen's size,
+        # or its size less one fixed allowance for a taskbar or dock - never
+        # what this system's own bars happen to leave (src/desktop_style.py).
+        from .desktop_style import screen_size, usable_size
+        width, height, ratio = screen_size(screen)
+        if available:
+            width, height = usable_size(screen)
+        cls.initialize(width, height, ratio)
 
     @classmethod
     def screen_pixels(cls, screen):
         """A QScreen's size in real pixels."""
-        ratio = max(1.0, float(screen.devicePixelRatio() or 1.0))
-        return int(screen.size().width() * ratio), int(screen.size().height() * ratio)
+        from .desktop_style import screen_size
+        width, height, ratio = screen_size(screen)
+        return int(width * ratio), int(height * ratio)
+
+    @classmethod
+    def window_size(cls):
+        """The tank window's size on this screen."""
+        return cls.scale(cls._window_base[0]), cls.scale(cls._window_base[1])
+
+    @classmethod
+    def tank_scale(cls):
+        """How large the tank is drawn on this screen, against its design:
+        1 on the design screen, about a half on a 1080p one. Everything that
+        lives in the tank - the squid, food, rocks, eggs, ink - is drawn at
+        this scale, so the tank is one picture, larger or smaller, and a
+        squid takes up the same share of it on every screen. (The squid used
+        to be 70% on a 1080p screen and the food full size, in a tank at 48%:
+        a squid half as tall as its tank.)"""
+        return cls._window_base[0] * cls._scale_factor / cls.DESIGN_WINDOW[0]
 
     @classmethod
     def points(cls, pixels):
-        """A size the game gives in real pixels, in points."""
-        return max(1, int(round(pixels / cls._ratio)))
+        """A size designed in pixels of the design tank, as drawn here."""
+        return max(1, int(round(pixels * cls.tank_scale())))
 
     @classmethod
     def to_points(cls, pixmap):
-        """A sprite drawn at its pixel size, as many points as it has pixels
-        on screen."""
-        if cls._ratio == 1.0 or pixmap is None or pixmap.isNull():
+        """A sprite of the tank, at the size the tank is drawn here."""
+        scale = cls.tank_scale()
+        if abs(scale - 1.0) < 1e-6 or pixmap is None or pixmap.isNull():
             return pixmap
         from PyQt5 import QtCore
         return pixmap.scaled(cls.points(pixmap.width()), cls.points(pixmap.height()),
@@ -67,8 +97,8 @@ class DisplayScaling:
 
     @classmethod
     def squid_scale(cls):
-        """How a squid's images are scaled: 70% on a 1080p screen, in points."""
-        return (0.7 if cls._small_screen else 1.0) / cls._ratio
+        """How a squid's images are scaled: with the tank."""
+        return cls.tank_scale()
     
     @classmethod
     def scale(cls, value):

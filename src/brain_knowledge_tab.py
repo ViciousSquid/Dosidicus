@@ -34,7 +34,7 @@ _KIND_STYLE = {
 
 def _confidence_bar(confidence: float, colour: str) -> str:
     filled = int(round(max(0.0, min(1.0, confidence)) * 20))
-    return (f"<span style='font-family:monospace; color:{colour};'>"
+    return (f"<span style='font-family: IBM Plex Mono; color:{colour};'>"
             f"{'█' * filled}{'░' * (20 - filled)}</span>")
 
 
@@ -307,7 +307,7 @@ class KnowledgeTab(BrainBaseTab):
         set_html(self.knowledge_view, self._render_items(items))
 
     def _render_items(self, items) -> str:
-        parts = ["<body style='font-family:sans-serif;'>"]
+        parts = ["<body style='font-family: Fio UI;'>"]
         for item in items:
             bg, colour, kind_label = _KIND_STYLE.get(
                 item.kind, ("#f5f5f5", "#424242", item.kind))
@@ -408,7 +408,7 @@ class KnowledgeTab(BrainBaseTab):
             set_html(self.capability_view, "<p>This brain has no capability monitor.</p>")
             return
 
-        parts = ["<body style='font-family:sans-serif;'>"]
+        parts = ["<body style='font-family: Fio UI;'>"]
         try:
             deficits = sorted(monitor.active.values(), key=lambda d: -d.severity)
             actionable = {d.key for d in monitor.actionable()}

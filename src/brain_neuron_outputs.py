@@ -48,7 +48,7 @@ if HAS_QT:
                 QWidget {
                     background-color: #121212;
                     color: #ffb74d;
-                    font-family: 'Consolas', 'Courier New', monospace;
+                    font-family: IBM Plex Mono;
                     font-size: 10pt;
                 }
                 QPlainTextEdit {

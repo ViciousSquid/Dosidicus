@@ -1786,7 +1786,7 @@ class MultiplayerPlugin:
         # If you still want a minimal static cue:
         # arrival_text_str = "New Visitor"
         # arrival_text_item = scene.addText(arrival_text_str)
-        # arrival_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
+        # arrival_font = QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold)
         # arrival_text_item.setFont(arrival_font)
         # text_metrics = QtGui.QFontMetrics(arrival_font)
         # text_rect = text_metrics.boundingRect(arrival_text_str)
@@ -2410,13 +2410,13 @@ class MultiplayerPlugin:
             current_status_from_data = squid_display_data.get('data', {}).get('status', 'visiting')
             status_text_item.setPlainText(current_status_from_data)
             status_text_item.setDefaultTextColor(QtGui.QColor(200, 200, 200, 220)) # Default color
-            status_text_item.setFont(QtGui.QFont("Arial", 9)) # Default font
+            status_text_item.setFont(QtGui.QFont("Fio UI", 9)) # Default font
             status_text_item.setZValue(6) # Above squid
 
         # Reset ID text style (usually less dynamic)
         if id_text_item:
             id_text_item.setDefaultTextColor(QtGui.QColor(200, 200, 200, 180))
-            id_text_item.setFont(QtGui.QFont("Arial", 8))
+            id_text_item.setFont(QtGui.QFont("Fio UI", 8))
             id_text_item.setZValue(6)
 
 
@@ -3327,10 +3327,10 @@ class MultiplayerPlugin:
                     status_text.setPos(squid_data_dict['x'], squid_data_dict['y'] - 35) # Adjust
                     # Static text styling, no animation-dependent changes
                     status_text.setDefaultTextColor(QtGui.QColor(200,200,200,230))
-                    status_text.setFont(QtGui.QFont("Arial", 9))
+                    status_text.setFont(QtGui.QFont("Fio UI", 9))
                     if is_new_arrival: # Slight emphasis for new arrivals' status
                         status_text.setDefaultTextColor(QtGui.QColor(255, 223, 0)) # Gold
-                        status_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+                        status_text.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
 
                 existing_squid_display['data'] = squid_data_dict
                 existing_squid_display['last_update'] = time.time()
@@ -3362,7 +3362,7 @@ class MultiplayerPlugin:
                     display_id_str = f"{remote_node_id[-6:]}" # Show last 6 chars of ID
                     id_text = scene.addText(display_id_str) # Basic text item
                     id_text.setPos(squid_data_dict['x'], squid_data_dict['y'] - 50) # Position above visual
-                    id_text.setFont(QtGui.QFont("Arial", 8))
+                    id_text.setFont(QtGui.QFont("Fio UI", 8))
                     id_text.setDefaultTextColor(QtGui.QColor(200,200,200,180)) # Semi-transparent white
                     id_text.setZValue(6) # Above squid visual
                     id_text.setVisible(self.SHOW_REMOTE_LABELS)
@@ -3371,11 +3371,11 @@ class MultiplayerPlugin:
                     status_str = "ARRIVING" if is_new_arrival else squid_data_dict.get('status', 'active')
                     status_text = scene.addText(status_str)
                     status_text.setPos(squid_data_dict['x'], squid_data_dict['y'] - 35) # Position above visual
-                    status_text.setFont(QtGui.QFont("Arial", 9))
+                    status_text.setFont(QtGui.QFont("Fio UI", 9))
                     status_text.setDefaultTextColor(QtGui.QColor(200,200,200,230))
                     if is_new_arrival: # Emphasize for new arrivals
                         status_text.setDefaultTextColor(QtGui.QColor(255, 215, 0)) # Gold
-                        status_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+                        status_text.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
                     status_text.setZValue(6) # Above squid visual
                     status_text.setVisible(self.SHOW_REMOTE_LABELS)
                     
@@ -3440,7 +3440,7 @@ class MultiplayerPlugin:
         if status_text: # Update status text
             status_text.setPlainText("RETURNING HOME...")
             status_text.setDefaultTextColor(QtGui.QColor(255, 165, 0)) # Orange
-            status_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+            status_text.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
         
         # For static testing, remove immediately after sending message
         self.logger.info(f"Static removal for remote squid {remote_node_id[-6:]} returning home.")
@@ -3631,7 +3631,7 @@ class MultiplayerPlugin:
 
             # Optional: Add a temporary "🎁 Gift!" text label above it
             gift_indicator_label = scene.addText("🎁 Gift!")
-            label_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
+            label_font = QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold)
             gift_indicator_label.setFont(label_font)
             gift_indicator_label.setDefaultTextColor(QtGui.QColor(255, 100, 100)) # Bright color
             label_x = gift_pos_x + (item_width / 2) - (gift_indicator_label.boundingRect().width() / 2)

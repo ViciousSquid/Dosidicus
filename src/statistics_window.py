@@ -11,7 +11,8 @@ class StatBox(QtWidgets.QWidget):
         self.label_key = label_key
         
         screen = QtWidgets.QApplication.primaryScreen()
-        screen_size = screen.size()
+        from .desktop_style import reported_size
+        screen_size = reported_size(screen)
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
 
@@ -77,7 +78,8 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.loc = Localisation.instance()
 
         screen = QtWidgets.QApplication.primaryScreen()
-        screen_size = screen.size()
+        from .desktop_style import reported_size
+        screen_size = reported_size(screen)
 
         self.setWindowTitle(self.loc.get("statistics"))
         self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
@@ -101,7 +103,7 @@ class StatisticsWindow(QtWidgets.QWidget):
             families = QtGui.QFontDatabase.applicationFontFamilies(font_id)
             font = QtGui.QFont(families[0], 40)
         else:
-            font = QtGui.QFont("Arial", 40, QtGui.QFont.Bold)
+            font = QtGui.QFont("Fio UI", 40, QtGui.QFont.Bold)
 
         # ---------------- score label ---------------------------------
         self.score_label = QtWidgets.QLabel("00000")

@@ -1715,7 +1715,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         """Return cached QFont to avoid recreation every paint."""
         key = (size, bold)
         if key not in self._cached_fonts:
-            font = QtGui.QFont("Arial", size)
+            font = QtGui.QFont("Fio UI", size)
             if bold:
                 font.setBold(True)
             self._cached_fonts[key] = font
@@ -3994,7 +3994,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         }
 
         # Font size for labels - use config value directly
-        label_font = QtGui.QFont("Arial", self.neuron_label_font_size)
+        label_font = QtGui.QFont("Fio UI", self.neuron_label_font_size)
         label_font.setBold(True)
         painter.setFont(label_font)
         font_metrics = painter.fontMetrics()
@@ -4034,7 +4034,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 symbol = "✓" if is_active else "✗"
                 
                 painter.save()
-                symbol_font = QtGui.QFont("Arial", int(size * 0.7))
+                symbol_font = QtGui.QFont("Fio UI", int(size * 0.7))
                 symbol_font.setBold(True)
                 painter.setFont(symbol_font)
                 painter.setPen(QtGui.QColor(0, 0, 0)) # Black text
@@ -4113,7 +4113,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 painter.drawPolygon(polygon)
                 
                 # Draw 'C' inside
-                font = QtGui.QFont("Arial", int(14 * scale))
+                font = QtGui.QFont("Fio UI", int(14 * scale))
                 font.setBold(True)
                 painter.setFont(font)
                 painter.setPen(QtGui.QColor(255, 255, 255))
@@ -4178,7 +4178,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # Apply scaling if it's a neurogenesis neuron (0.75x)
         effective_font_size = font_size * 0.75 if is_neurogenesis else font_size
 
-        label_font = QtGui.QFont("Arial", int(effective_font_size * scale))
+        label_font = QtGui.QFont("Fio UI", int(effective_font_size * scale))
         label_font.setBold(True)
         painter.setFont(label_font)
         font_metrics = painter.fontMetrics()
@@ -4238,7 +4238,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         is_neurogenesis = name not in self.innate_neurons
         effective_size = base_size * 0.75 if is_neurogenesis else base_size
 
-        font = QtGui.QFont("Arial", int(effective_size * scale))
+        font = QtGui.QFont("Fio UI", int(effective_size * scale))
         font.setBold(True)
         painter.setFont(font)
         fm = painter.fontMetrics()
@@ -4268,7 +4268,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         is_neurogenesis = name not in self.innate_neurons
         effective_size = base_size * 0.75 if is_neurogenesis else base_size
 
-        font = QtGui.QFont("Arial", int(effective_size * scale))
+        font = QtGui.QFont("Fio UI", int(effective_size * scale))
         font.setBold(True)
         painter.setFont(font)
         fm = painter.fontMetrics()
@@ -4332,7 +4332,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if font_size is None:
             font_size = self.neuron_label_font_size
 
-        label_font = QtGui.QFont("Arial", int(font_size * scale))
+        label_font = QtGui.QFont("Fio UI", int(font_size * scale))
         label_font.setBold(True)
         painter.setFont(label_font)
         font_metrics = painter.fontMetrics()
@@ -4447,7 +4447,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         # 3. Draw the 'C' inside
         font_size = int(14 * scale)
-        font = QtGui.QFont("Arial", font_size)
+        font = QtGui.QFont("Fio UI", font_size)
         font.setBold(True)
         painter.setFont(font)
         
@@ -4496,7 +4496,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         from .localisation import Localisation
         loc = Localisation.instance()
 
-        font = QtGui.QFont("Arial", int(self.neuron_label_font_size * scale))
+        font = QtGui.QFont("Fio UI", int(self.neuron_label_font_size * scale))
         font.setBold(True)
         painter.setFont(font)
         fm = painter.fontMetrics()
@@ -5254,7 +5254,7 @@ class NetworkRenderingMixin:
         if excluded_neurons is None:
             excluded_neurons = set()
 
-        label_font = QtGui.QFont("Arial", int(base_font_size * scale))
+        label_font = QtGui.QFont("Fio UI", int(base_font_size * scale))
         label_font.setBold(True)
         painter.setFont(label_font)
         font_metrics = painter.fontMetrics()
@@ -5370,7 +5370,7 @@ class NetworkRenderingMixin:
             painter.drawRect(rect)
             
             # Draw label
-            font = QtGui.QFont("Arial", int(10 * scale))
+            font = QtGui.QFont("Fio UI", int(10 * scale))
             font.setBold(True)
             painter.setFont(font)
             painter.setPen(QtGui.QColor(150, 150, 170))

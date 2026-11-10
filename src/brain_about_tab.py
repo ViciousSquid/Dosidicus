@@ -170,7 +170,7 @@ class AboutTab(BrainBaseTab):
         hello_label = QtWidgets.QLabel(self.loc.get("hello"))
         hello_label.setAlignment(QtCore.Qt.AlignCenter)
         hello_label.setStyleSheet(f"""
-            font-family: Arial, sans-serif;
+            font-family: Fio UI;
             font-size: {DisplayScaling.font_size(38)}px;
             font-weight: bold;
             color: #FFFFFF;
@@ -182,7 +182,7 @@ class AboutTab(BrainBaseTab):
         my_name_label = QtWidgets.QLabel(self.loc.get("my_name_is"))
         my_name_label.setAlignment(QtCore.Qt.AlignCenter)
         my_name_label.setStyleSheet(f"""
-            font-family: Arial, sans-serif;
+            font-family: Fio UI;
             font-size: {DisplayScaling.font_size(20)}px;
             color: #FFFFFF;
             background-color: #FF0000;
@@ -193,7 +193,7 @@ class AboutTab(BrainBaseTab):
         self.name_label = QtWidgets.QLabel(squid_name)
         self.name_label.setAlignment(QtCore.Qt.AlignCenter)
         self.name_label.setStyleSheet(f"""
-            font-family: Arial, sans-serif;
+            font-family: Fio UI;
             font-size: {DisplayScaling.font_size(38)}px;
             font-weight: bold;
             color: #000000;

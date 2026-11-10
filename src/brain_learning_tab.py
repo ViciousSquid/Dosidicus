@@ -239,7 +239,7 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
                 <div style='background: #f3e5f5; padding: 20px; border-radius: 8px; margin: 20px 0;'>
                     <h3 style='color: #6a1b9a; margin: 0 0 15px 0; font-size: 20px;'>{loc.get("learning_rule_title")}</h3>
-                    <div style='background: white; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 18px; text-align: center; margin-bottom: 15px;'>
+                    <div style='background: white; padding: 15px; border-radius: 6px; font-family: IBM Plex Mono; font-size: 18px; text-align: center; margin-bottom: 15px;'>
                         <b>Δw = η × x × y</b>
                     </div>
                     <p style='margin-bottom: 15px;'>{loc.get("where_label")}</p>

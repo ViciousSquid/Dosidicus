@@ -40,8 +40,10 @@ class PreferencesWindow(QtWidgets.QDialog):
         screen_geometry = screen.availableGeometry()
         self.config = ConfigManager()
         
-        # Re-initialize scaling to ensure context is correct for this window creation
-        DisplayScaling.initialize_for(screen, available=True)
+        # The game's scale is set once, from the screen, when the tank is
+        # made. (It used to be set again here, from what the taskbar left -
+        # so everything made after Preferences was opened came out a
+        # slightly different size from everything made before.)
         
         self.setWindowTitle("Preferences")
         self.setModal(False)
@@ -945,10 +947,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.button_font_size.valueChanged.connect(self._on_change)
         layout.addRow("Button Font Size:", self.button_font_size)
         
-        self.button_width = QtWidgets.QSpinBox()
-        self.button_width.setRange(80, 200)
-        self.button_width.valueChanged.connect(self._on_change)
-        layout.addRow("Button Width:", self.button_width)
+        # No width: Feed, Clean and Medicine share the window's whole width.
         
         self.button_height = QtWidgets.QSpinBox()
         self.button_height.setRange(30, 80)
@@ -1109,7 +1108,6 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.neuron_font_size.setValue(display_config['neuron_label_font_size'])
         self.connection_width.setValue(display_config['connection_line_width'])
         self.button_font_size.setValue(display_config['button_font_size'])
-        self.button_width.setValue(display_config['button_width'])
         self.button_height.setValue(display_config['button_height'])
         self.button_spacing.setValue(display_config['button_spacing'])
         

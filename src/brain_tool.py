@@ -106,9 +106,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         ratio = max(1.0, screen.devicePixelRatio())
         final_width, final_height = int(final_width / ratio), int(final_height / ratio)
 
-        # Ensure the final window dimensions do not exceed the actual screen available geometry
-        final_width = min(final_width, screen_geometry.width())
-        final_height = min(final_height, screen_geometry.height())
+        # No larger than the screen allows - by the same measure on every
+        # system (the screen less one fixed allowance for a taskbar or dock),
+        # so the window opens the same size on all of them.
+        from .desktop_style import usable_size
+        usable_width, usable_height = usable_size(screen)
+        final_width = min(final_width, usable_width)
+        final_height = min(final_height, usable_height)
 
         self.resize(final_width, final_height) # Resize the window with clamped dimensions
 
@@ -2672,14 +2676,14 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             source_item = QtWidgets.QTableWidgetItem(source)
             if source in self.brain_widget.neurogenesis_data.get('new_neurons', []):
                 source_item.setBackground(QtGui.QColor(255, 255, 200))  # Light yellow for new neurons
-            source_item.setFont(QtGui.QFont("Arial", 14))  # Bigger font size
+            source_item.setFont(QtGui.QFont("Fio UI", 14))  # Bigger font size
             self.connections_view.setItem(row, 0, source_item)
             
             # Target neuron
             target_item = QtWidgets.QTableWidgetItem(target)
             if target in self.brain_widget.neurogenesis_data.get('new_neurons', []):
                 target_item.setBackground(QtGui.QColor(255, 255, 200))
-            target_item.setFont(QtGui.QFont("Arial", 14))  # Bigger font size
+            target_item.setFont(QtGui.QFont("Fio UI", 14))  # Bigger font size
             self.connections_view.setItem(row, 1, target_item)
             
             # Weight value
@@ -2692,7 +2696,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 weight_item.setForeground(QtGui.QColor(150, 0, 0))  # Dark red for mild negative
             else:
                 weight_item.setForeground(QtGui.QColor(200, 0, 0))  # Bright red for strong negative
-            weight_item.setFont(QtGui.QFont("Arial", 14))  # Bigger font size
+            weight_item.setFont(QtGui.QFont("Fio UI", 14))  # Bigger font size
             self.connections_view.setItem(row, 2, weight_item)
             
             # Trend indicator with emoji arrows
@@ -2703,7 +2707,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     trend_item = QtWidgets.QTableWidgetItem("⬆️")  # Up emoji arrow
                 elif weight < prev - 0.01:
                     trend_item = QtWidgets.QTableWidgetItem("⬇️")  # Down emoji arrow
-            trend_item.setFont(QtGui.QFont("Arial", 14))  # Bigger font size
+            trend_item.setFont(QtGui.QFont("Fio UI", 14))  # Bigger font size
             self.connections_view.setItem(row, 3, trend_item)
             
             row += 1
@@ -2734,7 +2738,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         # Generate detailed HTML content
         details_html = f"""
-        <div style="font-family: Arial, sans-serif;">
+        <div style="font-family: Fio UI;">
             <h3 style="margin: 5px 0; color: #2c3e50;">Connection Details</h3>
             
             <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
@@ -3295,7 +3299,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             <head>
                 <title>Squid Brain Learning Data</title>
                 <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
+                    body { font-family: Fio UI; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
                     h1, h2, h3 { color: #2c3e50; }
                     table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
                     th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
