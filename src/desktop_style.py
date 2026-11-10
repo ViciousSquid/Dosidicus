@@ -621,11 +621,12 @@ def place_exactly(window, x, y, check_after_ms=250):
     """Put a window's frame at (x, y) - and, a moment after, see whether the
     system left it there, and correct it if not.
 
-    A window placed before the system has given it a frame, or with a frame
-    wider than the system admits to (Windows' invisible resize border), can
-    land a few pixels from where it was put: the Brain Tool sat 7 pixels to
-    the right on Windows and nowhere else. Asking again for the same place
-    gets the same answer, so the correction asks for a place that much the
+    A window placed before the system has given it a frame can land a few
+    pixels from where it was put: the Brain Tool sat 7 pixels to the right on
+    Windows and nowhere else. Asked again once it has its frame, Windows puts
+    it exactly there - so the first correction is simply to ask again. Only
+    if a second look finds it still off by the same amount (a system that
+    shifts every window it is given) is it asked for a place that much the
     other way. Not on Wayland, where the compositor places every window and
     reports no position at all.
     """
@@ -634,14 +635,25 @@ def place_exactly(window, x, y, check_after_ms=250):
     app = QtWidgets.QApplication.instance()
     if app is None or app.platformName().startswith('wayland'):
         return
+    looks = {'count': 0, 'off': None}
+
+    def off_by():
+        return window.pos().x() - x, window.pos().y() - y
 
     def correct():
         try:
             if not window.isVisible():
                 return
-            off_x, off_y = window.pos().x() - x, window.pos().y() - y
-            if (off_x, off_y) != (0, 0) and abs(off_x) <= 64 and abs(off_y) <= 64:
-                window.move(x - off_x, y - off_y)
+            off = off_by()
+            if off == (0, 0) or abs(off[0]) > 64 or abs(off[1]) > 64:
+                return
+            looks['count'] += 1
+            if looks['count'] == 1:
+                looks['off'] = off
+                window.move(x, y)                    # ask again, now it has a frame
+                timer.start(check_after_ms)          # and look once more
+            elif off == looks['off']:
+                window.move(x - off[0], y - off[1])  # shifted every time: lean against it
         except RuntimeError:                         # the window has gone
             pass
 
