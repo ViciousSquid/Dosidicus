@@ -322,6 +322,9 @@ jobs:
               if [ "$READY" -ge 15 ]; then
                 test -f "$DOSIDICUS_DATA_DIR/config.ini"
                 test -L "$DOSIDICUS_DATA_DIR/images"
+                # Running it must not have changed it: the DMG is made from
+                # this bundle next, and its signature has to still hold.
+                codesign --verify --deep --strict "$GITHUB_WORKSPACE/release/Dosidicus.app"
                 echo "macOS app stayed alive through initialization and created writable user data"
                 exit 0
               fi

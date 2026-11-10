@@ -222,3 +222,25 @@ def test_every_mac_disk_image_is_ad_hoc_signed_and_checked_to_be():
         < workflow.index('shasum -a 256 Dosidicus-macos-universal.dmg >')
     assert workflow.count('grep -Fxq "Signature=adhoc"') == 3
     assert 'codesign --deep --force --sign - universal/Dosidicus.app' in workflow
+
+
+def test_a_built_game_never_writes_into_its_own_folder():
+    """Python leaves compiled copies beside every plugin it loads from source.
+    Inside a signed Mac app those added files break the signature - which is
+    what stopped the Mac builds. A built game writes none; the build checks
+    that running the app left it exactly as it was signed."""
+    main = (ROOT / 'main.py').read_text(encoding='utf-8')
+    guard = "if getattr(sys, 'frozen', False) or '__compiled__' in globals():"
+    assert guard in main and 'sys.dont_write_bytecode = True' in main
+    # Before anything that could load a plugin.
+    assert main.index(guard) < main.index('from src.macos_runtime import')
+    smoke = (ROOT / 'tools' / 'macos_smoke_test.sh').read_text(encoding='utf-8')
+    assert "__pycache__" in smoke and 'codesign --verify --deep --strict "$APP"' in smoke
+    workflow = (ROOT / '.github' / 'workflows' / 'build-nuitka.yml').read_text(encoding='utf-8')
+    assert 'codesign --verify --deep --strict "$GITHUB_WORKSPACE/release/Dosidicus.app"' in workflow
+    # Run from source, the cache is kept.
+    import subprocess
+    out = subprocess.run([sys.executable, '-c',
+                          "import sys; print(sys.dont_write_bytecode)"],
+                         capture_output=True, text=True).stdout.strip()
+    assert out in ('False', 'True')

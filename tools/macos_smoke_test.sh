@@ -42,7 +42,20 @@ for _ in $(seq 1 60); do
     READY=$((READY + 1))
     if [ "$READY" -ge 15 ]; then
       test -f "$DOSIDICUS_DATA_DIR/config.ini"
-      echo "Started and stayed up as $(uname -m), with its data in a writable folder"
+      # Running it must not have changed it: a signed app that writes into
+      # itself (Python's __pycache__ beside a plugin, say) is no longer the
+      # app that was signed.
+      ADDED="$(find "$APP" -name '__pycache__' -o -name '*.pyc' | head -5)"
+      if [ -n "$ADDED" ]; then
+        echo "::error::The app wrote into its own bundle while running:"
+        echo "$ADDED"
+        exit 1
+      fi
+      if [ -w "$APP" ]; then      # not on a read-only disk image, where nothing could
+        codesign --verify --deep --strict "$APP"
+      fi
+      echo "Started and stayed up as $(uname -m), with its data in a writable folder,"
+      echo "and left its own bundle exactly as it was signed"
       exit 0
     fi
   fi

@@ -4,6 +4,14 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import os
 
+# A built game never writes into its own folder. Python would otherwise leave
+# compiled copies (__pycache__) beside every plugin it loads from source, and
+# on a Mac those files, added inside a signed app, break its signature: the
+# app that was verified is no longer the app on disk. (Run from source, the
+# cache is kept: it is what makes the second start faster.)
+if getattr(sys, 'frozen', False) or '__compiled__' in globals():
+    sys.dont_write_bytecode = True
+
 # The game prints emoji in its log lines. Where the output is a pipe or an
 # old console (Windows: cp1252) those cannot be encoded, and the print - and
 # with it the game - died. Print what can be printed instead.
