@@ -254,6 +254,15 @@ def capture(output, label, brain_size=None):
             notes['squid'] = {'hunger': round(squid.hunger), 'anxiety': round(squid.anxiety),
                               'happiness': round(squid.happiness),
                               'neurons': len(brain_window.brain_widget.neuron_positions)}
+            # How big the squid is drawn, and in how big a tank: what has to
+            # be the same on every system for the same screen.
+            from src.display_scaling import DisplayScaling
+            notes['scale'] = {
+                'tank_scale': round(DisplayScaling.tank_scale(), 4),
+                'squid': [int(squid.squid_width), int(squid.squid_height)],
+                'tank_window': [window.width(), window.height()],
+                'squid_share_of_width': round(squid.squid_width / max(1, window.width()), 4),
+                'food': DisplayScaling.points(64)}
             notes['seconds'] = round(time.monotonic() - started, 1)
             write()
             state['step'] = 9
@@ -412,7 +421,21 @@ def publish(folders, target):
         lines += ['### The whole screen, with the system\'s own window frames', '']
         for label in screens:
             lines += [f'**{label}**', '', f'![The whole screen on {label}]({label}/screen.png)', '']
-    lines += ['## Which font draws what', '',
+    lines += ['## How big the squid is', '',
+              '| System | Screen laid out for | Tank window | Squid | Share of the window\'s '
+              'width | Tank scale |', '|---|---|---|---|---|---|']
+    for label, notes in labels:
+        scale = notes.get('scale') or {}
+        style = notes['style']
+        screen = 'x'.join(str(v) for v in (style.get('screen_assumed') or style['screen']))
+        lines.append(f"| {label} | {screen} | "
+                     f"{'x'.join(str(v) for v in scale.get('tank_window', ['?']))} | "
+                     f"{'x'.join(str(v) for v in scale.get('squid', ['?']))} | "
+                     f"{100 * scale.get('squid_share_of_width', 0):.1f}% | "
+                     f"{scale.get('tank_scale', '?')} |")
+    lines += ['', 'On the screen the game was designed for (2880x1920) the squid is 253 pixels '
+              'wide in a 1344-pixel window: 18.8%. It takes the same share on every screen.', '',
+              '## Which font draws what', '',
               '| System | A brain emoji in Fio UI text | On the Brain Designer button | '
               'The reset arrow |', '|---|---|---|---|']
     for label, notes in labels:

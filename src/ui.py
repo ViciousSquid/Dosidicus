@@ -1456,12 +1456,15 @@ class Ui:
         from .display_scaling import DisplayScaling
         font = QtGui.QFont("Fio UI", DisplayScaling.font_size(12), QtGui.QFont.Bold)
         message_item.setFont(font)
+        # A text item keeps a 4-pixel margin of its own round its text, which
+        # showed as a strip of white under and beside the black banner.
+        message_item.document().setDocumentMargin(0)
         message_item.setTextWidth(self.window_width)
+        message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 0px;">{message}</div>')
         text_height = message_item.boundingRect().height()
         message_y = self.message_banner_y(text_height)
-        
+
         message_item.setPos(0, message_y)
-        message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 0px;">{message}</div>')
         message_item.setZValue(999)
         message_item.setOpacity(1)
         try:

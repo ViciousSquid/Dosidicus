@@ -151,3 +151,5 @@ def test_the_message_banner_sits_at_the_very_bottom_of_the_tank():
     text = (ROOT / 'src' / 'ui.py').read_text(encoding='utf-8')
     assert text.count('self.message_banner_y(text_height)') == 2       # shown, and on resize
     assert 'self.window_height - text_height - 40' not in text
+    # ...with no margin of its own round the black: flush below and at the sides.
+    assert 'message_item.document().setDocumentMargin(0)' in text
