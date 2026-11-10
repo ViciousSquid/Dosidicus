@@ -87,6 +87,30 @@ def capture(output, label, brain_size=None):
                 'line': metrics.height(), 'ascent': metrics.ascent(),
                 'width': metrics.horizontalAdvance('Hunger 42  Anxiety 17  can_see_plant')}
 
+    def drawn_by(family, text):
+        """The fonts that actually draw `text` when `family` is asked for."""
+        font = QtGui.QFont(family, 14)
+        text_layout = QtGui.QTextLayout(text, font)
+        text_layout.beginLayout()
+        text_layout.createLine()
+        text_layout.endLayout()
+        return [run.rawFont().familyName() for run in text_layout.glyphRuns()]
+
+    database = QtGui.QFontDatabase()
+    known = set(database.families())
+    notes['fonts'] = {}
+    for family in (desktop_style.UI_FONT, desktop_style.MONO_FONT,
+                   desktop_style.EMOJI_FONT, desktop_style.LINE_EMOJI_FONT):
+        info = QtGui.QFontInfo(QtGui.QFont(family, 14))
+        notes['fonts'][family] = {
+            'listed': family in known, 'resolves_to': info.family(),
+            'exact': info.exactMatch(),
+            'brain_drawn_by': drawn_by(family, '\U0001F9E0'),
+            'arrow_drawn_by': drawn_by(family, '\u21ba'),
+            'letter_drawn_by': drawn_by(family, 'A')}
+    notes['font_substitutes'] = {family: QtGui.QFont.substitutes(family)
+                                 for family in (desktop_style.UI_FONT, desktop_style.MONO_FONT)}
+
     def save(name, widget):
         image = widget.grab()
         image.save(str(shots / f'{name}.png'))
@@ -387,7 +411,17 @@ def publish(folders, target):
         lines += ['### The whole screen, with the system\'s own window frames', '']
         for label in screens:
             lines += [f'**{label}**', '', f'![The whole screen on {label}]({label}/screen.png)', '']
-    lines += ['## Each machine', '']
+    lines += ['## Which font draws what', '',
+              '| System | A brain emoji in Fio UI text | On the Brain Designer button | '
+              'The reset arrow |', '|---|---|---|---|']
+    for label, notes in labels:
+        fonts = notes.get('fonts') or {}
+        ui = fonts.get('Fio UI', {})
+        line = fonts.get('Dosidicus Line Emoji', {})
+        lines.append(f"| {label} | {', '.join(ui.get('brain_drawn_by', ['?']))} | "
+                     f"{', '.join(line.get('brain_drawn_by', ['?']))} | "
+                     f"{', '.join(ui.get('arrow_drawn_by', ['?']))} |")
+    lines += ['', '## Each machine', '']
     for label, notes in labels:
         lines.append(f"- **{label}**: {notes['system']}, Python {notes['python']}, "
                      f"Qt {notes['qt']}, real screen "
