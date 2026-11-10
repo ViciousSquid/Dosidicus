@@ -163,7 +163,7 @@
       458
     ],
     "brain_tool": [
-      512,
+      519,
       40,
       1300,
       920
@@ -230,7 +230,7 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 15,
+    "anxiety": 11,
     "happiness": 100,
     "neurons": 19
   },
@@ -247,5 +247,5 @@
     "squid_share_of_width": 0.1875,
     "food": 33
   },
-  "seconds": 61.8
+  "seconds": 61.5
 }

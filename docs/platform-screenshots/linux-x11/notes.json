@@ -230,7 +230,7 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 13,
+    "anxiety": 17,
     "happiness": 100,
     "neurons": 19
   },
@@ -247,5 +247,5 @@
     "squid_share_of_width": 0.1875,
     "food": 33
   },
-  "seconds": 63.2
+  "seconds": 63.4
 }
