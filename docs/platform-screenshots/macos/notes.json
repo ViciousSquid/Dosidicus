@@ -1,0 +1,124 @@
+{
+  "label": "macos",
+  "system": "macOS-26.7.2-arm64-arm-64bit",
+  "python": "3.11.9",
+  "qt": "5.15.14",
+  "pyqt": "5.15.11",
+  "session": "",
+  "style": {
+    "style": "DosidicusFusion",
+    "font_asked": "Fio UI",
+    "font_used": "Fio UI",
+    "font_point_size": 10,
+    "font_pixel_size": 13,
+    "line_height": 17,
+    "sample_width": 218,
+    "logical_dpi": 96.0,
+    "device_pixel_ratio": 1.0,
+    "screen": [
+      1024,
+      768
+    ],
+    "screen_assumed": [
+      1920,
+      1080
+    ],
+    "window_colour": "#efefef",
+    "platform": "cocoa"
+  },
+  "shots": {
+    "splash": [
+      352,
+      126
+    ],
+    "main": [
+      688,
+      458
+    ],
+    "statistics": [
+      320,
+      420
+    ],
+    "journey": [
+      520,
+      640
+    ],
+    "brain-1": [
+      1024,
+      646
+    ],
+    "brain-2": [
+      1024,
+      646
+    ],
+    "brain-3": [
+      1024,
+      646
+    ],
+    "brain-4": [
+      1024,
+      646
+    ],
+    "brain-5": [
+      1024,
+      646
+    ],
+    "brain-6": [
+      1024,
+      646
+    ],
+    "brain-7": [
+      1024,
+      646
+    ],
+    "brain-8": [
+      1024,
+      646
+    ],
+    "message": [
+      346,
+      133
+    ],
+    "menu": [
+      228,
+      177
+    ]
+  },
+  "problems": [],
+  "window_sizes": {
+    "main": [
+      688,
+      458
+    ],
+    "brain": [
+      1024,
+      646
+    ],
+    "statistics": [
+      320,
+      420
+    ],
+    "journey": [
+      520,
+      640
+    ]
+  },
+  "screen_captured": true,
+  "brain_tabs": [
+    "Brain Network",
+    "Learning",
+    "Knowledge",
+    "Memory",
+    "Decisions",
+    "Personality",
+    "Statistics",
+    "About"
+  ],
+  "squid": {
+    "hunger": 31,
+    "anxiety": 11,
+    "happiness": 100,
+    "neurons": 19
+  },
+  "seconds": 59.2
+}
