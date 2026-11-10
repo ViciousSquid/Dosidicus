@@ -153,16 +153,18 @@
       "dosidicus emoji"
     ]
   },
+  "tank_on_top_after_2s": true,
+  "tank_on_top_after_9s": false,
   "layout": {
     "tank": [
-      312,
+      -3,
       10,
       688,
       458
     ],
     "brain_tool": [
-      519,
-      40,
+      516,
+      10,
       1300,
       920
     ],
@@ -208,7 +210,7 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 16,
+    "anxiety": 10,
     "happiness": 100,
     "neurons": 19
   },
@@ -225,5 +227,5 @@
     "squid_share_of_width": 0.1875,
     "food": 33
   },
-  "seconds": 63.0
+  "seconds": 63.6
 }

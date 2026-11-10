@@ -153,9 +153,11 @@
       "dosidicus emoji"
     ]
   },
+  "tank_on_top_after_2s": true,
+  "tank_on_top_after_9s": false,
   "layout": {
     "tank": [
-      315,
+      0,
       40,
       688,
       458
@@ -225,5 +227,5 @@
     "squid_share_of_width": 0.1875,
     "food": 33
   },
-  "seconds": 63.6
+  "seconds": 63.4
 }
