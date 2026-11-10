@@ -47,6 +47,45 @@ class StatBox(QtWidgets.QWidget):
         layout.addWidget(self.name_label)
         self.setFixedSize(box_width, box_height)
 
+    #: How the border drawn round a newly gained statistic flashes.
+    FLASH_COLOUR = '#E53935'
+    FLASH_INTERVAL_MS = 350
+
+    def flash_border(self, seconds=5.0):
+        """Draw a border round the whole box, flashing, for `seconds` - then
+        take it away again. For a statistic that has just appeared."""
+        border = getattr(self, '_flash_border', None)
+        if border is None:
+            # Drawn over the box, not as part of it: nothing inside moves.
+            border = self._flash_border = QtWidgets.QFrame(self)
+            border.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+            border.setStyleSheet(f"QFrame {{ border: 3px solid {self.FLASH_COLOUR}; "
+                                 f"border-radius: 4px; background: transparent; }}")
+            self._flash_timer = QtCore.QTimer(self)
+            self._flash_timer.setInterval(self.FLASH_INTERVAL_MS)
+            self._flash_timer.timeout.connect(self._flash_step)
+        border.setGeometry(self.rect())
+        border.raise_()
+        border.show()
+        self._flash_steps_left = max(1, int(round(seconds * 1000.0 / self.FLASH_INTERVAL_MS)))
+        self._flash_timer.start()
+
+    def _flash_step(self):
+        self._flash_steps_left -= 1
+        if self._flash_steps_left <= 0:
+            self.stop_flashing()
+        else:
+            self._flash_border.setVisible(self._flash_border.isHidden())
+
+    def stop_flashing(self):
+        if getattr(self, '_flash_border', None) is not None:
+            self._flash_timer.stop()
+            self._flash_border.hide()
+
+    def is_flashing(self):
+        timer = getattr(self, '_flash_timer', None)
+        return bool(timer is not None and timer.isActive())
+
     def set_value(self, value):
         # Called sixty times a second. Only a changed value is written, which
         # also stops a value typed into the debug editor being overwritten
@@ -319,14 +358,25 @@ class StatisticsWindow(QtWidgets.QWidget):
         except (TypeError, ValueError):
             return 0.0
 
+    #: How long the border round a newly gained Aggression flashes.
+    AGGRESSION_FLASH_SECONDS = 5.0
+
     def _update_aggression(self):
         level = self._aggression_level()
         if level is None:
+            # Seen without it: if it turns up later, it was gained just now.
+            self._seen_without_aggression = True
             if not self.aggression_box.isHidden():
+                self.aggression_box.stop_flashing()
                 self.aggression_box.hide()
             return
         if self.aggression_box.isHidden():
             self.aggression_box.show()
+            # The squid has just grown the neuron while the player watched:
+            # point at the new statistic for a few seconds. A squid loaded
+            # with the neuron already grown gets no fanfare for it.
+            if getattr(self, '_seen_without_aggression', False):
+                self.aggression_box.flash_border(self.AGGRESSION_FLASH_SECONDS)
         self.aggression_box.set_value(level)
 
     def _update_state_pill(self):

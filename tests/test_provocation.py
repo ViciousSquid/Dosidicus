@@ -166,6 +166,39 @@ class AggressionIsAStatisticOnceItExists(unittest.TestCase):
         self.assertEqual(window.aggression_box.value_label.text(), '63')
         self.assertEqual(window.aggression_box.name_label.text(), 'Aggression')
 
+    def test_a_border_flashes_round_it_for_five_seconds_when_it_appears(self):
+        window, brain = self._window({'hunger': (0, 0)}, {'hunger': 10})
+        window._update_aggression()                    # seen without it
+        box = window.aggression_box
+        self.assertFalse(box.is_flashing())
+        brain.neuron_positions['aggression'] = (5, 5)
+        brain.state['aggression'] = 55.0
+        window._update_aggression()                    # gained just now
+        self.assertTrue(box.is_flashing())
+        self.assertFalse(box._flash_border.isHidden())
+        self.assertEqual(box._flash_border.geometry(), box.rect())    # round the whole box
+        self.assertEqual(window.AGGRESSION_FLASH_SECONDS, 5.0)
+        steps = box._flash_steps_left
+        self.assertAlmostEqual(steps * box.FLASH_INTERVAL_MS / 1000.0, 5.0, delta=0.2)
+        seen = set()
+        for _ in range(steps - 1):                     # it goes on and off...
+            box._flash_step()
+            seen.add(box._flash_border.isHidden())
+            self.assertTrue(box.is_flashing())
+        self.assertEqual(seen, {True, False})
+        box._flash_step()                              # ...and after five seconds is gone
+        self.assertFalse(box.is_flashing())
+        self.assertTrue(box._flash_border.isHidden())
+        self.assertFalse(box.isHidden())               # the statistic itself stays
+        window._update_aggression()                    # and it does not start again
+        self.assertFalse(box.is_flashing())
+
+    def test_a_squid_loaded_with_the_neuron_gets_no_flashing_border(self):
+        window, _brain = self._window({'aggression': (5, 5)}, {'aggression': 40.0})
+        window._update_aggression()
+        self.assertFalse(window.aggression_box.isHidden())
+        self.assertFalse(window.aggression_box.is_flashing())
+
     def test_it_is_read_from_the_brain_and_cannot_be_typed_into(self):
         window, brain = self._window({'aggression': (5, 5)}, {'aggression': 40.0})
         window.update_statistics()
