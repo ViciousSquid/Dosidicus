@@ -32,7 +32,10 @@ android.presplash_color = #0a0d17
 # WRITE_EXTERNAL_STORAGE: legacy (API 24-28) export to public Downloads (API 29+
 # uses MediaStore, no permission). The rest power local peer-to-peer visits via
 # Google Nearby Connections (Bluetooth + Wi-Fi + location, per the Nearby docs).
-android.permissions = WRITE_EXTERNAL_STORAGE, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION, NEARBY_WIFI_DEVICES
+# INTERNET and CHANGE_WIFI_MULTICAST_STATE are for the tank link: the desktop
+# game's own network, by which a phone's squid and a computer's visit each
+# other (friend codes over the internet; multicast on the home Wi-Fi).
+android.permissions = INTERNET, CHANGE_WIFI_MULTICAST_STATE, WRITE_EXTERNAL_STORAGE, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION, NEARBY_WIFI_DEVICES
 
 # Google Nearby Connections (local peer-to-peer). Pulls in Play Services, which
 # needs AndroidX; the Java shim in ./java bridges it to Python.

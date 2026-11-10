@@ -156,6 +156,12 @@ class DosidicusApp(App):
         container.add_widget(root)
         self._container = container
         self.deco_layer.on_headstone = self._read_headstone
+        # Multiplayer left on last time is on again: friends stay linked
+        # from one day to the next (ui/tank_network.py).
+        self.tank_link = None
+        from . import tank_network
+        if tank_network.was_left_on(self):
+            Clock.schedule_once(lambda dt: tank_network.start(self), 1.0)
         return container
 
     # ---------------------------------------------------------- persistence
@@ -202,6 +208,9 @@ class DosidicusApp(App):
         sim.achievements.on_unlock = self._on_achievement
         sim.on_save = self._save
         self._generation = sim.generation
+        link = getattr(self, 'tank_link', None)
+        if link is not None and link.sim is not sim:
+            link.use_simulation(sim)        # another game: the link carries on
         self.tank.set_simulation(sim)
         self.deco_layer.set_simulation(sim)
         self.brain.set_simulation(sim)
@@ -337,6 +346,13 @@ class DosidicusApp(App):
             self._flash("[color=b39ddb]" + "  ".join(self.sim.lifecycle_events) + "[/color]",
                         seconds=4.0)
             self.sim.lifecycle_events.clear()
+        # Other tanks: a visitor arriving, this squid going out or coming home.
+        if getattr(self, 'tank_link', None) is not None:
+            from . import tank_network
+            news = [text for text in tank_network.new_events(self)
+                    if not text.startswith('On the network')]
+            if news:
+                self._flash("[color=8fd3ff]" + "  ".join(news) + "[/color]", seconds=4.0)
 
         # Egg just hatched: celebrate and (first time) offer the tutorial.
         if self._was_hatching and not self.sim.hatching:
@@ -397,7 +413,17 @@ class DosidicusApp(App):
         return True  # keep state so we resume the same squid
 
     def on_resume(self):
-        pass
+        # Android may have closed the socket while the app was away.
+        link = getattr(self, 'tank_link', None)
+        if link is not None and link.running:
+            try:
+                link.node.watchdog_check()
+                link.say_hello()
+            except Exception as e:
+                print(f"[Dosidicus] could not wake the network: {e}")
 
     def on_stop(self):
         self._save()
+        if getattr(self, 'tank_link', None) is not None:
+            from . import tank_network
+            tank_network.stop(self, forget=False)      # on again next time

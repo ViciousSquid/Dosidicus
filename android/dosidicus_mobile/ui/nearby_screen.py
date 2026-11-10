@@ -30,14 +30,21 @@ def open_nearby(app):
 
     Asked until accepted; Cancel leaves Nearby closed.
     """
-    import os
     live = getattr(app, "_nearby_view", None)
     if live is not None and live.live_visits():
         live.open()                 # the visit carried on with the screen closed
         return
+    with_multiplayer_consent(app, lambda: NearbyView(app).open())
+
+
+def with_multiplayer_consent(app, then):
+    """Run `then` once the player has accepted the multiplayer risk on this
+    device - asked once, for Nearby and for Friends alike, in the desktop's
+    own words. Cancel runs nothing."""
+    import os
     flag = os.path.join(getattr(app, "user_data_dir", "") or ".", NOTICE_FLAG)
     if os.path.exists(flag):
-        NearbyView(app).open()
+        then()
         return
     from ..engine import shared  # noqa: F401 - locate the desktop source package
     from src.lifecycle import MULTIPLAYER_RISK_NOTICE, MULTIPLAYER_RISK_TITLE
@@ -56,7 +63,7 @@ def open_nearby(app):
         except OSError:
             pass
         notice.dismiss()
-        NearbyView(app).open()
+        then()
 
     row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))
     row.add_widget(_btn("Cancel", lambda *_: notice.dismiss(), (0.3, 0.3, 0.34, 1)))

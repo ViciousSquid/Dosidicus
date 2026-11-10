@@ -61,6 +61,9 @@ def open_menu(app):
                         color=(0.42, 0.34, 0.14, 1)))
     box.add_widget(_btn("Nearby squids", lambda *_: (close(), open_nearby(app)),
                         color=(0.2, 0.34, 0.5, 1)))
+    from .friends_screen import open_friends
+    box.add_widget(_btn("Friends (internet play)", lambda *_: (close(), open_friends(app)),
+                        color=(0.2, 0.34, 0.5, 1)))
     box.add_widget(_btn("Export squid", lambda *_: (close(), _export(app)),
                         color=(0.13, 0.42, 0.18, 1)))
     box.add_widget(_btn("Import squid", lambda *_: (close(), _import(app)),
