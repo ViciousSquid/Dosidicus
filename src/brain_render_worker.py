@@ -105,6 +105,9 @@ class RenderState:
     dpr: float = 1.0
     #: The user's zoom (1.0 = whole canvas fits) and pan, in widget units.
     zoom: float = 1.0
+    #: The part of the canvas being shown (brain_constants.content_bounds),
+    #: as the widget has it at this moment - it eases as the squid grows.
+    bounds: Optional[Tuple[float, float, float, float]] = None
     pan_x: float = 0.0
     pan_y: float = 0.0
     
@@ -292,7 +295,8 @@ class BrainRenderWorker(QThread):
         # testing so a click lands on what is drawn under it).
         from .brain_constants import view_transform
         scale, offset_x, indicator_space, fit = view_transform(
-            state.width, state.height, state.zoom, (state.pan_x, state.pan_y))
+            state.width, state.height, state.zoom, (state.pan_x, state.pan_y),
+            getattr(state, 'bounds', None))
 
         # Neurons, captions and line widths are sized in logical units on a
         # painter that is already scaled. They used to be multiplied by
@@ -432,7 +436,7 @@ class BrainRenderWorker(QThread):
         from .brain_constants import NEURON_ROWS, ROW_BAND_COLORS, LOGICAL_CANVAS
         return (live,
             state.width, state.height, state.dpr,
-            state.zoom, state.pan_x, state.pan_y,
+            state.zoom, state.pan_x, state.pan_y, getattr(state, 'bounds', None),
             tuple(state.anim_background_colour),
             tuple(state.neuron_positions.items()),
             frozenset(state.visible_neurons), frozenset(state.excluded_neurons),
@@ -1241,6 +1245,8 @@ def create_render_state_from_widget(brain_widget) -> RenderState:
     state.zoom = float(getattr(brain_widget, 'view_zoom', 1.0))
     pan = getattr(brain_widget, 'view_pan', (0.0, 0.0))
     state.pan_x, state.pan_y = float(pan[0]), float(pan[1])
+    shown = getattr(brain_widget, '_view_bounds', None)
+    state.bounds = shown() if callable(shown) else None
     
     # Hover state
     state.hovered_neuron = getattr(brain_widget, 'hovered_neuron', None)

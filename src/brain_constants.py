@@ -40,16 +40,25 @@ VIEW_ZOOM_MIN = 0.5
 VIEW_ZOOM_MAX = 6.0
 
 
-def view_transform(width, height, zoom=1.0, pan=(0.0, 0.0)):
+def view_transform(width, height, zoom=1.0, pan=(0.0, 0.0), bounds=None):
     """Where the logical canvas lands in a widget width x height.
 
     Returns (scale, offset_x, offset_y, fit_scale): screen = logical * scale +
-    offset. `fit_scale` is the scale that fits the whole LOGICAL_CANVAS in the
-    widget, centred horizontally; `zoom` multiplies it and `pan` (in widget
-    units) shifts the result. THE one copy of this - the render worker, the
-    widget's hit testing and overlays, and the tooltips each used to keep
-    their own, and all of them had to agree to the pixel.
+    offset. `fit_scale` is the scale that fits `bounds` - the part of the
+    canvas that has something in it (content_bounds) - in the widget, centred
+    both ways; with no bounds, the whole LOGICAL_CANVAS, centred horizontally
+    and against the top. `zoom` multiplies it and `pan` (in widget units)
+    shifts the result. THE one copy of this - the render worker, the widget's
+    hit testing and overlays, and the tooltips each used to keep their own,
+    and all of them had to agree to the pixel.
     """
+    if bounds is not None:
+        x0, y0, x1, y1 = bounds
+        span_w, span_h = max(1.0, x1 - x0), max(1.0, y1 - y0)
+        fit = max(0.01, min(width / span_w, height / span_h))
+        offset_x = (width - span_w * fit) / 2.0 - x0 * fit
+        offset_y = (height - span_h * fit) / 2.0 - y0 * fit
+        return fit * zoom, offset_x + pan[0], offset_y + pan[1], fit
     base_w, base_h = LOGICAL_CANVAS
     scale_x = width / base_w
     scale_y = height / max(1.0, base_h)
@@ -57,6 +66,41 @@ def view_transform(width, height, zoom=1.0, pan=(0.0, 0.0)):
     offset_x = (width - base_w * fit) / 2 if scale_x > scale_y else 0.0
     scale = fit * zoom
     return scale, offset_x + pan[0], 0.0 + pan[1], fit
+
+
+#: Clear space kept round what is shown, in logical units.
+VIEW_MARGIN = 22.0
+#: How far a neuron's circle and caption reach from its centre.
+NEURON_REACH = 52.0
+
+
+def content_bounds(positions):
+    """The part of the logical canvas that has something in it: (x0, y0, x1,
+    y1). The rows a squid is born with, always; the growth space below them
+    only as far down as it has grown neurons into it.
+
+    A newborn has nothing in the growth space, and fitted to the whole canvas
+    its network was drawn in the top half of the Brain Tool with the bottom
+    half blank. Fitted to this, the network fills the widget, and the view
+    draws back to take in each neuron as it grows - the growth space is all
+    still there, shown as it is used.
+    """
+    width, height = LOGICAL_CANVAS
+    positions = positions or {}
+    rows = display_rows(positions)
+    top = min(spec['band'][0] for spec in rows.values()) - VIEW_MARGIN
+    bottom = max(spec['band'][1] for spec in rows.values()) + VIEW_MARGIN
+    left, right = 0.0, width
+    for place in positions.values():
+        try:
+            x, y = float(place[0]), float(place[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        top = min(top, y - NEURON_REACH - VIEW_MARGIN)
+        bottom = max(bottom, y + NEURON_REACH + VIEW_MARGIN)
+        left = min(left, x - NEURON_REACH - VIEW_MARGIN)
+        right = max(right, x + NEURON_REACH + VIEW_MARGIN)
+    return (left, max(0.0, top) if top > -1.0 else top, right, bottom)
 
 #: The horizontal span a row is distributed across. Every row shares it, so
 #: the rows line up at both ends and read as layers rather than as three

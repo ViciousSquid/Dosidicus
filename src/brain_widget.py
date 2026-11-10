@@ -3617,7 +3617,51 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         = logical * scale + offset. The render worker uses the same function
         (brain_constants.view_transform), so what is hit is what is drawn."""
         return view_transform(self.width(), self.height(),
-                              self.view_zoom, self.view_pan)
+                              self.view_zoom, self.view_pan, self._view_bounds())
+
+    #: How fast the view draws back when the squid grows a neuron outside
+    #: what is being shown: the share of the remaining distance covered by
+    #: each step, and the time between steps.
+    VIEW_EASE = 0.22
+    VIEW_EASE_MS = 30
+
+    def _view_bounds(self):
+        """The part of the canvas being shown, right now: the rows, and as
+        much of the growth space as the squid has grown into
+        (brain_constants.content_bounds). When that changes - a neuron grows -
+        the view does not jump: it eases to the new bounds over a few
+        hundred milliseconds, so the network is seen to make room."""
+        from .brain_constants import content_bounds
+        shown = getattr(self, '_shown_bounds', None)
+        if getattr(self, 'dragging', False) and shown is not None:
+            return shown                    # not while a neuron is being dragged about
+        target = content_bounds(self.neuron_positions)
+        if shown is None:
+            self._shown_bounds = target
+            return target
+        if shown != target:
+            self._bounds_target = target
+            timer = getattr(self, '_bounds_timer', None)
+            if timer is None:
+                timer = self._bounds_timer = QtCore.QTimer(self)
+                timer.setInterval(self.VIEW_EASE_MS)
+                timer.timeout.connect(self._ease_view_bounds)
+            if not timer.isActive():
+                timer.start()
+        return shown
+
+    def _ease_view_bounds(self):
+        shown = getattr(self, '_shown_bounds', None)
+        target = getattr(self, '_bounds_target', None)
+        if shown is None or target is None:
+            self._bounds_timer.stop()
+            return
+        stepped = tuple(a + (b - a) * self.VIEW_EASE for a, b in zip(shown, target))
+        if max(abs(a - b) for a, b in zip(stepped, target)) < 0.5:
+            stepped = target
+            self._bounds_timer.stop()
+        self._shown_bounds = stepped
+        self._view_changed()
 
     def _view_changed(self):
         self._render_dirty = True
@@ -3635,7 +3679,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # Offsets with no pan, at the new zoom; the pan is whatever puts the
         # same logical point back under the cursor.
         scale, base_x, base_y, _fit = view_transform(
-            self.width(), self.height(), new_zoom, (0.0, 0.0))
+            self.width(), self.height(), new_zoom, (0.0, 0.0), self._view_bounds())
         self.view_pan = (widget_pos.x() - logical.x() * scale - base_x,
                          widget_pos.y() - logical.y() * scale - base_y)
         self._view_changed()
