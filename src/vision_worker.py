@@ -71,13 +71,12 @@ class VisionResult:
     
     # Cached values for quick access
     can_see_food: bool = False
+    #: A plant is in the view cone. The only thing the brain is ever told
+    #: about plants: there is no distance reading and nothing from behind.
+    can_see_plant: bool = False
     can_see_squid: bool = False
     nearest_food_distance: float = float('inf')
     nearest_food_position: Optional[Tuple[float, float]] = None
-    
-    # Proximity detection (doesn't require vision cone)
-    nearby_plants: List[Tuple[float, float]] = field(default_factory=list)
-    plant_proximity_value: float = 0.0
     
     timestamp: float = field(default_factory=time.time)
 
@@ -91,10 +90,6 @@ class VisionWorker(QThread):
             - bool: can_see_food
             - list: visible food positions [(x, y), ...]
             
-        plant_proximity_changed: Emitted when plant proximity changes
-            - float: proximity value (0-100)
-            - list: nearby plant positions
-            
         visibility_update: Emitted with full visibility results
             - VisionResult: Complete vision state
             
@@ -104,7 +99,6 @@ class VisionWorker(QThread):
     """
     
     food_visibility_changed = pyqtSignal(bool, list)
-    plant_proximity_changed = pyqtSignal(float, list)
     visibility_update = pyqtSignal(object)  # VisionResult
     threat_detected = pyqtSignal(str, tuple)
     
@@ -127,7 +121,6 @@ class VisionWorker(QThread):
         # Previous results for change detection
         self._last_result: Optional[VisionResult] = None
         self._last_food_visible = False
-        self._last_plant_proximity = 0.0
         
         # Update frequency control
         self._update_interval = 1.0 / 20.0  # 20 Hz max
@@ -250,12 +243,6 @@ class VisionWorker(QThread):
         squid_cx = squid.squid_x + squid.squid_width / 2
         squid_cy = squid.squid_y + squid.squid_height / 2
         
-        # Squid bounding box edges
-        squid_left = squid.squid_x
-        squid_right = squid.squid_x + squid.squid_width
-        squid_top = squid.squid_y
-        squid_bottom = squid.squid_y + squid.squid_height
-        
         # Vision cone length (diagonal of window)
         cone_length = math.sqrt(squid.window_width**2 + squid.window_height**2)
         
@@ -265,20 +252,10 @@ class VisionWorker(QThread):
         min_food_dist = float('inf')
         nearest_food = None
         
-        # Track plant proximity (with bounding box awareness)
-        min_plant_edge_dist = float('inf')
-        plant_is_touching = False
-        
         for obj in objects:
             # Get object center
             obj_cx = obj.x + obj.width / 2
             obj_cy = obj.y + obj.height / 2
-            
-            # Object bounding box edges
-            obj_left = obj.x
-            obj_right = obj.x + obj.width
-            obj_top = obj.y
-            obj_bottom = obj.y + obj.height
             
             # Calculate center-to-center distance
             dx = obj_cx - squid_cx
@@ -308,49 +285,6 @@ class VisionWorker(QThread):
                 if in_cone:
                     result.visible_plants.append(pos)
                 
-                # ============================================================
-                # PLANT PROXIMITY - Uses bounding box distance, not center
-                # ============================================================
-                
-                # Check if bounding boxes overlap (touching = 100)
-                boxes_overlap = not (
-                    squid_right < obj_left or   # squid is left of plant
-                    squid_left > obj_right or   # squid is right of plant
-                    squid_bottom < obj_top or   # squid is above plant
-                    squid_top > obj_bottom      # squid is below plant
-                )
-                
-                if boxes_overlap:
-                    plant_is_touching = True
-                    result.nearby_plants.append(pos)
-                else:
-                    # Calculate distance between bounding box edges
-                    # Find the closest point on the plant rect to the squid rect
-                    
-                    # Horizontal distance
-                    if squid_right < obj_left:
-                        hdist = obj_left - squid_right
-                    elif squid_left > obj_right:
-                        hdist = squid_left - obj_right
-                    else:
-                        hdist = 0  # Overlapping horizontally
-                    
-                    # Vertical distance
-                    if squid_bottom < obj_top:
-                        vdist = obj_top - squid_bottom
-                    elif squid_top > obj_bottom:
-                        vdist = squid_top - obj_bottom
-                    else:
-                        vdist = 0  # Overlapping vertically
-                    
-                    # Edge-to-edge distance
-                    edge_dist = math.sqrt(hdist*hdist + vdist*vdist)
-                    
-                    # Track if within proximity range (300px from edge)
-                    if edge_dist < 300:
-                        result.nearby_plants.append(pos)
-                        min_plant_edge_dist = min(min_plant_edge_dist, edge_dist)
-            
             elif obj.category == 'rock':
                 if in_cone:
                     result.visible_rocks.append(pos)
@@ -366,23 +300,10 @@ class VisionWorker(QThread):
         # Set food results
         result.visible_food = food_items
         result.can_see_food = len(food_items) > 0
+        result.can_see_plant = len(result.visible_plants) > 0
         result.can_see_squid = len(result.visible_squids) > 0
         result.nearest_food_distance = min_food_dist
         result.nearest_food_position = nearest_food
-        
-        # ============================================================
-        # Calculate final plant proximity value
-        # ============================================================
-        if plant_is_touching:
-            # Bounding boxes overlap = maximum proximity
-            result.plant_proximity_value = 100.0
-        elif result.nearby_plants:
-            # Scale 0-100 based on edge distance (closer = higher)
-            # At 0 distance (touching) = 100, at 300 distance = 0
-            max_range = 300.0
-            result.plant_proximity_value = max(0.0, 100.0 - (min_plant_edge_dist / max_range * 100.0))
-        else:
-            result.plant_proximity_value = 0.0
         
         return result
     
@@ -392,12 +313,6 @@ class VisionWorker(QThread):
         if result.can_see_food != self._last_food_visible:
             self._last_food_visible = result.can_see_food
             self.food_visibility_changed.emit(result.can_see_food, result.visible_food)
-        
-        # Plant proximity change (with threshold to avoid noise)
-        proximity_diff = abs(result.plant_proximity_value - self._last_plant_proximity)
-        if proximity_diff > 5.0:  # 5% threshold
-            self._last_plant_proximity = result.plant_proximity_value
-            self.plant_proximity_changed.emit(result.plant_proximity_value, result.nearby_plants)
         
         # Always emit full update
         self.visibility_update.emit(result)

@@ -98,7 +98,7 @@
       "is_sensor": true,
       "activation": 0.0
     },
-    "plant_proximity": {
+    "can_see_plant": {
       "position": [
         890.0,
         264.0
@@ -129,8 +129,8 @@
     "sleepiness->anxiety": 0.18,
     "cleanliness->anxiety": -0.137,
     "cleanliness->happiness": 0.2,
-    "plant_proximity->happiness": 0.2,
-    "plant_proximity->anxiety": -0.3,
+    "can_see_plant->happiness": 0.2,
+    "can_see_plant->anxiety": -0.3,
     "can_see_food->happiness": 0.25000000000000006
   },
   "state": {
@@ -142,7 +142,7 @@
     "anxiety": 50.0,
     "curiosity": 50.0,
     "can_see_food": false,
-    "plant_proximity": 0.0
+    "can_see_plant": 0.0
   },
   "excluded_neurons": [],
   "output_bindings": [],
@@ -179,7 +179,7 @@
       50.0,
       200.0
     ],
-    "plant_proximity": [
+    "can_see_plant": [
       890.0,
       264.0
     ]
@@ -203,8 +203,8 @@
     "sleepiness|anxiety": 0.18,
     "cleanliness|anxiety": -0.137,
     "cleanliness|happiness": 0.2,
-    "plant_proximity|happiness": 0.2,
-    "plant_proximity|anxiety": -0.3,
+    "can_see_plant|happiness": 0.2,
+    "can_see_plant|anxiety": -0.3,
     "can_see_food|happiness": 0.25000000000000006
   },
   "layer_structure": [],
@@ -345,8 +345,8 @@
       "is_binary": true,
       "category": "required"
     },
-    "plant_proximity": {
-      "name": "plant_proximity",
+    "can_see_plant": {
+      "name": "can_see_plant",
       "neuron_type": "sensor",
       "position": [
         890.0,
@@ -365,7 +365,7 @@
   },
   "sensors_used": [
     "can_see_food",
-    "plant_proximity"
+    "can_see_plant"
   ],
   "required_complete": true
 }

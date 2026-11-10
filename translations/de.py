@@ -251,7 +251,7 @@ translations = {
 
     # ===== NEURONEN-NAMEN =====
     "external_stimulus": "Reiz",
-    "plant_proximity": "Pflanzennähe",
+    "can_see_plant": "Sieht Pflanze",
     "layer_name": "Ebene",
     "layer_input": "Eingang",
     "layer_output": "Ausgang",

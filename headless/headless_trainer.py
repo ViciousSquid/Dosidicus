@@ -161,8 +161,11 @@ TRAINING_SCENARIOS = {
 class HeadlessSquid:
     """Minimal squid implementation for headless training"""
     
-    def __init__(self, personality: Personality = None):
-        self.personality = personality or random.choice(list(Personality))
+    def __init__(self, personality: Personality = None, rng: random.Random = None):
+        #: The body's own noise - how curiosity wanders, how long a fright
+        #: lasts. Never the world's stream: see TrainingConfig.world_seed.
+        self.rng = rng or random
+        self.personality = personality or self.rng.choice(list(Personality))
         
         # Core stats (0-100)
         self.hunger = 50.0
@@ -195,7 +198,11 @@ class HeadlessSquid:
         
         # Tracking
         self.food_visible = False
-        self.plant_nearby = False
+        #: A plant is within sight. All the brain is ever told about plants.
+        self.plant_visible = False
+        #: The body is actually among a plant's leaves this tick. A fact about
+        #: the world, felt as calm; the brain is not told it.
+        self.sheltered = False
         self.time_since_ate = 0
         self.time_since_slept = 0
         
@@ -217,7 +224,6 @@ class HeadlessSquid:
             "is_startled": self.is_startled,
             "threat_level": 100.0 if self.is_startled else 0.0,
             "can_see_food": 100.0 if self.food_visible else 0.0,
-            "plant_proximity": 100.0 if self.plant_nearby else 0.0,
             "external_stimulus": 0.0,
             "direction": self.direction,
             "position": (self.x, self.y),
@@ -242,9 +248,17 @@ class HeadlessSquid:
             self.hunger = min(100, self.hunger + 0.05 * dt)
         elif self.personality == Personality.ENERGETIC:
             self.sleepiness = max(0, self.sleepiness - 0.02 * dt)
-        elif self.personality == Personality.TIMID:
-            if self.plant_nearby:
-                self.anxiety = max(0, self.anxiety - 0.1 * dt)
+
+        # Among the leaves a squid calms down, and a timid one faster. This is
+        # the only place in the tank where anxiety falls quickly, and nothing
+        # tells the squid so: it has to end up there, and notice.
+        if self.sheltered:
+            relief = 1.5 + (0.5 if self.personality == Personality.TIMID else 0.0)
+            self.anxiety = max(0.0, self.anxiety - relief * dt)
+        elif not self.is_startled and self.hunger < 70:
+            # Left alone and fed, it settles - slowly.
+            self.anxiety = max(0.0, self.anxiety - 0.03 * dt)
+        self.sheltered = False
         
         # Anxiety from needs
         if self.hunger > 70:
@@ -265,7 +279,7 @@ class HeadlessSquid:
             self.happiness = min(100, self.happiness + 0.05 * dt)
             
         # Curiosity wanders
-        self.curiosity += random.uniform(-0.5, 0.5) * dt
+        self.curiosity += self.rng.uniform(-0.5, 0.5) * dt
         self.curiosity = max(0, min(100, self.curiosity))
         
         # The world does not invent eating, fleeing or movement. These flags
@@ -273,7 +287,7 @@ class HeadlessSquid:
         self.is_eating = False
         self.is_fleeing = False
         self.pursuing_food = False
-        if self.is_startled and random.random() < 0.1:
+        if self.is_startled and self.rng.random() < 0.1:
             self.is_startled = False
 
         # Sleep was entered through act_rest / act_collapse, not a hidden
@@ -333,8 +347,16 @@ class HeadlessSimulation:
         # the very first draw.
         if self.config.seed is not None:
             random.seed(self.config.seed)
+        # Two streams. The world's decides what happens TO the squid and is
+        # drawn from the same number of times each tick whatever the squid
+        # does, so one world_seed is one world, replayable to any brain. The
+        # body's decides the squid's own noise.
+        world_seed = (self.config.world_seed if self.config.world_seed is not None
+                      else self.config.seed)
+        self.world_rng = random.Random(world_seed)
+        self.body_rng = random.Random(self.config.seed)
         self.brain = HeadlessBrain(self.config)
-        self.squid = HeadlessSquid()
+        self.squid = HeadlessSquid(rng=self.body_rng)
         
         # Simulation state
         self.tick = 0
@@ -343,6 +365,9 @@ class HeadlessSimulation:
         # Environment
         self.food_items: List[Dict] = []
         self.poop_items: List[Dict] = []
+        self.plants: List[Dict] = [
+            {'x': self.world_rng.random(), 'y': self.world_rng.random()}
+            for _ in range(max(0, int(self.config.plants)))]
         
         # Statistics
         self.stats = {
@@ -356,6 +381,9 @@ class HeadlessSimulation:
             'flee_actions': 0,
             'escaped_startles': 0,
             'unavoided_startle_ticks': 0,
+            'sheltered_ticks': 0,   # among a plant's leaves, by its own choice
+            'chosen_rests': 0,      # went to sleep BEFORE exhaustion took it
+            'collapses': 0,         # exhaustion took it
             'actions_selected': {},
             'startles': 0,
             'peak_anxiety': 0,
@@ -464,12 +492,34 @@ class HeadlessSimulation:
             return item
         return None
 
+    # A plant is seen from as far off as food is, and sheltered in from much
+    # closer: seeing one and being in one are different facts.
+    PLANT_SIGHT_RADIUS = 0.32
+    PLANT_SHELTER_RADIUS = 0.07
+
+    def _nearest_visible_plant(self):
+        if not self.plants:
+            return None
+        x, y = self.squid.x, self.squid.y
+        plant = min(self.plants,
+                    key=lambda p: math.hypot(p['x'] - x, p['y'] - y))
+        if math.hypot(plant['x'] - x, plant['y'] - y) <= self.PLANT_SIGHT_RADIUS:
+            return plant
+        return None
+
+    def _among_leaves(self) -> bool:
+        x, y = self.squid.x, self.squid.y
+        return any(math.hypot(p['x'] - x, p['y'] - y) <= self.PLANT_SHELTER_RADIUS
+                   for p in self.plants)
+
     def _refresh_food_sense(self):
         self.squid.food_visible = self._nearest_visible_food() is not None
+        self.squid.plant_visible = self._nearest_visible_plant() is not None
 
     def _move_randomly(self, distance=0.055):
-        self.squid.x = max(0.0, min(1.0, self.squid.x + random.uniform(-distance, distance)))
-        self.squid.y = max(0.0, min(1.0, self.squid.y + random.uniform(-distance, distance)))
+        rng = self.body_rng
+        self.squid.x = max(0.0, min(1.0, self.squid.x + rng.uniform(-distance, distance)))
+        self.squid.y = max(0.0, min(1.0, self.squid.y + rng.uniform(-distance, distance)))
 
     def _act_on_neural_decision(self, action):
         """Apply the decision to the *body* before observing its consequences.
@@ -508,12 +558,37 @@ class HeadlessSimulation:
         elif action in ("sleeping", "exhausted"):
             if not squid.is_sleeping:
                 squid.sleep_ticks = 20
+                if action == "exhausted":
+                    # Being dropped by exhaustion is not the same as lying
+                    # down. It is the difference a squid can learn to avoid.
+                    squid.happiness = max(0.0, squid.happiness - 8.0)
+                    squid.anxiety = min(100.0, squid.anxiety + 6.0)
+                    self.stats['collapses'] += 1
+                else:
+                    self.stats['chosen_rests'] += 1
             squid.is_sleeping = True
             squid.status = "sleeping" if action == "sleeping" else "exhausted"
         elif action == "exploring":
             self._move_randomly()
-        elif action == "approaching_plant" and squid.plant_nearby:
-            squid.anxiety = max(0.0, squid.anxiety - 1.0)
+        elif action == "approaching_plant":
+            # Only towards a plant it can see; with none in sight the urge
+            # has nowhere to go and the squid casts about.
+            plant = self._nearest_visible_plant()
+            if plant is None:
+                self._move_randomly()
+            else:
+                dx, dy = plant['x'] - squid.x, plant['y'] - squid.y
+                distance = math.hypot(dx, dy)
+                if distance > self.PLANT_SHELTER_RADIUS:
+                    step = min(self.FOOD_SWIM_STEP, distance)
+                    squid.x += (dx / distance) * step
+                    squid.y += (dy / distance) * step
+
+        # Where the body ended up, whatever it meant to do.
+        if self._among_leaves() and not squid.is_sleeping:
+            squid.sheltered = True
+            if action == "approaching_plant":
+                self.stats['sheltered_ticks'] += 1
 
         # A startle that the animal does not flee from has a consequence,
         # rather than being merely an inert set of sensor bits.
@@ -538,6 +613,10 @@ class HeadlessSimulation:
         self.brain.advance_clock(1.0)
         before = self.squid.get_state_dict()
         self.brain.update_state(before)
+        # A plant in sight is a percept, not a neuron: it reaches the network
+        # only through the sense the squid grows the first time it sees one.
+        self.brain.perceive('plant_in_view',
+                            100.0 if self.squid.plant_visible else 0.0)
         self.brain.propagate(observe_learning=self.config.learning_enabled)
 
         if self.squid.is_sleeping:
@@ -581,15 +660,17 @@ class HeadlessSimulation:
 
     def _update_environment(self):
         """Spawn percepts and hazards, never hand the squid a free meal."""
-        if random.random() < self.config.food_spawn_chance:
-            self.food_items.append({'x': random.random(), 'y': random.random()})
-        if random.random() < self.config.poop_spawn_chance:
-            self.poop_items.append({'x': random.random(), 'y': random.random()})
+        # Every draw here is the WORLD's, and the number of draws per tick
+        # does not depend on anything the squid did - see world_rng.
+        world = self.world_rng
+        if world.random() < self.config.food_spawn_chance:
+            self.food_items.append({'x': world.random(), 'y': world.random()})
+        if world.random() < self.config.poop_spawn_chance:
+            self.poop_items.append({'x': world.random(), 'y': world.random()})
             self.squid.cleanliness = max(0, self.squid.cleanliness - 5)
-        if random.random() < self.config.startle_chance:
+        if world.random() < self.config.startle_chance:
             self.squid.startle()
             self.stats['startles'] += 1
-        self.squid.plant_nearby = random.random() < 0.2
 
     def _process_events(self):
         """Process queued scenario events"""

@@ -139,7 +139,6 @@ class Squid:
         # Background thread for vision calculations
         self._vision_worker = VisionWorker()
         self._vision_worker.food_visibility_changed.connect(self._on_food_visibility_changed)
-        self._vision_worker.plant_proximity_changed.connect(self._on_plant_proximity_changed)
         self._vision_worker.visibility_update.connect(self._on_visibility_update)
         self._vision_worker.start()
         
@@ -147,7 +146,7 @@ class Squid:
         self._cached_vision: Optional[VisionResult] = None
         self._cached_visible_food: List[Tuple[float, float]] = []
         self._cached_can_see_food: bool = False
-        self._cached_plant_proximity: float = 0.0
+        self._cached_can_see_plant: bool = False
         
         # Vision update timer - updates worker with squid state
         self._vision_update_timer = QtCore.QTimer()
@@ -495,16 +494,6 @@ class Squid:
         if self._scene_objects_dirty or has_food:
             self._update_scene_objects()
 
-    def _on_plant_proximity_changed(self, proximity: float, plant_positions: list):
-        """Handle plant proximity change from vision worker"""
-        self._cached_plant_proximity = proximity
-        
-        # Could trigger calming effects when near plants
-        if proximity > 50 and hasattr(self, 'tamagotchi_logic'):
-            # Near a plant - slight anxiety reduction
-            if hasattr(self.tamagotchi_logic, 'plant_calming_effect_counter'):
-                self.tamagotchi_logic.plant_calming_effect_counter += 1
-    
     def _on_visibility_update(self, result: VisionResult):
         """Handle full visibility update from vision worker"""
         # Discard stale updates if scene has changed since this calculation started
@@ -514,7 +503,7 @@ class Squid:
         self._cached_vision = result
         self._cached_visible_food = result.visible_food
         self._cached_can_see_food = result.can_see_food
-        self._cached_plant_proximity = result.plant_proximity_value
+        self._cached_can_see_plant = result.can_see_plant
 
     def _has_personality_starter_neuron(self) -> bool:
         """Return True if any starter neuron for this personality already exists."""
@@ -1454,14 +1443,39 @@ class Squid:
             return self._cached_can_see_food
         return len(self.get_visible_food()) > 0
 
-    def get_plant_proximity(self) -> float:
+    def can_see_plant(self) -> bool:
+        """Is a plant in the view cone right now? (Cached from the vision worker.)
+
+        The squid has no other way of knowing about a plant. There is no
+        distance reading: a plant behind it does not exist as far as its
+        brain is concerned until it turns round.
         """
-        Get the current plant proximity value (0-100).
-        Uses cached result from vision worker.
+        if getattr(self, '_cached_vision', None) is not None:
+            return bool(self._cached_can_see_plant)
+        return self.nearest_visible_plant() is not None
+
+    def nearest_visible_plant(self):
+        """The nearest plant IN THE VIEW CONE, as a scene item, or None.
+
+        What the squid swims to when it wants shelter. It used to be handed
+        the nearest plant in the tank wherever that was, which made "go to the
+        plant" something the game did for it rather than something it could
+        only do about a plant it had actually seen.
         """
-        if hasattr(self, '_cached_plant_proximity'):
-            return self._cached_plant_proximity
-        return 0.0
+        scene = getattr(getattr(self, 'ui', None), 'scene', None)
+        if scene is None:
+            return None
+        best, best_distance = None, float('inf')
+        for item in scene.items():
+            if getattr(item, 'category', None) != 'plant':
+                continue
+            centre = item.sceneBoundingRect().center()
+            if not self.is_in_vision_cone(centre.x(), centre.y()):
+                continue
+            distance = self.distance_to(centre.x(), centre.y())
+            if distance < best_distance:
+                best, best_distance = item, distance
+        return best
     
     def get_visible_plants(self):
         """

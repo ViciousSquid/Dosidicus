@@ -1057,16 +1057,16 @@ class SensorRangeTests(NeuralPipelineTestCase):
                     self.assertIn(value, (0.0, 100.0))
 
     def test_analogue_sensors_are_not_quantised_into_the_state(self):
-        """plant_proximity / external_stimulus must keep their gradient."""
+        """external_stimulus / threat_level must keep their gradient."""
         from src.brain_constants import ANALOGUE_SENSORS, BINARY_NEURONS
         for name in ANALOGUE_SENSORS:
             with self.subTest(sensor=name):
                 self.assertNotIn(name, BINARY_NEURONS)
 
-        BRAIN.neuron_positions.setdefault("plant_proximity", (50, 250))
-        self.addCleanup(BRAIN.neuron_positions.pop, "plant_proximity", None)
-        BRAIN.update_state({"plant_proximity": 37.5})
-        self.assertAlmostEqual(BRAIN.state["plant_proximity"], 37.5, places=3)
+        BRAIN.neuron_positions.setdefault("external_stimulus", (50, 250))
+        self.addCleanup(BRAIN.neuron_positions.pop, "external_stimulus", None)
+        BRAIN.update_state({"external_stimulus": 37.5})
+        self.assertAlmostEqual(BRAIN.state["external_stimulus"], 37.5, places=3)
 
     def test_boolean_state_is_stored_on_the_zero_to_one_hundred_scale(self):
         """A percent threshold in the Designer must be crossable."""

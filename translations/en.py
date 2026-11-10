@@ -265,7 +265,7 @@ translations = {
     "is_startled": "Startled",
     "pursuing_food": "Pursuing Food",
     "external_stimulus": "Stimulus",
-    "plant_proximity": "Near Plant",
+    "can_see_plant": "Sees Plant",
     "stress": "Stress",
     "novelty": "Novelty",
     "reward": "Reward",

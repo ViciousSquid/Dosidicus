@@ -105,7 +105,8 @@ Brains are stored as JSON files with the following structure:
 - `satisfaction`, `anxiety`, `curiosity`
 
 ### Input Sensors
-- `can_see_food`, `plant_proximity`, `external_stimulus`
+- `can_see_food`, `external_stimulus`
+- `can_see_plant` - not present at birth; grown the first time a plant comes within sight
 - `is_eating`, `is_sleeping`, `is_sick`, `is_fleeing`, `is_startled`, `pursuing_food`
 
 ### Custom Neurons

@@ -148,9 +148,8 @@ class EnhancedBrainTooltips:
             pass
         
         # Priority 5: Known binary sensors (hardcoded fallback for core sensors)
-        # NOTE: plant_proximity is NOT in this list - it's continuous!
         KNOWN_BINARY = {
-            'can_see_food', 'is_eating', 'is_sleeping', 'is_sick',
+            'can_see_food', 'can_see_plant', 'is_eating', 'is_sleeping', 'is_sick',
             'pursuing_food', 'is_fleeing', 'is_startled'
         }
         if neuron_name in KNOWN_BINARY:
@@ -170,7 +169,7 @@ class EnhancedBrainTooltips:
             # For binary neurons, show localized ON/OFF
             val_display = loc("state_on") if current_value > 50 else loc("state_off")
         else:
-            # For continuous neurons (including plant_proximity), show numeric value
+            # For continuous neurons, show numeric value
             val_display = f"{current_value:.1f}"
         
         # Minimal black rectangle with white text (matching weight overlay style)

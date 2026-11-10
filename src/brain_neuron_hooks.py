@@ -19,7 +19,6 @@ class BrainNeuronHooks:
         self.handlers: Dict[str, Callable] = {
             'external_stimulus': self.calculate_external_stimulus,
             'can_see_food': self.calculate_can_see_food,
-            'plant_proximity': self.calculate_plant_proximity,
             'threat_level': self.calculate_threat_level,
             'pursuing_food': self.calculate_pursuing_food,
             'is_sick': self.calculate_is_sick,
@@ -67,7 +66,7 @@ class BrainNeuronHooks:
         if neuron_name in self.handlers:
             # Don't remove built-in handlers
             built_ins = {
-                'external_stimulus', 'can_see_food', 'plant_proximity', 
+                'external_stimulus', 'can_see_food',
                 'threat_level', 'pursuing_food', 'is_sick', 'is_fleeing',
                 'is_eating', 'is_sleeping', 'is_startled'
             }
@@ -252,85 +251,6 @@ class BrainNeuronHooks:
             
         return 100.0 if self.logic.squid.can_see_food() else 0.0
     
-    def calculate_plant_proximity(self) -> float:
-        """
-        Calculate activation based on squid's proximity to plant decorations.
-        
-        Returns:
-            100.0 if squid body overlaps with any plant's bounding box (touching)
-            0-99 scaled by distance to nearest plant edge if not touching
-            0.0 if no plants exist
-        """
-        # 1. First check squid's cached plant proximity (most reliable, updated via signal)
-        if hasattr(self.logic, 'squid') and self.logic.squid:
-            squid = self.logic.squid
-            if hasattr(squid, '_cached_plant_proximity'):
-                cached = squid._cached_plant_proximity
-                if cached is not None and cached > 0:
-                    return cached
-            # Also try the getter method
-            if hasattr(squid, 'get_plant_proximity'):
-                prox = squid.get_plant_proximity()
-                if prox is not None and prox > 0:
-                    return prox
-        
-        # 2. Check VisionWorker result (only if attribute actually exists and has value)
-        if hasattr(self.logic, 'latest_vision_result') and self.logic.latest_vision_result:
-            result = self.logic.latest_vision_result
-            if hasattr(result, 'plant_proximity_value') and result.plant_proximity_value is not None:
-                if result.plant_proximity_value > 0:
-                    return result.plant_proximity_value
-
-        # 3. Manual fallback - calculate directly from scene
-        if not hasattr(self.logic, 'user_interface') or not hasattr(self.logic, 'squid'):
-            return 0.0
-        
-        squid = self.logic.squid
-        if not hasattr(squid, 'squid_item') or not squid.squid_item:
-            return 0.0
-        
-        # Get squid's bounding rect in scene coordinates
-        squid_rect = squid.squid_item.sceneBoundingRect()
-        
-        min_distance = float('inf')
-        is_touching = False
-        
-        # Scan scene for plant decorations
-        for item in self.logic.user_interface.scene.items():
-            # Check if item has category attribute and is a plant
-            if hasattr(item, 'category') and item.category == 'plant':
-                plant_rect = item.sceneBoundingRect()
-                
-                # Check if squid overlaps with plant bounding box
-                if squid_rect.intersects(plant_rect):
-                    is_touching = True
-                    break
-                
-                # Calculate distance from squid center to plant edge
-                squid_center = squid_rect.center()
-                
-                # Find closest point on plant rect to squid center
-                closest_x = max(plant_rect.left(), min(squid_center.x(), plant_rect.right()))
-                closest_y = max(plant_rect.top(), min(squid_center.y(), plant_rect.bottom()))
-                
-                # Distance from squid center to that closest point
-                dist = math.hypot(squid_center.x() - closest_x, squid_center.y() - closest_y)
-                min_distance = min(min_distance, dist)
-        
-        # If touching any plant, return max activation
-        if is_touching:
-            return 100.0
-        
-        # If no plants found, return 0
-        if min_distance == float('inf'):
-            return 0.0
-        
-        # Scale activation by distance (closer = higher, max range ~300px)
-        max_range = 300.0
-        activation = max(0.0, 100.0 - (min_distance / max_range * 100.0))
-        
-        return activation
-    
     def calculate_threat_level(self) -> float:
         """Calculate activation based on current anxiety and startle state."""
         if not hasattr(self.logic, 'squid'):
@@ -365,7 +285,6 @@ class BrainNeuronHooks:
 DEFAULT_INPUT_SENSORS = (
     'external_stimulus',
     'can_see_food',
-    'plant_proximity',
     'threat_level',
     'pursuing_food',
     'is_sick',

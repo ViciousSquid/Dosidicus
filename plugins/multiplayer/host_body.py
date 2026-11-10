@@ -269,10 +269,11 @@ class HostBody:
         if food is not None and food[0] <= SIGHT_RANGE:
             sensors['can_see_food'] = 100.0
 
-        plant = self._nearest_of_kind(actor, 'plant')
-        if plant is not None:
-            sensors['plant_proximity'] = _clamp(
-                100.0 - plant[0] / 300.0 * 100.0, 0.0, 100.0)
+        # A plant the visitor is LOOKING AT, by the same view cone it sees the
+        # resident with. It is told nothing about a plant behind it.
+        if any(self._in_view(actor, *_centre(item))
+               for item in self._scene_items('plant')):
+            sensors['plant_in_view'] = 100.0
 
         # A visitor in an unfamiliar tank has something going on around it.
         # This is the host's own tank activity, not a claim about the visitor.
@@ -308,6 +309,13 @@ class HostBody:
                             math.hypot(width, height),
                             float(getattr(resident, 'squid_x', 0.0)) + half_w,
                             float(getattr(resident, 'squid_y', 0.0)) + half_h)
+
+    def _in_view(self, actor: VisitorActor, x: float, y: float) -> bool:
+        """Is this point in the visitor's view cone, from where it is facing?"""
+        width, height = self._tank_size()
+        return in_view_cone(actor.x, actor.y,
+                            FACING_ANGLES.get(actor.facing, 0.0), VIEW_CONE_ANGLE,
+                            math.hypot(width, height), float(x), float(y))
 
     def _observable_items(self, actor: VisitorActor, resident) -> List[Dict[str, Any]]:
         """Objects the visitor can see, with host-issued ids.

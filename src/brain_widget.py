@@ -918,7 +918,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         orphans = []
 
         # Define neurons that should be checked even if they are in excluded_neurons
-        explicitly_allowed = {'can_see_food', 'plant_proximity', 'is_fleeing'}
+        explicitly_allowed = {'can_see_food', 'can_see_plant', 'is_fleeing'}
         never_orphans = set(LEARNED_ACTIONS)
 
         for neuron in self.neuron_positions.keys():
@@ -1438,7 +1438,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         INPUT_SENSORS = {
             "can_see_food", "is_eating", "is_sleeping", "is_sick",
             "pursuing_food", "is_fleeing", "is_startled", "external_stimulus",
-            "plant_proximity"
+            "can_see_plant"
         }
         
         # Remove sensors from the update packet before applying it
@@ -3950,7 +3950,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         BINARY_NEURONS = {
             "can_see_food", "is_eating", "is_sleeping",
             "is_sick", "is_fleeing", "pursuing_food", "is_startled",
-            "external_stimulus", "plant_proximity"
+            "external_stimulus", "can_see_plant"
         }
 
         # Font size for labels - use config value directly

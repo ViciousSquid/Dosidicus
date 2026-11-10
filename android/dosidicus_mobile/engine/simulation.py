@@ -1260,10 +1260,14 @@ class Simulation:
         clamped = squid.sync_stats_to_brain(can_see_food=can_see)
         if away:
             away.mind._perceive_host_tank()
-            for sensor in ('plant_proximity', 'external_stimulus'):
-                clamped[sensor] = away.mind.perception.sensor(sensor)
+            clamped['external_stimulus'] = away.mind.perception.sensor('external_stimulus')
         else:
             self._notice_newcomers(squid)
+            # A plant, as on desktop, is seen through the view cone or not at
+            # all, and reaches the brain through the sense it grows for one.
+            squid.brain.perceive('plant_in_view', 100. if any(
+                self._sees_squid_at(squid.x, squid.y, squid.direction, p['x'], p['y'])
+                for p in squid.plant_targets) else 0.)
             # Another squid, as on desktop, is percepts, not sense organs: the
             # shared engine grows its social senses from them the first time they
             # matter. Off-screen arrivals are not perceived.

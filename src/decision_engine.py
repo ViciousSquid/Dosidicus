@@ -330,7 +330,10 @@ class DecisionEngine:
             return self._drift()
 
         if decision == "approaching_plant":
-            plant = self._nearest_of('plant')
+            # Only a plant it can SEE. With none in view the urge is still
+            # there and the squid goes looking, which is what wanting shelter
+            # and not knowing where it is looks like.
+            plant = self._visible_plant()
             if plant is not None:
                 s.set_neural_drive('seek_plant', duration=5.0, target=plant,
                                    priority=s.DRIVE_DECISION)
@@ -398,6 +401,10 @@ class DecisionEngine:
             return None
         closest = min(food, key=lambda f: s.distance_to(f.pos().x(), f.pos().y()))
         return (closest.pos().x(), closest.pos().y())
+
+    def _visible_plant(self):
+        find = getattr(self.squid, 'nearest_visible_plant', None)
+        return find() if callable(find) else None
 
     def _nearest_of(self, *categories):
         s = self.squid

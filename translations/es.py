@@ -292,7 +292,7 @@ translations = {
     "is_startled": "Asustado",
     "pursuing_food": "Buscando Comida",
     "external_stimulus": "Estimulo",
-    "plant_proximity": "Cerca Planta",
+    "can_see_plant": "Ve Planta",
     "stress": "Estres",
     "novelty": "Novedad",
     "reward": "Recompensa",

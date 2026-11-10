@@ -423,7 +423,7 @@ class PerceptionReachesTheBrainTests(unittest.TestCase):
     def test_the_same_sensors_report_home_again_once_the_visit_ends(self):
         overrides = self.meeting.visitor_mind.sensor_overrides(
             {'can_see_food': (lambda: 42.0),
-             'plant_proximity': (lambda: 0.0),
+             'can_see_plant': (lambda: 0.0),
              'external_stimulus': (lambda: 0.0)})
         self.assertEqual(overrides['can_see_food'](), 100.0)
         self.meeting.visitor_mind.end_visit(notify=False)

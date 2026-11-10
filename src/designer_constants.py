@@ -49,7 +49,7 @@ CORE_NEURON_NAMES = list(CORE_NEURONS.keys())
 REQUIRED_NEURON_NAMES = CORE_NEURON_NAMES + ["can_see_food"]
 
 INPUT_SENSORS = {
-    "external_stimulus": (50, 50), "plant_proximity": (50, 250),
+    "external_stimulus": (50, 50), "can_see_plant": (50, 250),
     "threat_level": (50, 350), "pursuing_food": (150, 50),
     "is_sick": (150, 150), "is_fleeing": (150, 250),
     "is_eating": (150, 350), "is_sleeping": (250, 50),
@@ -61,7 +61,7 @@ INPUT_SENSORS = {
 #
 # Re-exported from brain_constants, which is the single definition for the
 # whole project. Previously five modules each carried their own divergent copy
-# of BINARY_NEURONS and they disagreed about plant_proximity and
+# of BINARY_NEURONS and they disagreed about the plant sensor and
 # external_stimulus.
 # ---------------------------------------------------------------------------
 from .brain_constants import (           # noqa: F401  (re-export)
@@ -91,7 +91,7 @@ DEFAULT_SENSOR_CONNECTIONS = {
     'can_see_food': [('hunger', 0.4, 1.0), ('happiness', 0.2, 0.5), ('satisfaction', 0.15, 0.2)],
     'external_stimulus': [('curiosity', 0.35, 1.0), ('anxiety', 0.15, 0.3)],
     'threat_level': [('anxiety', 0.6, 1.0), ('happiness', -0.3, 0.7), ('curiosity', -0.2, 0.4)],
-    'plant_proximity': [('happiness', 0.2, 1.0), ('curiosity', 0.15, 0.5)],
+    'can_see_plant': [('happiness', 0.2, 1.0), ('curiosity', 0.15, 0.5)],
     'is_sick': [('happiness', -0.5, 1.0), ('anxiety', 0.4, 0.8), ('sleepiness', 0.3, 0.6)],
     'is_fleeing': [('anxiety', 0.4, 1.0), ('curiosity', -0.3, 0.7)],
     'is_eating': [('satisfaction', 0.5, 1.0), ('happiness', 0.3, 0.8), ('hunger', -0.4, 1.0)],

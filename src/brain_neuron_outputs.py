@@ -116,7 +116,7 @@ STANDARD_OUTPUT_HOOKS = {
         'default_threshold': 60.0,
     },
     'neuron_output_seek_plant': {
-        'description': 'Move toward nearest plant',
+        'description': 'Move toward the nearest plant in view',
         'category': 'movement',
         'default_threshold': 50.0,
     },
@@ -533,14 +533,10 @@ class NeuronOutputMonitor:
         if not squid or not tamagotchi_logic:
             return
 
-        nearest_plant, min_dist = None, float('inf')
-        for item in tamagotchi_logic.user_interface.scene.items():
-            if getattr(item, 'category', None) != 'plant':
-                continue
-            c = item.sceneBoundingRect().center()
-            d = ((c.x() - squid.squid_x) ** 2 + (c.y() - squid.squid_y) ** 2) ** 0.5
-            if d < min_dist:
-                min_dist, nearest_plant = d, item
+        # The nearest plant in the squid's VIEW CONE - it cannot head for a
+        # plant it has not seen.
+        find = getattr(squid, 'nearest_visible_plant', None)
+        nearest_plant = find() if callable(find) else None
 
         if nearest_plant is None:
             return

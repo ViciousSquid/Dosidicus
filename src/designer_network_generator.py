@@ -196,7 +196,7 @@ class SparseNetworkGenerator:
         
         Rules:
         - 'can_see_food' is required (handled by design validation, but implicitly part of valid set)
-        - 'plant_proximity': 20% chance
+        - 'can_see_plant': 20% chance
         - 'is_fleeing': 10% chance
         - No other sensors are generated.
         
@@ -209,7 +209,7 @@ class SparseNetworkGenerator:
         """
         # Specific probabilities requested
         sensor_rules = {
-            'plant_proximity': 0.20,
+            'can_see_plant': 0.20,
             'is_fleeing': 0.10
         }
         

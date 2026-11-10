@@ -50,6 +50,16 @@ class TrainingConfig:
     food_spawn_chance: float = 0.02
     poop_spawn_chance: float = 0.01
     startle_chance: float = 0.005
+    #: Plants standing in the tank. The squid only knows about one while it is
+    #: within sight, and grows its can_see_plant sense the first time one is.
+    plants: int = 2
+
+    #: The world's own random stream: where and when food lands, when a
+    #: startle comes, where the plants are. Kept apart from the squid's so the
+    #: SAME world can be replayed to two different brains - which is the only
+    #: way "this squid does better than that one" means anything. Defaults to
+    #: `seed`.
+    world_seed: Optional[int] = None
 
     # Reproducibility. With a seed set, a run is deterministic: the same seed,
     # brain and tick count produce the same trained brain, byte for byte. That
@@ -557,7 +567,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         but does not record new plasticity/causal-credit evidence.
         The default preserves normal training and game behaviour.
         """
-        self.drive_external_neurons()
+        self.drive_external_neurons(grow=observe_learning)
         if observe_learning:
             self.observe_for_learning()
 

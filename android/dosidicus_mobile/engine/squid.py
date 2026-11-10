@@ -155,8 +155,6 @@ class Squid:
         clamped["is_startled"] = 100.0 if self.is_startled else 0.0
         clamped["pursuing_food"] = 100.0 if self.status.startswith(("approaching", "eyeing")) else 0.0
         clamped["threat_level"] = 100.0 if self.is_startled else 0.0
-        clamped["plant_proximity"] = max((max(0.0, 100.0 - self._dist(p['x'], p['y']) / 3)
-                                          for p in self.plant_targets), default=0.0)
         return clamped
 
     def pull_core_from_brain(self):

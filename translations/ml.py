@@ -265,7 +265,7 @@ translations = {
     "is_startled": "Spooked",
     "pursuing_food": "Hunting",
     "external_stimulus": "Stimulus",
-    "plant_proximity": "Near Plant",
+    "can_see_plant": "ചെടി കാണുന്നു",
     "stress": "Stress",
     "novelty": "New Stuff",
     "reward": "Treat",

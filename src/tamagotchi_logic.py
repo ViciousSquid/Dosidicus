@@ -1796,7 +1796,7 @@ class TamagotchiLogic:
     def apply_input_neurons_to_brain(self):
         """
         Apply real-time sensor values to the brain's input neurons.
-        Without this, can_see_food, plant_proximity, external_stimulus, etc. will NEVER update.
+        Without this, can_see_food, external_stimulus, etc. will NEVER update.
         """
         if not self.brain_window or not self.brain_window.brain_widget:
             return
@@ -1812,6 +1812,12 @@ class TamagotchiLogic:
                 not getattr(self.squid, 'is_transitioning', False):
             seen = getattr(self.latest_vision_result, 'can_see_squid', False)
             brain_widget.perceive('squid_in_view', 100.0 if seen else 0.0)
+            # A plant in the view cone, likewise: a percept that reaches the
+            # network only through the can_see_plant sense the squid grows the
+            # first time it sees one. Nothing reports a plant it is not
+            # looking at.
+            plant = getattr(self.latest_vision_result, 'can_see_plant', False)
+            brain_widget.perceive('plant_in_view', 100.0 if plant else 0.0)
             brain_widget.perceive('squid_proximity', self._squid_proximity())
 
         # Get fresh input neuron values (this calls calculate_can_see_food(), etc.)
@@ -1822,10 +1828,6 @@ class TamagotchiLogic:
         if self.latest_vision_result:
             # Overwrite the hook's calculation with the worker's result
             input_values['can_see_food'] = 100.0 if self.latest_vision_result.can_see_food else 0.0
-            
-            # Use worker for plant proximity if available
-            if hasattr(self.latest_vision_result, 'plant_proximity_value'):
-                 input_values['plant_proximity'] = self.latest_vision_result.plant_proximity_value
 
         if not input_values:
             return

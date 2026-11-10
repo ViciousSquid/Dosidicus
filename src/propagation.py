@@ -60,7 +60,7 @@ DEFAULT_SMOOTHING = 0.5
 # Imported lazily-ish at module level because brain_constants has no imports of
 # its own and cannot cycle.
 from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
-                              ACTION_NEURONS, SOCIAL_SENSORS, AGGRESSION_NEURON,
+                              ACTION_NEURONS, GROWN_SENSES, AGGRESSION_NEURON,
                               action_resting_level,
                               ensure_grown_sensor, on_input_sensor_change)
 
@@ -96,8 +96,10 @@ on_input_sensor_change(_follow_sensor_registration)
 #: squid is the vision system's to report (squid_in_view); the can_see_squid
 #: sensor neurogenesis grows on the first sighting is that percept in the
 #: brain, written the way can_see_food is - 100 or 0, every tick. The others
-#: (brain_constants.SOCIAL_SENSORS) are written the same way from theirs.
-CONCEPT_PERCEPTS = {name: percept for name, (percept, _binary) in SOCIAL_SENSORS.items()}
+#: (brain_constants.GROWN_SENSES) are written the same way from theirs - a
+#: plant in the view cone drives can_see_plant exactly as a squid in it drives
+#: can_see_squid.
+CONCEPT_PERCEPTS = {name: percept for name, (percept, _binary) in GROWN_SENSES.items()}
 
 
 def baseline_of(name: str) -> float:
@@ -360,8 +362,8 @@ class ExternallyDriven:
         return {name: percept for name, percept in CONCEPT_PERCEPTS.items()
                 if name in positions}
 
-    def drive_external_neurons(self, smoothing: float = DEFAULT_SMOOTHING
-                               ) -> Dict[str, float]:
+    def drive_external_neurons(self, smoothing: float = DEFAULT_SMOOTHING,
+                               grow: bool = True) -> Dict[str, float]:
         """Write the neurons the world drives: the squid's actions, from what
         it is actually doing, and its grown percepts, from what it perceives.
 
@@ -374,8 +376,10 @@ class ExternallyDriven:
         """
         percepts = getattr(self, 'percepts', None) or {}
         growth = getattr(self, 'enhanced_neurogenesis', None)
-        if growth is not None:
-            growth.observe_social()
+        # `grow=False` is a frozen brain being evaluated: it perceives and
+        # acts, and nothing about it changes - not a weight, not a neuron.
+        if growth is not None and grow:
+            growth.observe_percepts()
         actions, external = self._external_maps()
         state = getattr(self, 'state', None)
         if state is None:
@@ -385,7 +389,7 @@ class ExternallyDriven:
         for neuron, percept in self.percept_neurons().items():
             # A sense organ, so the world writes it outright - binary ones as
             # can_see_food is - and no synapse may point at it.
-            binary = SOCIAL_SENSORS[neuron][1]
+            binary = GROWN_SENSES[neuron][1]
             ensure_grown_sensor(neuron, binary)
             reading = percepts.get(percept, 0.0)
             new = (100.0 if reading > 0.0 else 0.0) if binary else reading

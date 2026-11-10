@@ -38,7 +38,7 @@ The "Filter" Layer: Information doesn't just jump from a feeling to an action. I
 ------------------------
 
 ## Plant-Seeker: 
-This is a more complex specialized brain. It uses a unique plant_proximity sensor to drive its internal state. It has a very strong link where hunger spikes anxiety (0.348), creating a squid that is highly motivated to find those plants when its stomach is empty.
+This is a more complex specialized brain. It is designed with the can_see_plant sense already in place (other squid have to grow it the first time they see a plant) to drive its internal state. It has a very strong link where hunger spikes anxiety (0.348), creating a squid that is highly motivated to find those plants when its stomach is empty.
 
 
 -------------------

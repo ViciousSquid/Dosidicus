@@ -10,7 +10,10 @@ import math
 from pathlib import Path
 import zipfile
 
-from .brain_constants import (REQUIRED_NEURONS, RETIRED_NEURONS, newborn_neurons,
+import re
+
+from .brain_constants import (REQUIRED_NEURONS, RETIRED_NEURONS, RENAMED_NEURONS,
+                              newborn_neurons,
                               INNATE_ACTION_WIRING, action_competition_wiring)
 from .propagation import baseline_of
 
@@ -24,8 +27,39 @@ def _number(value):
     return value
 
 
+_RENAMED = (re.compile(r'\b(' + '|'.join(map(re.escape, RENAMED_NEURONS)) + r')\b')
+            if RENAMED_NEURONS else None)
+
+
+def rename_legacy_neurons(value):
+    """Carry a brain saved under an old neuron name over to the current one.
+
+    Applied to the whole document - neuron tables, synapse keys of every
+    spelling ("a->b", "a|b", [a, b, w]), activations, bindings and the history
+    that mentions them - so the neuron arrives with everything it had. Only a
+    whole name is replaced, never part of a longer one.
+    """
+    if _RENAMED is None:
+        return value
+    swap = lambda m: RENAMED_NEURONS[m.group(1)]
+    if isinstance(value, str):
+        return _RENAMED.sub(swap, value)
+    if isinstance(value, dict):
+        return {(_RENAMED.sub(swap, k) if isinstance(k, str) else k):
+                rename_legacy_neurons(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [rename_legacy_neurons(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(rename_legacy_neurons(v) for v in value)
+    return value
+
+
 def brain_document(data):
     """Unwrap a desktop save bundle or custom-brain wrapper without stale data."""
+    return rename_legacy_neurons(_unwrap_brain_document(data))
+
+
+def _unwrap_brain_document(data):
     if not isinstance(data, dict):
         raise ValueError('Expected a brain object')
     if 'brain_state' in data:
@@ -48,9 +82,9 @@ def brain_document(data):
             base['neuron_states'] = deepcopy(state)
         return base
     if data.get('is_custom_brain'):
-        return brain_document(data.get('brain_definition'))
+        return _unwrap_brain_document(data.get('brain_definition'))
     if 'brain' in data and not any(k in data for k in ('neurons', 'positions', 'neuron_positions')):
-        return brain_document(data['brain'])
+        return _unwrap_brain_document(data['brain'])
     return deepcopy(data)
 
 

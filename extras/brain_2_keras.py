@@ -189,7 +189,7 @@ def parse_design(data):
         known_inputs = list(DEFAULT_INPUT_SENSORS)
     except Exception:
         known_inputs = [
-            'external_stimulus', 'plant_proximity', 'threat_level',
+            'external_stimulus', 'can_see_plant', 'threat_level',
             'pursuing_food', 'is_sick', 'is_fleeing', 'is_eating',
             'is_sleeping', 'is_startled', 'can_see_food'
         ]

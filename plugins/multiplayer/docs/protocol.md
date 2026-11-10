@@ -410,8 +410,8 @@ is. `PerceptionFrame.to_payload()`.
   "facing": "left",
   "sensors": {
     "can_see_food": 100.0,
-    "plant_proximity": 37.5,
     "external_stimulus": 24.0,
+    "plant_in_view": 100.0,
     "squid_in_view": 100.0,
     "squid_proximity": 61.3,
     "in_fight": 0.0
@@ -444,8 +444,8 @@ The sensors (`OBSERVABLE_SENSORS`, computed by `HostBody._observable_sensors`):
 | Sensor | Range | Host computes |
 |---|---|---|
 | `can_see_food` | 0 or 100 | 100 when food is within `SIGHT_RANGE` (400 px) |
-| `plant_proximity` | 0-100 | `100 - distance_to_nearest_plant / 300 * 100` |
 | `external_stimulus` | 0-60 | 12 per food item in the tank |
+| `plant_in_view` | 0 or 100 | 100 when a plant is in the body's view cone (72°, `src/vision_cone.py`). A percept: it reaches the visitor's network through the `can_see_plant` sense it grows. Replaces `plant_proximity`, which a current build ignores |
 | `squid_in_view` | 0 or 100 | 100 when the resident is in the body's view cone (72°, `src/vision_cone.py`) and not itself away |
 | `squid_proximity` | 0-100 | `100 - distance_to_resident / 1000 * 100` (`vision_cone.proximity`) |
 | `in_fight` | 0 or 100 | 100 while the body is in a fight animation (`body_busy_until`) |

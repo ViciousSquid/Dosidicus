@@ -536,8 +536,8 @@ class NeuronLaboratory(QDialog):
                          value=value, reading=self._reading(value)))
 
         fn = self._functional(name)
-        from .neurogenesis import SOCIAL_CONCEPTS
-        concept = SOCIAL_CONCEPTS.get(getattr(fn, 'represents_concept', ''))
+        from .neurogenesis import ALL_CONCEPTS
+        concept = ALL_CONCEPTS.get(getattr(fn, 'represents_concept', ''))
         if concept:
             lines.insert(1, loc("lab_identity_represents",
                                 "This neuron was created to represent {concept}.",

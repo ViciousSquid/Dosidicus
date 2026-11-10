@@ -265,7 +265,7 @@ translations = {
     "is_startled": "受惊",
     "pursuing_food": "追逐食物",
     "external_stimulus": "外部刺激",
-    "plant_proximity": "靠近植物",
+    "can_see_plant": "看见植物",
     "stress": "压力",
     "novelty": "新奇",
     "reward": "奖励",

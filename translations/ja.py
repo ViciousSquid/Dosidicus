@@ -265,7 +265,7 @@ translations = {
     "is_startled": "驚き",
     "pursuing_food": "餌追跡",
     "external_stimulus": "外部刺激",
-    "plant_proximity": "植物近接",
+    "can_see_plant": "植物が見える",
     "stress": "ストレス",
     "novelty": "新規性",
     "reward": "報酬",

@@ -103,7 +103,7 @@ class NeuralBrain(HeadlessBrain):
             self._tick_remainder = max(0.0, self._tick_remainder - 1.0)
             self.advance_clock()
             self.update_state(clamped)
-            social = self.enhanced_neurogenesis.observe_social()
+            social = self.enhanced_neurogenesis.observe_percepts()
             if social:
                 born.append(social)
             self.propagate()

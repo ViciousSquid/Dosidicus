@@ -158,7 +158,7 @@ MOTOR_ROW_ORDER = (
 SENSOR_ROW_ORDER = (
     "can_see_food",        # MANDATORY - the squid must be able to see food
     "external_stimulus",   # Environmental changes (resize, interactions)
-    "plant_proximity",     # Distance to nearest plant decoration
+    "can_see_plant",       # A plant is in the view cone (grown on first sight)
     "threat_level",        # Computed from anxiety + startle state
     "pursuing_food",       # Currently chasing food
     "is_sick",             # Sickness state
@@ -230,7 +230,7 @@ INPUT_SENSORS = {
 DEFAULT_INPUT_SENSORS = (
     'external_stimulus',
     'can_see_food',  # Listed here for hooks compatibility but it's mandatory
-    'plant_proximity',
+    'can_see_plant',
     'threat_level',
     'pursuing_food',
     'is_sick',
@@ -246,6 +246,7 @@ DEFAULT_INPUT_SENSORS = (
 # =============================================================================
 BINARY_NEURONS = {
     'can_see_food',
+    'can_see_plant',
     'is_eating',
     'is_sleeping',
     'is_sick',
@@ -256,12 +257,11 @@ BINARY_NEURONS = {
 
 # =============================================================================
 # ANALOGUE SENSORS - Continuous 0-100 readings that must NOT be binarised.
-# external_stimulus baselines around 5-15 and plant_proximity is a distance
-# gradient; quantising either at the 50 mark discarded the whole signal.
+# external_stimulus baselines around 5-15; quantising it at the 50 mark
+# discarded the whole signal.
 # =============================================================================
 ANALOGUE_SENSORS = {
     'external_stimulus',
-    'plant_proximity',
     'threat_level',
 }
 
@@ -727,6 +727,38 @@ SQUID_SENSORS = {
 AQUARIUM_SENSE = 'aquarium_nearby'
 
 SOCIAL_SENSORS = {**SQUID_SENSORS, AQUARIUM_SENSE: ('aquarium_heard', True)}
+
+#: The sense organ for a plant, grown the way can_see_squid is: the first time
+#: a plant is in the squid's VIEW CONE, because until then nothing in the
+#: network can stand for one. It is what can_see_food is for food - on while a
+#: plant is in sight and off the moment it is not.
+#:
+#: It replaces `plant_proximity`, which reported the distance to the nearest
+#: plant whichever way the squid was facing, through rock and behind its own
+#: back. That was not a sense, it was the game telling the brain where things
+#: were, and a squid that is handed the answer cannot be said to have learned
+#: where the plants are.
+PLANT_SENSOR = 'can_see_plant'
+PLANT_PERCEPT = 'plant_in_view'
+
+#: Sense organs grown for things in the squid's own tank, as
+#: {name: (percept, binary)} - the same shape as SOCIAL_SENSORS.
+WORLD_SENSES = {PLANT_SENSOR: (PLANT_PERCEPT, True)}
+
+#: Every sense organ neurogenesis can grow, social or not.
+GROWN_SENSES = {**SOCIAL_SENSORS, **WORLD_SENSES}
+
+#: Neurons whose NAME changed while what they stand for did not. A saved or
+#: shared brain that still uses the old name keeps the neuron, its synapses
+#: and its history under the new one (brain_io.normalise_brain). The squid a
+#: player raised is the same squid; only what its plant sense reports changes,
+#: from "how near" to "can I see one".
+RENAMED_NEURONS = {'plant_proximity': PLANT_SENSOR}
+
+
+def current_neuron_name(name: str) -> str:
+    """The name this neuron goes by now (itself, unless it was renamed)."""
+    return RENAMED_NEURONS.get(name, name)
 
 #: The first of them, grown on the first sighting.
 SOCIAL_SENSOR = 'can_see_squid'

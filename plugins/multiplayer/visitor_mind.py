@@ -45,7 +45,7 @@ from .remote_protocol import (
 #: Everything else a squid senses is about its own body - whether it is sick,
 #: asleep, startled, how threatened it feels - and stays local, because those
 #: are true wherever it happens to be swimming.
-REMOTE_DRIVEN_SENSORS = ('can_see_food', 'plant_proximity', 'external_stimulus')
+REMOTE_DRIVEN_SENSORS = ('can_see_food', 'external_stimulus')
 
 #: What being away does to a squid, as ordinary drive changes rather than as
 #: an interpretation. Applied once when a consequence arrives, so that what
@@ -246,6 +246,10 @@ class VisitorMind:
         widget.perceive('squid_in_view', in_view)
         widget.perceive('squid_proximity', sense('squid_proximity'))
         widget.perceive('in_fight', sense('in_fight'))
+        # A plant in view in the HOST's tank, while away. Back home the game
+        # loop reports its own tank's (TamagotchiLogic.apply_input_neurons_to_brain).
+        if away:
+            widget.perceive('plant_in_view', sense('plant_in_view'))
         resident = self.perception.resident if away and in_view > 0 else None
         perceive_recognition(widget, self.peer_ledger,
                              getattr(resident, 'uuid', '') if resident else '')

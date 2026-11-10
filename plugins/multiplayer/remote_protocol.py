@@ -70,9 +70,11 @@ VISIT_ABANDON_TIMEOUT = 12.0
 #: The values a HOST is allowed to compute for a visitor. Everything here is
 #: something the host can see from its own tank.
 #:
-#: The first three feed the visitor's own built-in sensors. The rest are
+#: The first two feed the visitor's own built-in sensors. The rest are
 #: percepts, not neurons, which reach the visitor's network only through the
-#: social senses it grows (src.brain_constants.SOCIAL_SENSORS): squid_in_view
+#: senses it grows (src.brain_constants.GROWN_SENSES): plant_in_view is a
+#: plant in its view cone, exactly as its vision reports one at home;
+#: squid_in_view
 #: is its vision of the resident, by the same view cone its own vision uses
 #: (src.vision_cone); squid_proximity how close the resident is; in_fight that
 #: its body is in a scuffle.
@@ -81,8 +83,8 @@ VISIT_ABANDON_TIMEOUT = 12.0
 #: and a host cannot know it.
 OBSERVABLE_SENSORS = (
     'can_see_food',
-    'plant_proximity',
     'external_stimulus',
+    'plant_in_view',
     'squid_in_view',
     'squid_proximity',
     'in_fight',
