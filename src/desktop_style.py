@@ -19,9 +19,10 @@ different size and shape on every machine. Here the game brings its own:
            panel happens to leave.
 
 What stays the system's: the window frame and title bar (they are drawn by
-the system, not the game); the names of keys in menus (a Mac's Command key
-is not Ctrl); an emoji the game itself does not use, typed by a player; and
-writing systems Fio UI does not cover, which fall back to a system font.
+the system, not the game); an emoji the game itself does not use, typed by a
+player; and writing systems Fio UI does not cover, which fall back to a
+system font. Shortcuts are the same keys everywhere, a Mac included: Ctrl is
+the Control key there, not Command.
 
 prepare_qt() must run before the QApplication is made; install_style() right
 after.
@@ -138,6 +139,13 @@ def prepare_qt():
     app.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, sys.platform != 'darwin')
     app.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     app.setAttribute(QtCore.Qt.AA_Use96Dpi, True)
+    # A Mac swaps Ctrl and Command, and names keys with symbols: the same
+    # menu read "Ctrl+Shift+B" on two systems and a narrower symbol row on the
+    # third. Unswapped, Ctrl+P is the Control key and P on a Mac as it is
+    # everywhere else, so the menu can say so in the same words
+    # (spell_out_shortcuts) and be telling the truth.
+    if sys.platform == 'darwin':
+        app.setAttribute(QtCore.Qt.AA_MacDontSwapCtrlAndMeta, True)
     app.setAttribute(QtCore.Qt.AA_DontUseNativeMenuBar, True)
     app.setAttribute(QtCore.Qt.AA_DontUseNativeDialogs, True)
     QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
@@ -246,12 +254,40 @@ def message_box_size(box):
     return QtCore.QSize(width, height)
 
 
+def spell_out_shortcuts(menu):
+    """Write each action's shortcut into its text in the same words on every
+    system ("Ctrl+Shift+B"). Qt would otherwise write it the system's way,
+    which on a Mac is a row of symbols - a different menu, and a narrower
+    one. A menu shows what follows a tab in an action's text as its shortcut,
+    and adds nothing of its own when there is one."""
+    changed = 0
+    for action in menu.actions():
+        shortcut = action.shortcut()
+        text = action.text()
+        if shortcut.isEmpty() or '\t' in text or action.isSeparator():
+            continue
+        action.setText(f"{text}\t{shortcut.toString(QtGui.QKeySequence.PortableText)}")
+        changed += 1
+    return changed
+
+
 class LayoutRules(QtCore.QObject):
     """What Qt lays out differently on a Mac whatever the style says, put
     back the way it is on Windows and Linux. A message box there has its own
     margins and columns, bold text and a narrower wrap."""
 
+    #: Where shortcuts are spelt out: a Mac. Elsewhere Qt already writes them
+    #: in these words.
+    SPELL_OUT = sys.platform == 'darwin'
+
     def eventFilter(self, obj, event):
+        if self.SPELL_OUT and isinstance(obj, QtWidgets.QMenu) \
+                and event.type() == QtCore.QEvent.Show:
+            try:
+                spell_out_shortcuts(obj)
+            except Exception:
+                pass
+            return False
         if not isinstance(obj, QtWidgets.QMessageBox):
             return False
         kind = event.type()

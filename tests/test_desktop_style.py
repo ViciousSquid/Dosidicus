@@ -305,3 +305,24 @@ def test_the_colour_emoji_font_has_outlines_for_the_systems_that_insist_on_them(
     count = int.from_bytes(data[4:6], 'big')
     tables = {data[12 + 16 * i:16 + 16 * i].decode('latin-1') for i in range(count)}
     assert {'glyf', 'loca', 'CBDT', 'CBLC', 'cmap'} <= tables
+
+
+def test_a_menu_names_its_shortcuts_in_the_same_words_on_every_system():
+    """A Mac writes shortcuts as symbols, and swaps Ctrl with Command. The
+    game spells them out there ("Ctrl+Shift+B") and leaves the keys unswapped,
+    so the menu is the same menu and what it says is the key that works."""
+    menu = QtWidgets.QMenu()
+    designer = menu.addAction('Brain Designer')
+    designer.setShortcut(QtGui.QKeySequence('Ctrl+Shift+B'))
+    plain = menu.addAction('Statistics')
+    menu.addSeparator()
+    already = menu.addAction('preferences\tCtrl+P')
+    already.setShortcut(QtGui.QKeySequence('Ctrl+P'))
+    assert desktop_style.spell_out_shortcuts(menu) == 1
+    assert designer.text() == 'Brain Designer\tCtrl+Shift+B'
+    assert plain.text() == 'Statistics' and already.text() == 'preferences\tCtrl+P'
+    assert desktop_style.spell_out_shortcuts(menu) == 0          # nothing is added twice
+    assert designer.shortcut() == QtGui.QKeySequence('Ctrl+Shift+B')   # the key is unchanged
+    text = (ROOT / 'src' / 'desktop_style.py').read_text(encoding='utf-8')
+    assert 'AA_MacDontSwapCtrlAndMeta, True' in text
+    assert desktop_style.LayoutRules.SPELL_OUT == (sys.platform == 'darwin')
