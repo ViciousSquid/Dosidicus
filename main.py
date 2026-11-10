@@ -346,15 +346,14 @@ class MainWindow(QtWidgets.QMainWindow):
         # Initialize plugin menu - do this AFTER loading plugins
         self.user_interface.apply_plugin_menu_registrations(self.plugin_manager)
     
-        # Position window 300 pixels to the left of default position
-        desktop = QtWidgets.QApplication.desktop()
-        screen_rect = desktop.screenGeometry()
-        window_rect = self.geometry()
-        center_x = screen_rect.center().x()
-        window_x = center_x - (window_rect.width() // 2)  # Default centered X position
-        
-        # Move 300 pixels to the left
-        self.move(window_x - 300, self.y())
+        # The tank: 300 pixels left of centre, at the top of the area the game
+        # lays its windows out in - the same spot on every system
+        # (desktop_style.layout_area). Its height used to be left to the
+        # system, which put it somewhere different on each.
+        from src.desktop_style import layout_area
+        area = layout_area(QtWidgets.QApplication.primaryScreen())
+        window_x = area.center().x() - (self.geometry().width() // 2) - 300
+        self.move(max(area.left(), window_x), area.top())
         
         if self.debug_mode:
             print(f"DEBUG MODE ENABLED: Console output is being logged to console.txt")
@@ -618,10 +617,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def position_and_show_decoration_window(self):
         """Position the decoration window in the bottom right and show it"""
         if hasattr(self.user_interface, 'decoration_window') and self.user_interface.decoration_window:
-            # Get screen geometry
-            screen_geometry = QtWidgets.QApplication.desktop().availableGeometry()
-            
-            # Position window in bottom right
+            # Bottom right of the area the game lays its windows out in: the
+            # same spot on every system (desktop_style.layout_area).
+            from src.desktop_style import layout_area
+            screen_geometry = layout_area(QtWidgets.QApplication.primaryScreen())
             decoration_window = self.user_interface.decoration_window
             decoration_window.move(
                 screen_geometry.right() - decoration_window.width() - 20,

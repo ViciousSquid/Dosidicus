@@ -77,7 +77,8 @@ if HAS_QT:
                 
             screen = QtWidgets.QApplication.primaryScreen()
             if screen:
-                geo = screen.availableGeometry()
+                from .desktop_style import layout_area
+                geo = layout_area(screen)   # the same spot on every system
                 # Center X
                 x = geo.x() + (geo.width() - self.width()) // 2
                 # Bottom Y (with some padding)

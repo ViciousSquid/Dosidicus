@@ -76,9 +76,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         self.setWindowTitle("Brain Tool")
 
-        # Get screen resolution and available geometry (excluding taskbars/docks)
         screen = QtWidgets.QApplication.primaryScreen()
-        screen_geometry = screen.availableGeometry() # Use availableGeometry for usable screen space
 
         # Opening size, in absolute pixels (no DisplayScaling). Override either
         # of these in config.ini under [Display] rather than editing the source.
@@ -118,9 +116,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Position window properly in the top-right corner of the *available* screen geometry
         # x-coordinate: right edge of available geometry minus window width, then shift left by 200 pixels
-        x_pos = screen_geometry.right() - final_width - 100 # Shift left by subtracting 1and using final_width
-        # y-coordinate: top edge of available geometry
-        y_pos = screen_geometry.top() # Use top of available geometry
+        # Top right of the area the game lays its windows out in, 100 pixels
+        # in from the edge: the same spot on every system
+        # (desktop_style.layout_area), not wherever this system's bars leave.
+        from .desktop_style import layout_area
+        area = layout_area(screen)
+        x_pos = max(area.left(), area.right() - final_width - 100)
+        y_pos = area.top()
 
         self.move(x_pos, y_pos)
 
@@ -144,11 +146,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # and do not shrink with it, so never smaller than they need.
         if ratio > 1.0:
             hint = self.sizeHint()
-            width = min(max(final_width, hint.width()), screen_geometry.width())
-            height = min(max(final_height, hint.height()), screen_geometry.height())
+            width = min(max(final_width, hint.width()), usable_width)
+            height = min(max(final_height, hint.height()), usable_height)
             if (width, height) != (final_width, final_height):
                 self.resize(width, height)
-                self.move(screen_geometry.right() - width - 100, screen_geometry.top())
+                self.move(max(area.left(), area.right() - width - 100), area.top())
 
         # Set up timers
         self.init_timers()

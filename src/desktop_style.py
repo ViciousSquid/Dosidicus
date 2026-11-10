@@ -15,8 +15,8 @@ different size and shape on every machine. Here the game brings its own:
            the whole window is scaled, not just the text.
   STYLE    Qt's Fusion style with a fixed light palette, whatever the system
            theme. Dialog buttons in one order, menus in the window.
-  WINDOWS  Sized from the screen's size, never from what the taskbar, dock or
-           panel happens to leave.
+  WINDOWS  Sized and placed from the screen's size, never from what the
+           taskbar, dock or panel happens to leave (layout_area).
 
 What stays the system's: the window frame and title bar (they are drawn by
 the system, not the game); an emoji the game itself does not use, typed by a
@@ -585,6 +585,30 @@ def usable_size(screen):
     return width, max(240, height - SYSTEM_CHROME)
 
 
+#: Kept clear above the windows the game places: lower than any system's
+#: menu bar or panel, so a window put here is not pushed somewhere else.
+TOP_INSET = 40
+
+
+def layout_area(screen):
+    """The part of the screen the game lays its windows out in, as a QRect -
+    the same rectangle on every system for the same screen.
+
+    Each system keeps a different strip of the screen for itself (a taskbar
+    at the bottom, a menu bar at the top, a dock at the side) and reports
+    what is left; placed from that, the same window landed in a different
+    spot on each. This is the screen itself, less one fixed strip at the top
+    and one at the bottom that between them clear all of those.
+    """
+    width, height, _ratio = screen_size(screen)
+    try:
+        origin = screen.geometry().topLeft()
+        left, top = origin.x(), origin.y()
+    except Exception:
+        left, top = 0, 0
+    return QtCore.QRect(left, top + TOP_INSET, width, max(240, height - SYSTEM_CHROME))
+
+
 def describe(app):
     """What is actually in force - for a screenshot's notes and the tests."""
     font = app.font()
@@ -609,5 +633,5 @@ def describe(app):
 
 __all__ = ['UI_FONT', 'MONO_FONT', 'EMOJI_FONT', 'LINE_EMOJI_FONT', 'UI_FONT_SIZE', 'prepare_qt', 'install_style',
            'load_fonts', 'ui_font', 'light_palette', 'screen_size', 'reported_size',
-           'usable_size',
+           'usable_size', 'layout_area', 'TOP_INSET',
            'describe', 'GameStyle', 'font_directory']

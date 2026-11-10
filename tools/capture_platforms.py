@@ -158,6 +158,15 @@ def capture(output, label, brain_size=None):
                 subprocess.run(['screencapture', '-x', target], timeout=30, check=False)
             elif app.platformName() in ('windows', 'xcb'):
                 app.primaryScreen().grabWindow(0).save(target)
+            elif app.platformName().startswith('wayland'):
+                # A Wayland program cannot look at the screen; the compositor's
+                # own screenshot tool can (weston, started with --debug).
+                before = set(output.glob('wayland-screenshot-*.png'))
+                subprocess.run(['weston-screenshooter'], cwd=str(output), timeout=30,
+                               check=False)
+                taken = sorted(set(output.glob('wayland-screenshot-*.png')) - before)
+                if taken:
+                    taken[-1].replace(target)
         except Exception as exc:                    # noqa: BLE001
             notes['problems'].append(f'screen: {exc!r}')
         notes['screen_captured'] = os.path.exists(target)
@@ -179,23 +188,27 @@ def capture(output, label, brain_size=None):
             if time.monotonic() - started >= RUN_SECONDS:
                 state['step'] = 1
         elif number == 1:
-            if not brain_window.isVisible():
-                brain_window.show()
+            # The windows a player gets, opened by the game itself and left
+            # exactly where it puts them: the tank, the Brain Tool and the
+            # decorations (MainWindow.open_initial_windows), and Statistics.
+            window.open_initial_windows()
+            if ui.statistics_window is None or not ui.statistics_window.isVisible():
+                ui.toggle_statistics_window()
+            state['step'] = 1.5
+        elif number == 1.5 and wait(4.0):
+            placed = {'tank': window, 'brain_tool': brain_window,
+                      'statistics': ui.statistics_window,
+                      'decorations': getattr(ui, 'decoration_window', None)}
+            notes['layout'] = {
+                name: [shown.pos().x(), shown.pos().y(), shown.width(), shown.height()]
+                for name, shown in placed.items() if shown is not None and shown.isVisible()}
+            whole_screen()                          # the layout, as the game made it
             if brain_size:                          # a size every runner's screen can hold
                 brain_window.resize(*brain_size)
                 notes['brain_resized_to'] = list(brain_size)
-            if ui.statistics_window is None or not ui.statistics_window.isVisible():
-                ui.toggle_statistics_window()
             journey = getattr(ui, 'journey_window', None)
             if journey is None or not journey.isVisible():
                 ui.toggle_journey_window()
-            # Side by side for the picture of the whole screen.
-            window.move(20, 40)
-            brain_window.move(window.width() + 60, 40)
-            ui.journey_window.move(20, window.height() + 120)
-            ui.statistics_window.move(20 + ui.journey_window.width() + 30, window.height() + 120)
-            for shown in (ui.statistics_window, ui.journey_window):
-                shown.raise_()
             state['step'] = 2
         elif number == 2 and wait(4.0):
             save('main', window)
@@ -206,7 +219,6 @@ def capture(output, label, brain_size=None):
                 'brain': [brain_window.width(), brain_window.height()],
                 'statistics': [ui.statistics_window.width(), ui.statistics_window.height()],
                 'journey': [ui.journey_window.width(), ui.journey_window.height()]}
-            whole_screen()
             state['step'] = 3
         elif number == 3:                           # the Brain Tool, tab by tab
             tabs = brain_window.tabs
@@ -344,8 +356,16 @@ def compare(folders, report=None):
                     continue
                 difference = numpy.asarray(ImageChops.difference(first, second).convert('L'))
                 pixels.append(f'{name} {100.0 * float((difference > 24).mean()):.1f}%')
-        if not text_same or not sizes_same or same != total:
+        placed_same = notes.get('layout') == first_notes.get('layout')
+        if not text_same or not sizes_same or same != total or not placed_same:
             agree = False
+        if not placed_same:
+            for name in sorted(set(first_notes.get('layout') or {}) | set(notes.get('layout') or {})):
+                here = (first_notes.get('layout') or {}).get(name)
+                there = (notes.get('layout') or {}).get(name)
+                if here != there:
+                    details.append(f'- {label} / where the {name} window is put: {here} on '
+                                   f'{first_label}, {there} on {label}')
         if not sizes_same:
             for name in sorted(set(first_notes['shots']) | set(notes['shots'])):
                 here, there = first_notes['shots'].get(name), notes['shots'].get(name)
@@ -421,7 +441,21 @@ def publish(folders, target):
         lines += ['### The whole screen, with the system\'s own window frames', '']
         for label in screens:
             lines += [f'**{label}**', '', f'![The whole screen on {label}]({label}/screen.png)', '']
-    lines += ['## How big the squid is', '',
+    names = ('tank', 'brain_tool', 'statistics', 'decorations')
+    lines += ['## Where the game puts its windows', '',
+              'Opened by the game itself and left where it put them: left, top, width, height '
+              'on the screen. The picture of the whole screen for each system is further down.',
+              '', '| System | ' + ' | '.join(name.replace('_', ' ').capitalize() for name in names)
+              + ' |', '|---|' + '---|' * len(names)]
+    for label, notes in labels:
+        placed = notes.get('layout') or {}
+        lines.append(f'| {label} | ' + ' | '.join(
+            ', '.join(str(v) for v in placed[name]) if name in placed else 'not shown'
+            for name in names) + ' |')
+    lines += ['', 'A Wayland compositor decides where a window goes and does not tell the '
+              'program, so there the game can ask for a size but not a place, and reports '
+              '0, 0 for all of them.', '',
+              '## How big the squid is', '',
               '| System | Screen laid out for | Tank window | Squid | Share of the window\'s '
               'width | Tank scale |', '|---|---|---|---|---|---|']
     for label, notes in labels:

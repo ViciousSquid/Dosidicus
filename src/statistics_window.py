@@ -122,7 +122,12 @@ class StatisticsWindow(QtWidgets.QWidget):
 
         self.setWindowTitle(self.loc.get("statistics"))
         self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
-        self.move(0, 0)
+        # Top left of the area the game lays its windows out in: the same
+        # spot on every system. (At 0, 0 a Mac moved it out from under its
+        # menu bar, and the others did not.)
+        from .desktop_style import layout_area
+        area = layout_area(screen)
+        self.move(area.left(), area.top())
 
         # ---------------- score state ---------------------------------
         self.score         = 0

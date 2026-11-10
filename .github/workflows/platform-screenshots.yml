@@ -87,6 +87,21 @@ jobs:
         if: matrix.label == 'windows'
         run: python tools/capture_platforms.py captured --brain-size 1000x620 --label windows
 
+      - name: A 1920x1080 screen if this Mac will give one
+        if: matrix.label == 'macos'
+        run: |
+          # The runner's screen is 1024x768, and macOS will not open a window
+          # larger than the screen. Ask for 1080p; carry on either way.
+          system_profiler SPDisplaysDataType | grep -i -E "resolution|display" || true
+          brew install displayplacer >/dev/null 2>&1 || true
+          if command -v displayplacer >/dev/null; then
+            displayplacer list | grep -i -E "persistent screen id|mode [0-9]+: res:(1920x1080|1024x768)" | head -12 || true
+            SCREEN="$(displayplacer list | awk '/Persistent screen id:/ {print $4; exit}')"
+            displayplacer "id:$SCREEN res:1920x1080 scaling:off origin:(0,0) degree:0" || true
+            sleep 2
+          fi
+          system_profiler SPDisplaysDataType | grep -i resolution || true
+
       - name: Photograph the game (macOS)
         if: matrix.label == 'macos'
         run: python tools/capture_platforms.py captured --brain-size 1000x620 --label macos
@@ -104,7 +119,9 @@ jobs:
         run: |
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
           mkdir -p -m 700 "$XDG_RUNTIME_DIR"
-          weston --backend=headless --width=1920 --height=1080 \
+          # --debug lets weston's own screenshot tool look at the screen (a
+          # Wayland program cannot); pixman actually draws it.
+          weston --backend=headless --renderer=pixman --debug --width=1920 --height=1080 \
             --socket=wayland-capture > weston.log 2>&1 &
           for i in $(seq 1 30); do
             [ -S "$XDG_RUNTIME_DIR/wayland-capture" ] && break

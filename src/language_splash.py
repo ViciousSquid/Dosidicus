@@ -145,7 +145,8 @@ def centre_on(window: QtWidgets.QWidget, over: Optional[QtWidgets.QWidget] = Non
         screen = QtWidgets.QApplication.primaryScreen()
         if screen is None:
             return
-        area = screen.availableGeometry()
+        from .desktop_style import layout_area
+        area = layout_area(screen)          # the same spot on every system
     frame = window.frameGeometry()
     frame.moveCenter(area.center())
     window.move(frame.topLeft())

@@ -156,6 +156,30 @@ def test_no_window_is_sized_from_what_the_systems_bars_leave():
         assert not sizing.search(text), name
 
 
+def test_every_window_is_placed_in_the_same_spot_on_every_system():
+    """Each system keeps a different strip of the screen for itself and
+    reports what is left. Placed from that, the same window landed somewhere
+    different on each. The game places its windows from one rectangle that is
+    the same everywhere for the same screen."""
+    screen = _APP.primaryScreen()
+    os.environ[desktop_style.SCREEN_OVERRIDE] = '1920x1080'
+    try:
+        area = desktop_style.layout_area(screen)
+        assert (area.left(), area.top(), area.width(), area.height()) == (0, 40, 1920, 980)
+        assert area.top() == desktop_style.TOP_INSET            # below any menu bar or panel
+        assert 1080 - (area.top() + area.height()) == 60        # above any taskbar or dock
+    finally:
+        del os.environ[desktop_style.SCREEN_OVERRIDE]
+    # Nothing that places a window asks the system what it has left free.
+    for name in ('main.py', 'src/brain_tool.py', 'src/statistics_window.py',
+                 'src/preferences.py', 'src/language_splash.py', 'src/brain_neuron_outputs.py'):
+        text = (ROOT / name).read_text(encoding='utf-8')
+        assert 'availableGeometry' not in text, name
+        assert 'layout_area' in text, name
+    # Statistics no longer sits at 0, 0, where a Mac moved it and the others did not.
+    assert 'self.move(0, 0)' not in (ROOT / 'src' / 'statistics_window.py').read_text()
+
+
 def test_no_other_font_family_is_written_into_the_game():
     family = re.compile(r"""QFont\(\s*["'](Arial|Verdana|Helvetica|Courier New|Consolas|Segoe UI)["']"""
                         r"""|font-family:\s*(Arial|sans-serif|monospace|'Consolas'|'Times)""")

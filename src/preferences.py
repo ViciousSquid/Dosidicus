@@ -37,7 +37,6 @@ class PreferencesWindow(QtWidgets.QDialog):
         
         # Ensure scaling is initialized based on the screen this window is on
         screen = QtWidgets.QApplication.primaryScreen()
-        screen_geometry = screen.availableGeometry()
         self.config = ConfigManager()
         
         # The game's scale is set once, from the screen, when the tank is
@@ -54,8 +53,10 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.resize(w, h)
         
         # Center on screen
-        x = (screen_geometry.width() - self.width()) // 2
-        y = (screen_geometry.height() - self.height()) // 2
+        from .desktop_style import layout_area
+        area = layout_area(screen)          # the same spot on every system
+        x = area.left() + (area.width() - self.width()) // 2
+        y = area.top() + max(0, (area.height() - self.height()) // 2)
         self.move(x, y)
         
         # Load config manager (use same instance if available)
