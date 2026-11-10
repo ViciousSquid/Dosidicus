@@ -184,7 +184,7 @@ class GameStyle(QtWidgets.QProxyStyle):
         # margin, tab and check box came out a third larger. Its own numbers,
         # as it gives them at 96/96, written out - so they are the same
         # numbers everywhere.
-        self._metrics = {getattr(hint, name): value for name, value in METRICS.items()
+        self._metrics_table = {getattr(hint, name): value for name, value in METRICS.items()
                          if hasattr(hint, name)}
         self._message_icons = (hint.SP_MessageBoxInformation, hint.SP_MessageBoxWarning,
                                hint.SP_MessageBoxCritical, hint.SP_MessageBoxQuestion)
@@ -196,7 +196,7 @@ class GameStyle(QtWidgets.QProxyStyle):
         return super().styleHint(hint, option, widget, returnData)
 
     def pixelMetric(self, metric, option=None, widget=None):
-        fixed = self._metrics.get(metric)
+        fixed = self._metrics_table.get(metric)
         if fixed is not None:
             return fixed
         return super().pixelMetric(metric, option, widget)
@@ -379,6 +379,77 @@ def keep_message_box_titles():
     box._dosidicus_titles_kept = True
 
 
+class MacGameStyle(GameStyle):
+    """GameStyle on a Mac, where Fusion would otherwise draw a third larger.
+
+    Fusion scales the sizes written into its code by (the DPI of the text it
+    is given) / (the system's base DPI). On a Mac the base is 72 and the
+    game's text is at 96, so every such size came out 4/3 as big: a menu 12
+    pixels wider than the same menu on Windows. The table in GameStyle covers
+    the sizes Fusion can be asked for; the rest are inside its measuring and
+    drawing code. So each time Fusion is asked to measure or draw, the text
+    measurements it is handed are swapped for the same measurements made at
+    72 DPI - the same letters at the same pixel size, so nothing about the
+    text changes, and the ratio Fusion multiplies by is 1.
+    """
+
+    def __init__(self):
+        super().__init__()
+        device = QtGui.QImage(1, 1, QtGui.QImage.Format_RGB32)
+        per_metre = int(round(72 / 0.0254))
+        device.setDotsPerMeterX(per_metre)
+        device.setDotsPerMeterY(per_metre)
+        self._device = device                # a paint device at 72 DPI
+        self._metrics = {}
+
+    def _at_base_dpi(self, option, widget):
+        """Swap the option's text measurements for the same ones at 72 DPI."""
+        if option is None or widget is None:
+            return option
+        try:
+            font = widget.font()
+            key = font.key()
+            metrics = self._metrics.get(key)
+            if metrics is None:
+                same = QtGui.QFont(font)
+                if same.pixelSize() <= 0 and same.pointSizeF() > 0:
+                    # As many pixels at 72 DPI as it has at 96.
+                    same.setPointSizeF(same.pointSizeF() * FONT_DPI / 72.0)
+                metrics = QtGui.QFontMetrics(same, self._device)
+                if len(self._metrics) > 256:
+                    self._metrics.clear()
+                self._metrics[key] = metrics
+            option.fontMetrics = metrics
+        except Exception:
+            pass
+        return option
+
+    def sizeFromContents(self, kind, option, size, widget=None):
+        return super().sizeFromContents(kind, self._at_base_dpi(option, widget), size, widget)
+
+    def subElementRect(self, element, option, widget=None):
+        return super().subElementRect(element, self._at_base_dpi(option, widget), widget)
+
+    def subControlRect(self, control, option, sub, widget=None):
+        return super().subControlRect(control, self._at_base_dpi(option, widget), sub, widget)
+
+    def drawControl(self, element, option, painter, widget=None):
+        super().drawControl(element, self._at_base_dpi(option, widget), painter, widget)
+
+    def drawPrimitive(self, element, option, painter, widget=None):
+        super().drawPrimitive(element, self._at_base_dpi(option, widget), painter, widget)
+
+    def drawComplexControl(self, control, option, painter, widget=None):
+        super().drawComplexControl(control, self._at_base_dpi(option, widget), painter, widget)
+
+    def pixelMetric(self, metric, option=None, widget=None):
+        fixed = self._metrics_table.get(metric)
+        if fixed is not None:
+            return fixed
+        return QtWidgets.QProxyStyle.pixelMetric(
+            self, metric, self._at_base_dpi(option, widget), widget)
+
+
 def light_palette() -> QtGui.QPalette:
     palette = QtGui.QPalette()
     role = QtGui.QPalette
@@ -453,7 +524,7 @@ def install_style(app):
     for family, others in ((UI_FONT, [MONO_FONT, EMOJI_FONT]), (MONO_FONT, [EMOJI_FONT])):
         QtGui.QFont.removeSubstitutions(family)         # installing twice adds none twice
         QtGui.QFont.insertSubstitutions(family, others)
-    style = GameStyle()
+    style = MacGameStyle() if sys.platform == 'darwin' else GameStyle()
     app.setStyle(style)
     app._dosidicus_style = style            # the application does not keep it alive
     app.setPalette(light_palette())

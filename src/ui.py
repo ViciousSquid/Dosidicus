@@ -1541,7 +1541,7 @@ class Ui:
                         self.tamagotchi_logic is not None and
                         hasattr(self.tamagotchi_logic, 'statistics_window') and
                         self.tamagotchi_logic.statistics_window):
-                            self.tamagotchi_logic.statistics_window.award(10)
+                            self.tamagotchi_logic.statistics_window.award(10, at=item)
                 event.accept()
 
     def keyPressEvent(self, event):
@@ -1572,8 +1572,8 @@ class Ui:
                 if is_poop:
                     if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and \
                        hasattr(self.tamagotchi_logic, 'statistics_window') and self.tamagotchi_logic.statistics_window:
-                        self.tamagotchi_logic.statistics_window.award(5)
-                    self.show_floating_score(item, "+5")
+                        # The points rise from the poop that was cleared away.
+                        self.tamagotchi_logic.statistics_window.award(5, at=item)
                 if hasattr(item, '_decoration_id'):
                     self.awarded_decorations.discard(item._decoration_id)
                 self.scene.removeItem(item)

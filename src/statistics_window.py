@@ -293,7 +293,18 @@ class StatisticsWindow(QtWidgets.QWidget):
             self.update_statistics()
 
     # -------------- external award -----------------------------------
-    def award(self, base):
+    #: Points gained float up in green, points lost in red.
+    GAIN_COLOUR = (50, 205, 50)
+    LOSS_COLOUR = (220, 40, 40)
+
+    def award(self, base, at=None):
+        """Change the score by `base` points (less for a loss), times the
+        food combo. Every change to the score comes through here - so here
+        is where the player is shown it: the number floats up out of the
+        squid, green for points gained and red for points lost. `at` is the
+        thing the points were for, where that is not the squid itself (a
+        piece of poop cleared away): the number rises from there instead."""
+        before = self.score
         now = time.time()
         # food chaining
         if base == 100:
@@ -310,6 +321,27 @@ class StatisticsWindow(QtWidgets.QWidget):
         total = int(base * self.combo_level)
         self.score += total
         self.score = max(0, min(9999, self.score))
+        self._float_change(self.score - before, at)
+
+    def _float_change(self, change, at=None):
+        """Float what the score actually changed by ("+75", "-50") up from
+        the squid - or from `at`. Nothing if the score did not move, or the
+        squid is not in the tank to rise from."""
+        if not change:
+            return
+        squid = self.squid
+        ui = getattr(squid, 'ui', None)
+        show = getattr(ui, 'show_floating_score', None)
+        if not callable(show):
+            return
+        item = at if at is not None else getattr(squid, 'squid_item', None)
+        try:
+            if item is None or item.scene() is None or not item.isVisible():
+                return
+            colour = QtGui.QColor(*(self.GAIN_COLOUR if change > 0 else self.LOSS_COLOUR))
+            show(item, f"{change:+d}", colour)
+        except Exception:                           # a number failing to float costs no points
+            pass
 
     def set_score(self, value):
         """Directly set the score value (used for loading saves)"""

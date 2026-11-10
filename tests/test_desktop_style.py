@@ -14,7 +14,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from PyQt5 import QtGui, QtWidgets                                  # noqa: E402
+from PyQt5 import QtCore, QtGui, QtWidgets                          # noqa: E402
 
 from src import desktop_style                                       # noqa: E402
 
@@ -326,3 +326,36 @@ def test_a_menu_names_its_shortcuts_in_the_same_words_on_every_system():
     text = (ROOT / 'src' / 'desktop_style.py').read_text(encoding='utf-8')
     assert 'AA_MacDontSwapCtrlAndMeta, True' in text
     assert desktop_style.LayoutRules.SPELL_OUT == (sys.platform == 'darwin')
+
+
+def test_on_a_mac_fusion_is_handed_text_measured_at_its_own_base_dpi():
+    """Fusion multiplies the sizes inside its code by text DPI / 72 on a Mac.
+    The Mac style hands it the same text measured at 72, so the ratio is 1.
+    Run here against the real Fusion: what it measures and draws must come
+    out exactly as it does without the swap, since here the ratio is 1 anyway
+    - the swap must change nothing but the DPI it is measured at."""
+    before = _installed()
+    try:
+        mac, plain = desktop_style.MacGameStyle(), desktop_style.GameStyle()
+        _APP._mac_style_for_test = (mac, plain)
+        button = QtWidgets.QPushButton('Load a custom brain')
+        option = QtWidgets.QStyleOptionButton()
+        option.initFrom(button)
+        option.text = button.text()
+        real = QtGui.QFontMetrics(button.font())
+        swapped = mac._at_base_dpi(option, button).fontMetrics
+        assert swapped.fontDpi() == 72                       # what Fusion divides by 72
+        # ...and the same letters at the same size, to the pixel.
+        for text in ('Load a custom brain', 'Ctrl+Shift+B', 'Functional Neurons: 0'):
+            assert swapped.horizontalAdvance(text) == real.horizontalAdvance(text)
+        assert (swapped.height(), swapped.ascent()) == (real.height(), real.ascent())
+        assert mac._at_base_dpi(None, button) is None and mac._at_base_dpi(option, None) is option
+        assert mac.pixelMetric(QtWidgets.QStyle.PM_ScrollBarExtent) == 14
+        size = QtCore.QSize(real.horizontalAdvance(option.text), real.height())
+        kind = QtWidgets.QStyle.CT_PushButton
+        other = QtWidgets.QStyleOptionButton(option)
+        other.fontMetrics = real
+        assert mac.sizeFromContents(kind, option, size, button) \
+            == plain.sizeFromContents(kind, other, size, button)
+    finally:
+        _restore(before)
