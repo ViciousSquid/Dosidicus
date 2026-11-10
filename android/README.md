@@ -58,6 +58,7 @@ could be driven headless — the Kivy layer is just one consumer of it.
 | `plugins/achievements`                                  | `achievements.py`| The same 57 achievements (ids, tiers, points, targets). |
 | `plugins/sleep_replay`                                  | `brain.py` + `memory.py` | Co-activation traces while awake; on sleep, replay strengthens links + promotes memories. |
 | `plugins/multiplayer` (LAN)                             | `ui/nearby*.py`  | Reworked for phones as local peer-to-peer squid *visits* over Nearby Connections. |
+| `plugins/multiplayer` (network, friend codes)           | `engine/tank_link.py`, `ui/friends_screen.py` | Not reworked: the desktop's own network code. A phone's squid and a computer's visit each other's tanks. |
 | `brain_widget.py` / brain tool tabs                     | `ui/brain_screen.py`, `ui/brainview.py`, `ui/*_cards.py` | The live network + Learning/Memory/Decisions/Stats/Personality/About tabs. |
 
 ## What's in the app
@@ -146,6 +147,19 @@ squid `.zip` (yours, a friend's, or one exported from the desktop app). Mobile
 exports round-trip exactly. Desktop brain structure and cognitive history are preserved;
 decorations remain specific to each platform. Brain-only JSON import/export is
 also available from the menu and works with the desktop Network tab and Designer.
+
+## Friends: visits over the internet, to phones and computers alike
+
+**Menu > Friends (internet play)** puts the phone's tank on the same network
+the desktop game uses, with the desktop's own code. Press **Get my code**,
+send the 15-character code to a friend, type theirs into **Add a friend** and
+press **Connect** - they do the same, on a phone or on a computer. Once the
+tanks are linked each squid decides for itself whether to visit, exactly as on
+desktop. On the same Wi-Fi as a desktop game the tanks hear each other without
+any code. The steps and troubleshooting are in
+[`plugins/multiplayer/README`](../plugins/multiplayer/README); the engine side
+is `engine/tank_link.py`, tested against a whole desktop game by
+`tools/test_phone_desktop_visit.py`.
 
 ## Local peer-to-peer visits (Nearby Connections)
 

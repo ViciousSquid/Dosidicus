@@ -1060,11 +1060,34 @@ and a test holds it to `FORBIDDEN_KEYS`. `heartbeat` carries its position.
 | Packet allow-list (not wired in) | `plugins/multiplayer/packet_validator.py` |
 | Tests | `tests/test_peer_discovery.py`, `tests/test_encounter_stage0.py`, `tests/test_remote_mind_stage1.py`, `tests/test_reproduction_lifecycle.py`, `tests/test_rock_throwing.py`, `tests/test_protocol_hardening.py`; LAN harnesses in `tools/test_lan_round_trip.py`, `tools/test_rock_multiplayer.py`, `tools/test_venture_multiplayer.py` |
 
-### Android (Nearby) transport
+### Android
 
-The Android build reuses the same payload classes (section 4) over one
-consented Google Nearby link instead of multicast
-(`android/dosidicus_mobile/engine/peer_visit.py`).
+A phone speaks this protocol exactly as a desktop does: the same
+`NetworkNode`, the same envelope and compression, the same friend codes, the
+same `ConsentPolicy`, `HostBody` and `VisitorMind`. Sections 1 to 7 describe a
+phone's tank as they describe a desktop's, and a visit between the two needs
+nothing that a visit between two desktops does not
+(`android/dosidicus_mobile/engine/tank_link.py`; tested against a whole
+desktop game by `tools/test_phone_desktop_visit.py`). What differs is small:
+
+- A phone sends `heartbeat`, `squid_exit`, `visit_response`, the remote-mind
+  messages and `player_leave`. It sends no `object_sync` and ignores those it
+  hears: a host places a visitor's drawing from its body (5.6), not from its
+  home's world sync.
+- Its squid reaches the side of its tank 30 px in (`Squid.SIDE_MARGIN`), and
+  that counts as reaching it; `squid_exit.position` is in its own tank's
+  coordinates, with `window_width`/`window_height` that tank's size.
+- A visitor is brought in 80 px from the side opposite the one it left by, at
+  the same proportion of the tank's height it left at.
+- Each visitor has its own `HostBody`, so frame `seq` counts per visitor.
+
+#### The Nearby transport
+
+Two phones side by side can also be linked without any network, over one
+consented Google Nearby link (`android/dosidicus_mobile/engine/peer_visit.py`,
+`ui/nearby.py`). The payload classes are the same (section 4); the envelope
+and the opening differ.
+
 Its envelope is `{"protocol": 4, "kind": <type>, "payload": {...}}`: no node
 id, no timestamp, no compression, serialised with `allow_nan=False`. Packets
 over 16384 bytes are ignored, a packet whose `protocol` differs is dropped,

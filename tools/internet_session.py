@@ -59,6 +59,15 @@ PLAYERS = (('Ziggy', 'ADVENTUROUS', None), ('Inky', 'TIMID', (120, 170, 255)),
            ('Pesto', 'GREEDY', (255, 105, 180)), ('Bolt', 'ENERGETIC', (120, 220, 140)))
 #: The screen the games lay themselves out for (they draw offscreen).
 SCREEN = '2560x1440'
+#: The homes whose player is on a phone: the Android app itself, its own
+#: screens and engine, behind its own router like everyone else. The rest
+#: play the desktop game. The platform is not meant to matter.
+PHONES = (3,)
+PHONE_SCREEN = (440, 900)
+
+
+#: The desktop home whose Friends window is pictured step by step.
+GUIDE_HOME = 1
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +212,7 @@ def worker(output, number):
                                     text=text, **more))
 
     def write():
-        data = {k: v for k, v in state.items() if k != 'plugin'}
+        data = {k: v for k, v in state.items() if k not in ('plugin', 'dialog')}
         temporary = folder / 'status.tmp'
         temporary.write_text(json.dumps(data, indent=1, default=str))
         temporary.replace(folder / 'status.json')
@@ -374,7 +383,21 @@ def worker(output, number):
                     node = plugin.network_node
                     state['node_id'] = node.node_id
                     state['private_address'] = f'{node.local_ip}:{node.port}'
+                    state['platform'] = 'desktop'
+                    if number == GUIDE_HOME:
+                        # The first desktop player's Friends window, as the
+                        # player sees it at each step (the connection guide).
+                        plugin.show_friends_dialog()
+                        state['dialog'] = plugin._friends_dialog
+                        app.processEvents()
+                        shot('friends-1-open', 'Plugins > Multiplayer > Friends: before asking '
+                             'for a code', state['dialog'])
                     state['friend_code'] = plugin.find_friend_code()
+                    if state.get('dialog') is not None:
+                        state['dialog'].refresh()
+                        app.processEvents()
+                        shot('friends-2-code', f"{name}'s friend code, after 'Get my code'",
+                             state['dialog'])
                     state['seen_from_outside_as'] = (
                         '%s:%s' % tuple(node.public_endpoint) if node.public_endpoint else None)
                     state['friend_code_note'] = plugin.friend_code_note()
@@ -387,10 +410,28 @@ def worker(output, number):
                 state['heard_before_codes'] = len(plugin._peers_last_heard)
                 codes = folder / 'codes.json'
                 if codes.exists():
-                    for friend, code in json.loads(codes.read_text()):
-                        ok, said = plugin.connect_to_friend(code)
+                    dialog = state.get('dialog')
+                    for index, (friend, code) in enumerate(json.loads(codes.read_text())):
+                        if dialog is not None:      # typed into the window, as a player does
+                            dialog.entry.setText(code)
+                            app.processEvents()
+                            if index == 0:
+                                shot('friends-3-typing', f"{name} types in {friend}'s code", dialog)
+                            dialog.add_friend()
+                            ok, said = True, dialog.status.text()
+                        else:
+                            ok, said = plugin.connect_to_friend(code)
                         event('entered', f"entered {friend}'s friend code {code}: {said}", ok=ok)
                     state['stage'] = 'linked'
+                    state['linked_at'] = time.monotonic()
+            dialog = state.get('dialog')
+            if dialog is not None and state['stage'] == 'linked' \
+                    and time.monotonic() - state['linked_at'] > 4.0:
+                dialog.refresh()
+                app.processEvents()
+                shot('friends-4-connected', f"{name}'s linked tanks, a few seconds later", dialog)
+                dialog.hide()
+                state['dialog'] = None
             pending = state.get('pending_visitor_shot')
             if pending and time.monotonic() >= pending:
                 state['pending_visitor_shot'] = None
@@ -430,6 +471,285 @@ def worker(output, number):
 # ---------------------------------------------------------------------------
 # The session
 # ---------------------------------------------------------------------------
+def phone_worker(output, number):
+    """One player on a phone: the Android app - its Kivy screens and its
+    engine - in a phone-sized display, behind this home's router. The script
+    presses what a player would: Menu, Friends, Get my code, Connect."""
+    name, personality_name, colour = PLAYERS[number - 1]
+    folder = output / f'home{number}'
+    shots = output / 'shots'
+    folder.mkdir(parents=True, exist_ok=True)
+    shots.mkdir(parents=True, exist_ok=True)
+    os.environ['KIVY_HOME'] = str(folder / 'kivy')
+    os.environ.setdefault('KIVY_NO_ARGS', '1')
+    sys.path.insert(0, str(ROOT / 'android'))
+    sys.path.insert(0, str(ROOT))
+    from kivy.config import Config
+    Config.set('graphics', 'width', str(PHONE_SCREEN[0]))
+    Config.set('graphics', 'height', str(PHONE_SCREEN[1]))
+    Config.set('input', 'mouse', 'mouse,disable_multitouch')
+    from kivy.clock import Clock
+    from kivy.core.window import Window
+    from dosidicus_mobile.ui.app import DosidicusApp, TANK_SIZE
+    from dosidicus_mobile.ui.nearby_screen import NOTICE_FLAG
+    from dosidicus_mobile.ui.friends_screen import FriendsView, NO_CODE_YET
+    from dosidicus_mobile.ui.menu import open_menu
+    from dosidicus_mobile.ui import tank_network
+    from dosidicus_mobile.engine import Simulation, Squid
+    from dosidicus_mobile.engine.personality import Personality
+
+    data_dir = folder / 'data'
+    data_dir.mkdir(exist_ok=True)
+    (data_dir / NOTICE_FLAG).write_text('1')            # this player has said yes
+    first = Simulation(tank_size=TANK_SIZE,
+                       squid=Squid(Personality.from_value(personality_name.lower()),
+                                   tank_size=TANK_SIZE))
+    first.squid.name = name
+    if colour:
+        first.squid.color_tint = tuple(c / 255.0 for c in colour)
+    first.save(str(data_dir / 'squid_save.zip'))
+
+    class Phone(DosidicusApp):
+        link_stun_server = f'{STUN_ADDRESS}:{STUN_PORT}'
+
+        @property
+        def user_data_dir(self):
+            return str(data_dir)
+
+    app = Phone()
+    started = time.monotonic()
+    state = {'home': number, 'name': name, 'personality': personality_name.lower(),
+             'platform': 'phone', 'colour': colour, 'stage': 'starting', 'events': [],
+             'trace': [], 'shots': {}}
+    seen = {'neurons': None, 'heard': set(), 'links': set(), 'visitors': {}, 'away': False,
+            'thoughts': 0, 'beliefs': set(), 'second': -1, 'shot_minute': -1}
+    ui = {}
+
+    def event(kind, text, **more):
+        state['events'].append(dict(at=time.time(), home=number, who=name, kind=kind,
+                                    text=text, **more))
+
+    def write():
+        temporary = folder / 'status.tmp'
+        temporary.write_text(json.dumps(state, indent=1, default=str))
+        temporary.replace(folder / 'status.json')
+
+    def shot(tag, caption):
+        key = f'home{number}-{tag}'
+        if key in state['shots']:
+            return
+        made = Window.screenshot(name=str(shots / f'{key}.png'))
+        if made and Path(made).exists() and Path(made) != shots / f'{key}.png':
+            Path(made).rename(shots / f'{key}.png')
+        state['shots'][key] = {'at': time.time(), 'caption': caption}
+
+    def after(name_, seconds):
+        ui.setdefault(name_, time.monotonic())
+        return time.monotonic() - ui[name_] >= seconds
+
+    def watch(link):
+        sim = app.sim
+        squid, b, node = sim.squid, sim.squid.brain, link.node
+        for (ip, port), peer in list(node.direct_peers.items()):
+            if peer.get('last_heard') and (ip, port) not in seen['links']:
+                seen['links'].add((ip, port))
+                event('link', f"hears the tank at {ip}:{port} through its router"
+                      + (" (they joined with this tank's code)" if peer.get('theirs') else ''))
+        heard = set(link.peers_last_heard)
+        for node_id in sorted(heard - seen['heard']):
+            event('heard', 'now knows of another aquarium', node_id=node_id)
+        seen['heard'] = heard
+        neurons = set(b.positions)
+        if seen['neurons'] is not None:
+            for neuron in sorted(neurons - seen['neurons']):
+                why = ''
+                try:
+                    from src import social_knowledge
+                    why = social_knowledge._born_because(b, neuron) or ''
+                except Exception:                       # noqa: BLE001
+                    pass
+                event('grew', f'grew the neuron {neuron}' + (f' - {why}' if why else ''),
+                      neuron=neuron)
+            for neuron in sorted(seen['neurons'] - neurons):
+                event('lost', f'lost the neuron {neuron}', neuron=neuron)
+        seen['neurons'] = neurons
+        away = link.away is not None
+        if away != seen['away']:
+            seen['away'] = away
+            if away:
+                event('left', 'swam out of its own tank to visit another', to_node=link.asked)
+                ui['empty_shot'] = time.monotonic() + 1.5
+            else:
+                event('home', 'came home')
+                ui['home_shot'] = time.monotonic() + 1.0
+        visitors = {uuid: visit.actor.identity.name
+                    for uuid, (_node, visit) in link.hosted.items() if visit.actor}
+        for uuid, visitor in visitors.items():
+            if uuid not in seen['visitors']:
+                event('arrival', f'{visitor} arrived in this tank', visitor=visitor,
+                      squid_in_tank=1 + len(visitors) - (1 if away else 0))
+                ui['visitor_shot'] = time.monotonic() + 2.5
+        for uuid, visitor in seen['visitors'].items():
+            if uuid not in visitors:
+                event('departure', f'{visitor} left this tank', visitor=visitor)
+        seen['visitors'] = visitors
+        thoughts = list(getattr(b, 'social_thoughts', None) or ())
+        for entry in thoughts[seen['thoughts']:]:
+            text = entry[1] if isinstance(entry, (tuple, list)) and len(entry) > 1 else str(entry)
+            event('thought', str(text))
+        seen['thoughts'] = len(thoughts)
+        try:
+            for belief in b.causal_learning.beliefs():
+                statement = str(belief.get('statement') or belief)
+                if statement not in seen['beliefs']:
+                    seen['beliefs'].add(statement)
+                    event('belief', f'has come to believe: {statement}')
+        except Exception:                               # noqa: BLE001
+            pass
+
+    def due(key):
+        at = ui.get(key)
+        if at and time.monotonic() >= at:
+            ui[key] = None
+            return True
+        return False
+
+    def drive(dt):
+        now = time.monotonic() - started
+        try:
+            sim = app.sim
+            squid = sim.squid
+            stage = state['stage']
+            view = ui.get('view')
+            if stage == 'starting' and now > 5:
+                state['uuid'] = str(squid.uuid)
+                shot('alone', f'{name}, a new {personality_name.lower()} hatchling, alone, '
+                              f'on a phone')
+                ui['menu'] = open_menu(app)
+                state['stage'] = 'menu'
+            elif stage == 'menu' and after('menu_open', 1.2):
+                shot('friends-0-menu', 'Menu > Friends (internet play)')
+                ui['menu'].dismiss()
+                view = ui['view'] = FriendsView(app)       # which puts the tank on the network
+                view.open()
+                state['stage'] = 'friends'
+            elif stage == 'friends' and after('friends_open', 1.5):
+                link = tank_network.link_of(app)
+                assert link is not None, 'the phone could not open its socket'
+                seen['neurons'] = set(squid.brain.positions)
+                state['node_id'] = link.node.node_id
+                state['private_address'] = f'{link.node.local_ip}:{link.node.port}'
+                shot('friends-1-open', 'Friends on the phone: before asking for a code')
+                view.get_code()                          # the button a player presses
+                state['stage'] = 'asking'
+            elif stage == 'asking' and after('asked', 1.0):
+                link = tank_network.link_of(app)
+                if (view.code.text != NO_CODE_YET and view._finding is None) or after('asked', 12.0):
+                    state['friend_code'] = link.friend_code()
+                    state['seen_from_outside_as'] = (
+                        '%s:%s' % tuple(link.node.public_endpoint)
+                        if link.node.public_endpoint else None)
+                    state['friend_code_note'] = link.friend_code_note()
+                    shot('friends-2-code', f"{name}'s friend code, after 'Get my code'")
+                    state['stage'] = 'has a friend code'
+                    write()
+            link = tank_network.link_of(app)
+            if link is None or 'friend_code' not in state:
+                return
+            watch(link)
+            if state['stage'] == 'has a friend code':
+                state['heard_before_codes'] = len(link.peers_last_heard)
+                codes = folder / 'codes.json'
+                if codes.exists():
+                    todo = ui.setdefault('codes', json.loads(codes.read_text()))
+                    if todo and 'typed' not in ui:
+                        view.entry.text = todo[0][1]     # typed in, as a player does
+                        ui['typed'] = time.monotonic()
+                    elif todo and time.monotonic() - ui['typed'] > 0.8:
+                        if not ui.get('typing_shot'):
+                            ui['typing_shot'] = True
+                            shot('friends-3-typing', f"{name} types in {todo[0][0]}'s code")
+                        friend, code = todo.pop(0)
+                        ok = view.add_friend()
+                        event('entered', f"entered {friend}'s friend code {code}: "
+                                         f"{view.message.text}", ok=ok)
+                        ui.pop('typed')
+                    elif not todo:
+                        state['stage'] = 'linked'
+                        ui['linked_at'] = time.monotonic()
+            if state['stage'] == 'linked' and view is not None \
+                    and time.monotonic() - ui['linked_at'] > 4.0:
+                view.refresh()
+                shot('friends-4-connected', f"{name}'s linked tanks, a few seconds later")
+                if time.monotonic() - ui['linked_at'] > 5.0:
+                    view.dismiss()
+                    ui['view'] = None
+            if due('visitor_shot') and seen['visitors']:
+                names = ', '.join(sorted(seen['visitors'].values()))
+                shot(f'visit-{len(state["shots"])}', f"{name}'s tank (a phone) with {names} in it")
+            if due('empty_shot'):
+                shot(f'empty-{len(state["shots"])}', f"{name}'s phone after it left: "
+                                                     f"{sim.visiting_text()}")
+            if due('home_shot'):
+                shot(f'home-{len(state["shots"])}', f'{name} home again')
+            if int(now) != seen['second']:
+                seen['second'] = int(now)
+                if int(now) % 2 == 0:
+                    state['trace'].append({
+                        'at': round(time.time(), 1), 'status': str(squid.status),
+                        'hunger': round(squid.hunger), 'anxiety': round(squid.anxiety),
+                        'happiness': round(squid.happiness), 'health': round(squid.health),
+                        'curiosity': round(squid.curiosity),
+                        'sleepiness': round(squid.sleepiness), 'away': seen['away'],
+                        'visitors': sorted(seen['visitors'].values()),
+                        'why_not_leaving': squid.why_not_venturing() if not seen['away'] else ''})
+                if state['stage'] == 'linked' and ui.get('view') is None \
+                        and int(now) // 60 != seen['shot_minute']:
+                    seen['shot_minute'] = int(now) // 60
+                    shot(f'minute-{int(now) // 60}',
+                         f"{name}'s tank, about minute {int(now) // 60}")
+                write()
+            if (output / 'stop').exists() and state['stage'] not in ('ending', 'done'):
+                state['stage'] = 'ending'
+                known = {}
+                try:
+                    from src import social_knowledge
+                    known = social_knowledge.knowledge(
+                        squid.brain, list(squid.memory.short_term) + list(squid.memory.long_term))
+                except Exception as exc:                # noqa: BLE001
+                    known = {'error': repr(exc)}
+                state['final'] = {
+                    'neurons': sorted(squid.brain.positions),
+                    'social_knowledge': known,
+                    'squid': {'hunger': round(squid.hunger), 'anxiety': round(squid.anxiety),
+                              'happiness': round(squid.happiness), 'health': round(squid.health)},
+                    'links': [{'address': f'{ip}:{port}', 'heard': bool(peer.get('last_heard')),
+                               'they_joined_with_my_code': bool(peer.get('theirs'))}
+                              for (ip, port), peer in link.node.direct_peers.items()],
+                    'packets_refused': link.node.packets_refused,
+                    'away_at_the_end': seen['away'],
+                }
+                shot('end', f"{name}'s tank at the end")
+                ui['ending_at'] = time.monotonic()
+                app._toggle_view()                       # its brain, as the phone shows it
+                write()
+            if state['stage'] == 'ending' and time.monotonic() - ui['ending_at'] > 3.0:
+                shot('brain', f"{name}'s brain at the end")
+                state['stage'] = 'done'
+                write()
+                app.stop()
+        except Exception as exc:                        # noqa: BLE001
+            import traceback
+            traceback.print_exc()
+            state['error'] = repr(exc)
+            write()
+            app.stop()
+
+    Clock.schedule_interval(drive, 0.25)
+    app.run()
+    return 1 if state.get('error') else 0
+
+
 def _status(output, number):
     try:
         return json.loads((output / f'home{number}' / 'status.json').read_text())
@@ -460,10 +780,13 @@ def run(output, homes, minutes):
         environment = dict(os.environ, QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1')
         for i in range(1, homes + 1):
             log = open(output / f'home{i}.log', 'w')
+            command = ['ip', 'netns', 'exec', f'{PREFIX}-h{i}']
+            if i in PHONES:             # a phone-sized display of its own
+                command += ['xvfb-run', '-a', '-s',
+                            f'-screen 0 {PHONE_SCREEN[0] + 160}x{PHONE_SCREEN[1] + 100}x24']
+            command += [sys.executable, __file__, str(output), '--player', str(i)]
             children.append((f'home{i}', subprocess.Popen(
-                ['ip', 'netns', 'exec', f'{PREFIX}-h{i}', sys.executable, __file__,
-                 str(output), '--player', str(i)],
-                stdout=log, stderr=subprocess.STDOUT, env=environment), log))
+                command, stdout=log, stderr=subprocess.STDOUT, env=environment), log))
         # Every game gets its friend code.
         deadline = time.time() + 120
         while time.time() < deadline:
@@ -478,12 +801,14 @@ def run(output, homes, minutes):
         for s in statuses:
             session['players'].append({
                 'home': s['home'], 'name': s['name'], 'personality': s['personality'],
+                'platform': s.get('platform', 'desktop'),
                 'colour': s.get('colour'),
                 'private_address': s['private_address'],
                 'seen_from_outside_as': s['seen_from_outside_as'],
                 'friend_code': s['friend_code'],
                 'tanks_heard_before_any_code': s.get('heard_before_codes', 0)})
-            print(f"{s['name']:6} ({s['personality']}) at home {s['home']}: private "
+            print(f"{s['name']:6} ({s['personality']}, {s.get('platform', 'desktop')}) "
+                  f"at home {s['home']}: private "
                   f"{s['private_address']}, seen from outside as {s['seen_from_outside_as']}, "
                   f"friend code {s['friend_code']}, hears "
                   f"{s.get('heard_before_codes', 0)} other tanks")
@@ -576,6 +901,7 @@ if __name__ == '__main__':
     if args.stun:
         stun_server(args.output / 'stun.log')
     elif args.player:
-        sys.exit(worker(args.output.resolve(), args.player))
+        play = phone_worker if args.player in PHONES else worker
+        sys.exit(play(args.output.resolve(), args.player))
     else:
         sys.exit(run(args.output, args.homes, args.minutes))

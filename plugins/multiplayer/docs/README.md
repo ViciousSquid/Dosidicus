@@ -8,6 +8,14 @@ recorded ([the full page](../../../docs/story-gallery/index.html)).
 Players enable the possibility of encounters. Squid make their own decisions.
 Evolution emerges from the consequences.
 
+**How players find one another:** on one home network the tanks hear each
+other by themselves. Anywhere else, both players open *Friends*, press *Get my
+code*, swap the 15-character codes and each enters the other's - on a
+computer (Plugins > Multiplayer > Friends) or a phone (Menu > Friends), in any
+combination. The steps, what a code contains and what to do when the tanks do
+not connect are in the plugin's README (`../README`, "Playing with a friend
+over the internet").
+
 | Document | What it covers |
 |---|---|
 | [The social network](social-network.md) | How another squid reaches the brain (vision, closeness, memory), and the small network of social senses and neurons that grows inside the squid's own network - what grows, when, how it is wired, how it can change for good |
