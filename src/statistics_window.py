@@ -125,9 +125,11 @@ class StatisticsWindow(QtWidgets.QWidget):
         # Top left of the area the game lays its windows out in: the same
         # spot on every system. (At 0, 0 a Mac moved it out from under its
         # menu bar, and the others did not.)
+        # The aquarium has the top left corner; Statistics opens beside it.
         from .desktop_style import layout_area
+        from .display_scaling import DisplayScaling
         area = layout_area(screen)
-        self.move(area.left(), area.top())
+        self.move(area.left() + DisplayScaling.window_size()[0] + 24, area.top())
 
         # ---------------- score state ---------------------------------
         self.score         = 0

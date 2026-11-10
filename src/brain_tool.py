@@ -1397,7 +1397,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self._placed_once = True
             place = getattr(self, '_placed_at', None)
             if place is not None:
-                QtCore.QTimer.singleShot(0, lambda: self.move(*place))
+                from .desktop_style import place_exactly
+                place_exactly(self, *place)
 
     def init_timers(self):
         # Hebbian learning timer

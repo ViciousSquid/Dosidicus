@@ -617,6 +617,41 @@ def layout_area(screen):
                         max(240, height - TOP_INSET - BOTTOM_INSET))
 
 
+def place_exactly(window, x, y, check_after_ms=250):
+    """Put a window's frame at (x, y) - and, a moment after, see whether the
+    system left it there, and correct it if not.
+
+    A window placed before the system has given it a frame, or with a frame
+    wider than the system admits to (Windows' invisible resize border), can
+    land a few pixels from where it was put: the Brain Tool sat 7 pixels to
+    the right on Windows and nowhere else. Asking again for the same place
+    gets the same answer, so the correction asks for a place that much the
+    other way. Not on Wayland, where the compositor places every window and
+    reports no position at all.
+    """
+    x, y = int(x), int(y)
+    window.move(x, y)
+    app = QtWidgets.QApplication.instance()
+    if app is None or app.platformName().startswith('wayland'):
+        return
+
+    def correct():
+        try:
+            if not window.isVisible():
+                return
+            off_x, off_y = window.pos().x() - x, window.pos().y() - y
+            if (off_x, off_y) != (0, 0) and abs(off_x) <= 64 and abs(off_y) <= 64:
+                window.move(x - off_x, y - off_y)
+        except RuntimeError:                         # the window has gone
+            pass
+
+    timer = QtCore.QTimer(window)
+    timer.setSingleShot(True)
+    timer.timeout.connect(correct)
+    timer.start(check_after_ms)
+    window._placement_check = timer
+
+
 def describe(app):
     """What is actually in force - for a screenshot's notes and the tests."""
     font = app.font()
@@ -641,5 +676,6 @@ def describe(app):
 
 __all__ = ['UI_FONT', 'MONO_FONT', 'EMOJI_FONT', 'LINE_EMOJI_FONT', 'UI_FONT_SIZE', 'prepare_qt', 'install_style',
            'load_fonts', 'ui_font', 'light_palette', 'screen_size', 'reported_size',
-           'usable_size', 'layout_area', 'TOP_INSET', 'BOTTOM_INSET', 'TITLE_BAR',
+           'usable_size', 'layout_area', 'place_exactly', 'TOP_INSET', 'BOTTOM_INSET',
+           'TITLE_BAR',
            'describe', 'GameStyle', 'font_directory']

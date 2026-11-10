@@ -386,3 +386,79 @@ def test_on_a_mac_fusion_is_handed_text_measured_at_its_own_base_dpi():
             == plain.sizeFromContents(kind, other, size, button)
     finally:
         _restore(before)
+
+
+def test_the_aquarium_opens_at_the_top_left_and_on_top_for_five_seconds():
+    main = (ROOT / 'main.py').read_text(encoding='utf-8')
+    assert 'self._opens_at = (area.left(), area.top())' in main          # the top left corner
+    assert 'self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, True)' in main
+    assert 'ON_TOP_SECONDS = 5.0' in main
+    assert 'self._on_top_timer.start(int(self.ON_TOP_SECONDS * 1000))' in main
+    assert "area.center().x() - (self.geometry().width() // 2) - 300" not in main
+    # What happens when the five seconds are up, on a real window.
+    import ast
+    tree = ast.parse(main)
+    source = next(ast.get_source_segment(main, node) for node in ast.walk(tree)
+                  if isinstance(node, ast.FunctionDef) and node.name == 'stop_staying_on_top')
+    scope = {'QtCore': QtCore}
+    exec('import textwrap\n', scope)
+    import textwrap
+    exec(textwrap.dedent(source), scope)
+
+    class Tank(QtWidgets.QMainWindow):
+        stop_staying_on_top = scope['stop_staying_on_top']
+
+    tank = Tank()
+    tank.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, True)
+    tank.move(0, 40)
+    tank.show()
+    assert tank.windowFlags() & QtCore.Qt.WindowStaysOnTopHint          # above the others...
+    tank.stop_staying_on_top()                                           # ...for five seconds
+    assert not tank.windowFlags() & QtCore.Qt.WindowStaysOnTopHint
+    assert tank.isVisible() and (tank.pos().x(), tank.pos().y()) == (0, 40)   # still there
+    tank.stop_staying_on_top()                                           # twice does no harm
+    assert tank.isVisible()
+    tank.close()
+    # Statistics opens beside the aquarium, not on top of it.
+    stats = (ROOT / 'src' / 'statistics_window.py').read_text(encoding='utf-8')
+    assert 'area.left() + DisplayScaling.window_size()[0] + 24, area.top()' in stats
+
+
+def test_a_window_the_system_shifts_is_put_back_where_it_was_meant_to_go():
+    """Windows put the Brain Tool 7 pixels to the right of where it was asked
+    to be. Asked again for the same place it would give the same answer, so
+    the correction asks for a place that much the other way."""
+    class Shifted(QtWidgets.QWidget):
+        """A window the system always puts 7 pixels right of where asked."""
+        def __init__(self):
+            super().__init__()
+            self.asked = []
+
+        def move(self, x, y):
+            self.asked.append((x, y))
+            self._at = (x + 7, y)
+
+        def pos(self):
+            return QtCore.QPoint(*self._at)
+
+        def isVisible(self):
+            return True
+
+    window = Shifted()
+    desktop_style.place_exactly(window, 519, 40)
+    assert window.asked == [(519, 40)] and window.pos().x() == 526      # 7 to the right
+    window._placement_check.timeout.emit()                              # a moment later
+    assert window.asked == [(519, 40), (512, 40)]
+    assert (window.pos().x(), window.pos().y()) == (519, 40)            # where it was meant
+    window._placement_check.stop()
+
+    class Obedient(Shifted):
+        def move(self, x, y):
+            self.asked.append((x, y))
+            self._at = (x, y)
+
+    window = Obedient()
+    desktop_style.place_exactly(window, 0, 40)
+    window._placement_check.timeout.emit()
+    assert window.asked == [(0, 40)]                                    # left alone
+    window._placement_check.stop()

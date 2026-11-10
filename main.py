@@ -346,14 +346,19 @@ class MainWindow(QtWidgets.QMainWindow):
         # Initialize plugin menu - do this AFTER loading plugins
         self.user_interface.apply_plugin_menu_registrations(self.plugin_manager)
     
-        # The tank: 300 pixels left of centre, at the top of the area the game
-        # lays its windows out in - the same spot on every system
-        # (desktop_style.layout_area). Its height used to be left to the
-        # system, which put it somewhere different on each.
+        # The aquarium opens at the top left of the area the game lays its
+        # windows out in - the same spot on every system
+        # (desktop_style.layout_area) - and for its first five seconds stays
+        # above the other windows, so it is the first thing a player sees
+        # whatever else is opening round it.
         from src.desktop_style import layout_area
         area = layout_area(QtWidgets.QApplication.primaryScreen())
-        window_x = area.center().x() - (self.geometry().width() // 2) - 300
-        self.move(max(area.left(), window_x), area.top())
+        self._opens_at = (area.left(), area.top())
+        self.move(*self._opens_at)
+        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, True)
+        self._on_top_timer = QtCore.QTimer(self)
+        self._on_top_timer.setSingleShot(True)
+        self._on_top_timer.timeout.connect(self.stop_staying_on_top)
         
         if self.debug_mode:
             print(f"DEBUG MODE ENABLED: Console output is being logged to console.txt")
@@ -622,11 +627,11 @@ class MainWindow(QtWidgets.QMainWindow):
             from src.desktop_style import layout_area
             screen_geometry = layout_area(QtWidgets.QApplication.primaryScreen())
             decoration_window = self.user_interface.decoration_window
-            decoration_window.move(
-                screen_geometry.right() - decoration_window.width() - 20,
-                screen_geometry.bottom() - decoration_window.height() - 20
-            )
+            from src.desktop_style import place_exactly
             decoration_window.show()
+            place_exactly(decoration_window,
+                          screen_geometry.right() - decoration_window.width() - 20,
+                          screen_geometry.bottom() - decoration_window.height() - 20)
             self.user_interface.decorations_action.setChecked(True)
 
     def start_new_game(self):
@@ -869,6 +874,28 @@ class MainWindow(QtWidgets.QMainWindow):
                     print(f"✓ Restored {unlocked_count} achievements")
         except Exception as e:
             print(f"[Warning] Could not restore achievements: {e}")
+
+    #: How long the aquarium stays above the other windows after it opens.
+    ON_TOP_SECONDS = 5.0
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, '_opened_once', False) and hasattr(self, '_on_top_timer'):
+            self._opened_once = True
+            from src.desktop_style import place_exactly
+            place_exactly(self, *self._opens_at)
+            self._on_top_timer.start(int(self.ON_TOP_SECONDS * 1000))
+
+    def stop_staying_on_top(self):
+        """The five seconds are up: an ordinary window again, where it was.
+        (Changing this hides a window; it is shown again in the same place.)"""
+        if not self.windowFlags() & QtCore.Qt.WindowStaysOnTopHint:
+            return
+        visible, place = self.isVisible(), self.pos()
+        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, False)
+        if visible:
+            self.show()
+            self.move(place)
 
     def closeEvent(self, event):
         """Handle window close event"""

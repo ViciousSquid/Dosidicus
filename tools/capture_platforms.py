@@ -185,7 +185,13 @@ def capture(output, label, brain_size=None):
         brain_window = window.brain_window
         number = state['step']
         if number == 0:                             # let the squid hatch and live a little
-            if time.monotonic() - started >= RUN_SECONDS:
+            running = time.monotonic() - started
+            on_top = bool(window.windowFlags() & QtCore.Qt.WindowStaysOnTopHint)
+            if running >= 2.0 and 'tank_on_top_after_2s' not in notes:
+                notes['tank_on_top_after_2s'] = on_top
+            if running >= 9.0 and 'tank_on_top_after_9s' not in notes:
+                notes['tank_on_top_after_9s'] = on_top
+            if running >= RUN_SECONDS:
                 state['step'] = 1
         elif number == 1:
             # The windows a player gets, opened by the game itself and left
@@ -452,6 +458,11 @@ def publish(folders, target):
         lines.append(f'| {label} | ' + ' | '.join(
             ', '.join(str(v) for v in placed[name]) if name in placed else 'not shown'
             for name in names) + ' |')
+    lines += ['', 'The aquarium opens at the top left and stays above the other windows for '
+              'its first five seconds: '
+              + '; '.join(f"{label}: on top after 2 s {notes.get('tank_on_top_after_2s')}, "
+                          f"after 9 s {notes.get('tank_on_top_after_9s')}"
+                          for label, notes in labels) + '.']
     lines += ['', 'A Wayland compositor decides where a window goes and does not tell the '
               'program, so there the game can ask for a size but not a place, and reports '
               '0, 0 for all of them.', '',
