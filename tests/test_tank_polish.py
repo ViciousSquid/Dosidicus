@@ -73,8 +73,9 @@ def test_the_head_icon_sits_just_above_the_squid_at_any_tank_size():
 
 def test_only_one_icon_is_shown_above_the_head_at_a_time():
     """A squid can be curious and have just grown a neuron at once. One icon
-    is shown - the first that applies of sick, startled, neurogenesis, then
-    the other states - and the rest wait."""
+    is shown: neurogenesis whenever it is there - it lasts only a few seconds
+    - otherwise the first that applies of sick, startled, then the other
+    states. The rest wait."""
     from src.mental_states import MentalStateManager
     scene = QtWidgets.QGraphicsScene()
     squid = _squid(scene)
@@ -95,20 +96,22 @@ def test_only_one_icon_is_shown_above_the_head_at_a_time():
     startled = scene.addPixmap(curious.pixmap())             # ...and something startles it
     squid.startled_icon = startled
     squid.update_head_icon_positions()
-    assert [i.isVisible() for i in (startled, ng, curious)] == [True, False, False]
+    assert [i.isVisible() for i in (ng, startled, curious)] == [True, False, False]
 
-    sick = scene.addPixmap(curious.pixmap())                 # sick comes before everything
+    sick = scene.addPixmap(curious.pixmap())                 # ...and it is sick as well:
     squid.sick_icon_item = sick
-    squid.update_head_icon_positions()
-    assert [i.isVisible() for i in (sick, startled, ng, curious)] == [True, False, False, False]
+    squid.update_head_icon_positions()                       # neurogenesis is still the one
+    assert [i.isVisible() for i in (ng, sick, startled, curious)] == [True, False, False, False]
 
-    # As each passes, the next takes its place - in the same spot.
-    scene.removeItem(sick); squid.sick_icon_item = None
-    scene.removeItem(startled); squid.startled_icon = None
-    squid.update_head_icon_positions()
-    assert ng.isVisible() and not curious.isVisible()
+    # The few seconds pass. The next takes its place, in the same spot: sick,
     scene.removeItem(ng); squid.ng_icon = None
-    squid.squid_x += 90                                      # and it moves with the squid
+    squid.update_head_icon_positions()
+    assert [i.isVisible() for i in (sick, startled, curious)] == [True, False, False]
+    scene.removeItem(sick); squid.sick_icon_item = None      # then startled,
+    squid.update_head_icon_positions()
+    assert [i.isVisible() for i in (startled, curious)] == [True, False]
+    scene.removeItem(startled); squid.startled_icon = None   # then the rest.
+    squid.squid_x += 90                                      # And it moves with the squid.
     squid.update_head_icon_positions()
     assert curious.isVisible()
     centre = curious.x() + curious.pixmap().width() / 2

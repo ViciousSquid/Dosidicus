@@ -705,9 +705,11 @@ class Squid:
     HEAD_ICON_GAP = 10
 
     def _head_icons(self):
-        """Every icon now showing above the head, in a fixed order."""
-        icons = [getattr(self, 'sick_icon_item', None), getattr(self, 'startled_icon', None),
-                 getattr(self, 'ng_icon', None)]
+        """Every icon that applies now, most important first: the one shown
+        is the first. Neurogenesis always comes first - it is the rarest
+        thing a player can see, and it is only there for a few seconds."""
+        icons = [getattr(self, 'ng_icon', None), getattr(self, 'sick_icon_item', None),
+                 getattr(self, 'startled_icon', None)]
         manager = getattr(self, 'mental_state_manager', None)
         for state in (getattr(manager, 'mental_states', None) or {}).values():
             icons.append(getattr(state, 'icon_item', None))
@@ -724,9 +726,10 @@ class Squid:
 
         Several things can be true of a squid at once (it has just grown a
         neuron and it is curious), and each has an icon. Only one is shown at
-        a time: the first that applies of sick, startled, neurogenesis, then
-        the other states (the order of _head_icons). The rest stay hidden
-        until it is their turn.
+        a time: neurogenesis whenever it is there (it lasts a few seconds),
+        otherwise the first that applies of sick, startled, then the other
+        states (the order of _head_icons). The rest stay hidden until it is
+        their turn.
 
         The icon's bottom edge sits a small gap above the squid, centred on
         it. Icons used to be pinned a fixed 100 pixels above it by their top
