@@ -153,6 +153,27 @@
       "dosidicus emoji"
     ]
   },
+  "layout": {
+    "tank": [
+      312,
+      10,
+      688,
+      458
+    ],
+    "brain_tool": [
+      516,
+      10,
+      1300,
+      980
+    ],
+    "decorations": [
+      1517,
+      689,
+      382,
+      310
+    ]
+  },
+  "screen_captured": true,
   "brain_resized_to": [
     1000,
     620
@@ -175,7 +196,6 @@
       640
     ]
   },
-  "screen_captured": false,
   "brain_tabs": [
     "Brain Network",
     "Learning",
@@ -188,7 +208,7 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 16,
+    "anxiety": 15,
     "happiness": 100,
     "neurons": 19
   },
@@ -205,5 +225,5 @@
     "squid_share_of_width": 0.1875,
     "food": 33
   },
-  "seconds": 58.6
+  "seconds": 63.8
 }

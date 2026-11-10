@@ -16,8 +16,8 @@
     "logical_dpi": 96.0,
     "device_pixel_ratio": 1.0,
     "screen": [
-      1024,
-      768
+      1920,
+      1080
     ],
     "screen_assumed": [
       1920,
@@ -153,6 +153,27 @@
       "dosidicus emoji"
     ]
   },
+  "layout": {
+    "tank": [
+      315,
+      40,
+      688,
+      458
+    ],
+    "brain_tool": [
+      519,
+      31,
+      1300,
+      943
+    ],
+    "decorations": [
+      1517,
+      689,
+      382,
+      310
+    ]
+  },
+  "screen_captured": true,
   "brain_resized_to": [
     1000,
     620
@@ -175,7 +196,6 @@
       640
     ]
   },
-  "screen_captured": true,
   "brain_tabs": [
     "Brain Network",
     "Learning",
@@ -188,7 +208,7 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 11,
+    "anxiety": 15,
     "happiness": 100,
     "neurons": 19
   },
@@ -205,5 +225,5 @@
     "squid_share_of_width": 0.1875,
     "food": 33
   },
-  "seconds": 58.7
+  "seconds": 63.8
 }
