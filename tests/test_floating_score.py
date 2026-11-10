@@ -106,3 +106,48 @@ def test_everything_that_changes_the_score_goes_through_award():
                 if changed_directly.search(line) and 'statistics_window' in line:
                     offenders.append(f'{path.relative_to(ROOT)}:{number}')
     assert not offenders, offenders
+
+
+def test_a_floating_score_is_a_little_larger_and_has_a_slight_shadow():
+    from src.ui import Ui
+    scene = QtWidgets.QGraphicsScene()
+    body = scene.addPixmap(QtGui.QPixmap(130, 75))
+    tank = SimpleNamespace(scene=scene, FLOATING_SCORE_SIZE=Ui.FLOATING_SCORE_SIZE)
+    before = set(scene.items())
+    Ui.show_floating_score(tank, body, '+75', QtGui.QColor(50, 205, 50))
+    number = (set(scene.items()) - before).pop()
+    assert number.toPlainText() == '+75'
+    assert Ui.FLOATING_SCORE_SIZE == 20                      # it was 16
+    assert number.font().bold() and number.font().family() == 'Fio UI'
+    shadow = number.graphicsEffect()
+    assert isinstance(shadow, QtWidgets.QGraphicsDropShadowEffect)
+    assert 0 < shadow.blurRadius() <= 6 and 0 < shadow.yOffset() <= 2     # slight
+    assert shadow.color().alpha() < 160
+    number._pos_animation.stop()
+    number._opacity_animation.stop()
+
+
+def test_the_message_banner_sits_at_the_very_bottom_of_the_tank():
+    from src.ui import Ui
+
+    class View:
+        def __init__(self, height, visible=True):
+            self._height, self._visible = height, visible
+
+        def isVisible(self):
+            return self._visible
+
+        def viewport(self):
+            return SimpleNamespace(height=lambda: self._height)
+
+    menu = SimpleNamespace(menuBar=lambda: SimpleNamespace(
+        sizeHint=lambda: SimpleNamespace(height=lambda: 22)))
+    # On screen: the bottom of what can be seen, with nothing left under it.
+    shown = SimpleNamespace(window_height=702, view=View(680), window=menu)
+    assert Ui.message_banner_y(shown, 18) == 680 - 18
+    # Before the window is on screen: the window less its menu bar.
+    early = SimpleNamespace(window_height=702, view=View(0, visible=False), window=menu)
+    assert Ui.message_banner_y(early, 18) == 702 - 22 - 18
+    text = (ROOT / 'src' / 'ui.py').read_text(encoding='utf-8')
+    assert text.count('self.message_banner_y(text_height)') == 2       # shown, and on resize
+    assert 'self.window_height - text_height - 40' not in text

@@ -1393,7 +1393,7 @@ class Ui:
         self.debug_text.setPos(self.window_width - 60, self.window_height - 60)
         if hasattr(self, 'current_message_item') and self.current_message_item in self.scene.items():
             text_height = self.current_message_item.boundingRect().height()
-            message_y = self.window_height - text_height - 20
+            message_y = self.message_banner_y(text_height)
             self.current_message_item.setPos(0, message_y)
             self.current_message_item.setTextWidth(self.window_width)
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'squid') and self.tamagotchi_logic.squid:
@@ -1413,6 +1413,21 @@ class Ui:
             # to be left behind here, as it was in move_squid.
             if hasattr(squid, 'update_head_icon_positions'):
                 squid.update_head_icon_positions()
+
+    def message_banner_y(self, text_height):
+        """Where the black message banner goes: flat against the bottom of
+        what can be seen of the tank. (It used to float 20 to 40 pixels above
+        it.) The view is shorter than the window by the menu bar, so the
+        bottom is measured from the view itself once it is on screen."""
+        bottom = self.window_height
+        try:
+            if self.view.isVisible() and self.view.viewport().height() > 0:
+                bottom = self.view.viewport().height()
+            else:
+                bottom -= self.window.menuBar().sizeHint().height()
+        except Exception:
+            pass
+        return max(0, int(bottom - text_height))
 
     def show_message(self, message):
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
@@ -1443,7 +1458,7 @@ class Ui:
         message_item.setFont(font)
         message_item.setTextWidth(self.window_width)
         text_height = message_item.boundingRect().height()
-        message_y = self.window_height - text_height - 40
+        message_y = self.message_banner_y(text_height)
         
         message_item.setPos(0, message_y)
         message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 0px;">{message}</div>')
@@ -1579,6 +1594,9 @@ class Ui:
                 self.scene.removeItem(item)
         self.scene.update()
 
+    #: The size of a number floating up out of the squid (it was 16).
+    FLOATING_SCORE_SIZE = 20
+
     def show_floating_score(self, item, text, color=QtGui.QColor(50, 205, 50)):
         item_rect = item.sceneBoundingRect()
         center_x = item_rect.center().x()
@@ -1586,8 +1604,16 @@ class Ui:
         score_text = QtWidgets.QGraphicsTextItem(text)
         score_text.setDefaultTextColor(color)
         from .display_scaling import DisplayScaling
-        font = QtGui.QFont("Fio UI", DisplayScaling.font_size(16), QtGui.QFont.Bold)
+        font = QtGui.QFont("Fio UI", DisplayScaling.font_size(self.FLOATING_SCORE_SIZE),
+                           QtGui.QFont.Bold)
         score_text.setFont(font)
+        # A slight shadow, so the number reads over the squid, a plant or
+        # plain white water alike.
+        shadow = QtWidgets.QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(4)
+        shadow.setOffset(1.0, 1.5)
+        shadow.setColor(QtGui.QColor(0, 0, 0, 130))
+        score_text.setGraphicsEffect(shadow)
         text_width = score_text.boundingRect().width()
         score_text.setPos(center_x - text_width / 2, top_y)
         score_text.setZValue(1000)
