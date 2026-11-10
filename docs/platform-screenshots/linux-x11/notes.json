@@ -175,6 +175,26 @@
       310
     ]
   },
+  "frames": {
+    "tank": [
+      1,
+      20,
+      1,
+      5
+    ],
+    "brain_tool": [
+      1,
+      20,
+      1,
+      5
+    ],
+    "decorations": [
+      1,
+      20,
+      1,
+      1
+    ]
+  },
   "screen_captured": true,
   "brain_resized_to": [
     1000,
@@ -210,7 +230,7 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 12,
+    "anxiety": 13,
     "happiness": 100,
     "neurons": 19
   },
@@ -227,5 +247,5 @@
     "squid_share_of_width": 0.1875,
     "food": 33
   },
-  "seconds": 63.4
+  "seconds": 63.2
 }

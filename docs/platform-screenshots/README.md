@@ -11,15 +11,15 @@ Compared with **windows**:
 
 | System | Text measurements | Window sizes | Widgets in the same place (fixed windows) | Pixels that differ |
 |---|---|---|---|---|
-| macos | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 4.3%, brain-3 1.5%, brain-4 0.3%, brain-5 0.8%, brain-6 0.8%, brain-7 0.7%, brain-8 1.0%, journey 5.0%, main 5.0%, menu 2.2%, message 2.7%, splash 0.4%, statistics 1.7% |
-| linux-x11 | identical | identical | 70 of 70 | brain-1 1.2%, brain-2 7.5%, brain-3 2.3%, brain-4 0.6%, brain-5 0.9%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.2%, main 1.1%, menu 2.5%, message 3.1%, splash 0.4%, statistics 1.6% |
-| linux-wayland | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 4.0%, brain-3 2.3%, brain-4 0.6%, brain-5 1.5%, brain-6 0.9%, brain-7 0.8%, brain-8 1.1%, journey 5.2%, main 4.1%, menu 2.5%, message 3.6%, splash 0.4%, statistics 2.5% |
+| macos | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 6.8%, brain-3 1.4%, brain-4 0.5%, brain-5 0.8%, brain-6 0.8%, brain-7 0.7%, brain-8 1.0%, journey 5.0%, main 1.1%, menu 2.2%, message 2.7%, splash 0.4%, statistics 1.7% |
+| linux-x11 | identical | identical | 70 of 70 | brain-1 0.7%, brain-2 6.6%, brain-3 2.4%, brain-4 0.4%, brain-5 0.6%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.3%, main 1.1%, menu 2.5%, message 3.1%, splash 0.4%, statistics 1.7% |
+| linux-wayland | identical | identical | 70 of 70 | brain-1 0.7%, brain-2 4.4%, brain-3 1.7%, brain-4 0.4%, brain-5 0.8%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.2%, main 1.1%, menu 2.5%, message 3.6%, splash 0.4%, statistics 1.9% |
 
 Not the same:
 
-- macos / where the brain_tool window is put: [526, 40, 1300, 920] on windows, [519, 40, 1300, 920] on macos
-- linux-x11 / where the brain_tool window is put: [526, 40, 1300, 920] on windows, [519, 40, 1300, 920] on linux-x11
-- linux-wayland / where the brain_tool window is put: [526, 40, 1300, 920] on windows, [516, 10, 1300, 920] on linux-wayland
+- macos / where the brain_tool window is put: [512, 40, 1300, 920] on windows, [519, 40, 1300, 920] on macos
+- linux-x11 / where the brain_tool window is put: [512, 40, 1300, 920] on windows, [519, 40, 1300, 920] on linux-x11
+- linux-wayland / where the brain_tool window is put: [512, 40, 1300, 920] on windows, [516, 10, 1300, 920] on linux-wayland
 - linux-wayland / where the tank window is put: [0, 40, 688, 458] on windows, [-3, 10, 688, 458] on linux-wayland
 
 Fixed windows: splash, main, statistics, message, menu, brain-1. The other Brain Tool tabs list what one particular squid has learned, so their contents differ between any two runs.
@@ -102,7 +102,7 @@ Opened by the game itself and left where it put them: left, top, width, height o
 
 | System | Tank | Brain tool | Statistics | Decorations |
 |---|---|---|---|---|
-| windows | 0, 40, 688, 458 | 526, 40, 1300, 920 | not shown | 1517, 661, 382, 310 |
+| windows | 0, 40, 688, 458 | 512, 40, 1300, 920 | not shown | 1517, 661, 382, 310 |
 | macos | 0, 40, 688, 458 | 519, 40, 1300, 920 | not shown | 1517, 661, 382, 310 |
 | linux-x11 | 0, 40, 688, 458 | 519, 40, 1300, 920 | not shown | 1517, 661, 382, 310 |
 | linux-wayland | -3, 10, 688, 458 | 516, 10, 1300, 920 | not shown | 1517, 661, 382, 310 |
