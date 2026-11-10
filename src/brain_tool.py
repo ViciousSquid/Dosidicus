@@ -1388,17 +1388,22 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
 
     def showEvent(self, event):
-        """The first time the window is shown, put it where it was meant to
-        go once more. A window placed before the system has given it a frame
-        can end up a few pixels off (7 on Windows); placed again once it has
-        one, it is where every other system has it."""
+        """When the window is shown, put it where it was meant to go once
+        more. A window placed before the system has given it a frame can end
+        up a few pixels off (7 on Windows); placed again once it has one, and
+        checked, it is where every other system has it."""
         super().showEvent(event)
-        if not getattr(self, '_placed_once', False):
-            self._placed_once = True
-            place = getattr(self, '_placed_at', None)
-            if place is not None:
+        # Each time it is shown, until a player has moved it: the game shows
+        # this window once while it starts, hidden again at once, and a
+        # correction left to that showing never got to run.
+        place = getattr(self, '_placed_at', None)
+        if place is not None and not getattr(self, '_moved_by_player', False):
+            near = (abs(self.pos().x() - place[0]) <= 64 and abs(self.pos().y() - place[1]) <= 64)
+            if near:
                 from .desktop_style import place_exactly
                 place_exactly(self, *place)
+            else:
+                self._moved_by_player = True        # somewhere else: leave it there
 
     def init_timers(self):
         # Hebbian learning timer

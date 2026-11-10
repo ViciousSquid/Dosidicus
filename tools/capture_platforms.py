@@ -208,6 +208,14 @@ def capture(output, label, brain_size=None):
             notes['layout'] = {
                 name: [shown.pos().x(), shown.pos().y(), shown.width(), shown.height()]
                 for name, shown in placed.items() if shown is not None and shown.isVisible()}
+            # The frame the system drew round each (left, top, right, bottom):
+            # it is the system's, and differs from one to the next.
+            notes['frames'] = {
+                name: [shown.geometry().x() - shown.frameGeometry().x(),
+                       shown.geometry().y() - shown.frameGeometry().y(),
+                       shown.frameGeometry().right() - shown.geometry().right(),
+                       shown.frameGeometry().bottom() - shown.geometry().bottom()]
+                for name, shown in placed.items() if shown is not None and shown.isVisible()}
             whole_screen()                          # the layout, as the game made it
             if brain_size:                          # a size every runner's screen can hold
                 brain_window.resize(*brain_size)
