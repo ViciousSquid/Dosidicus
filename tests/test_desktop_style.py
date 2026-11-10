@@ -226,3 +226,55 @@ def test_a_message_box_is_laid_out_and_sized_the_same_way_everywhere():
 def test_one_text_engine_is_asked_for_on_windows_and_a_mac():
     text = (ROOT / 'src' / 'desktop_style.py').read_text(encoding='utf-8')
     assert "fontengine=freetype" in text and "DOSIDICUS_NATIVE_TEXT" in text
+
+
+def test_every_emoji_the_game_uses_is_in_its_own_emoji_font():
+    """Each system has its own emoji font. The game carries the emoji it
+    uses (tools/subset_emoji_font.py), so they are the same picture
+    everywhere. An emoji added to the game and not to the font would be drawn
+    by whatever the system has: run the tool again."""
+    from tools.subset_emoji_font import FAMILY, OUTPUT, emoji_in_the_game
+    assert FAMILY == desktop_style.EMOJI_FONT and OUTPUT.is_file()
+    assert OUTPUT.stat().st_size < 2_000_000                  # a subset, not all of Noto
+    font = QtGui.QRawFont(str(OUTPUT), 16)
+    assert font.isValid() and font.familyName() == 'Dosidicus Emoji'
+    used = emoji_in_the_game()
+    assert len(used) > 100
+    missing = sorted(ch for ch in used if not font.supportsCharacter(ord(ch)))
+    # Symbols Noto Color Emoji does not draw at all are text, not emoji.
+    full_lacks = {ch for ch in missing if ord(ch) < 0x1F000}
+    assert not [ch for ch in missing if ch not in full_lacks], \
+        'not in src/fonts/DosidicusEmoji.ttf - run tools/subset_emoji_font.py: ' + ' '.join(missing)
+    assert (desktop_style.font_directory() / 'DosidicusEmoji-OFL.txt').is_file()
+    # The same emoji as black-and-white line drawings.
+    from tools.subset_emoji_font import LINE_FAMILY, LINE_OUTPUT
+    line = QtGui.QRawFont(str(LINE_OUTPUT), 16)
+    assert line.isValid() and line.familyName() == LINE_FAMILY == desktop_style.LINE_EMOJI_FONT
+    assert not [ch for ch in used if ord(ch) >= 0x1F000 and not line.supportsCharacter(ord(ch))]
+    assert (desktop_style.font_directory() / 'DosidicusLineEmoji-OFL.txt').is_file()
+
+
+def test_the_brain_designer_button_is_a_plain_black_and_white_brain():
+    text = (ROOT / 'src' / 'brain_network_tab.py').read_text(encoding='utf-8')
+    start = text.index('self.new_50x50_button = QtWidgets.QPushButton("\U0001F9E0")')
+    style = text[start:text.index('QPushButton:hover', start)]
+    assert 'font-family: "Dosidicus Line Emoji"' in style and 'color: #000000' in style
+    # Drawn from the line font it is one colour: every painted pixel is a grey.
+    font = QtGui.QRawFont(str(desktop_style.font_directory() / 'DosidicusLineEmoji.ttf'), 40)
+    image = font.alphaMapForGlyph(font.glyphIndexesForString('\U0001F9E0')[0])
+    assert not image.isNull() and image.width() > 20
+    assert image.isGrayscale()
+
+
+def test_what_fio_ui_lacks_comes_from_the_games_other_fonts_first():
+    before = _installed()
+    try:
+        assert QtGui.QFont.substitutes('Fio UI') == ['ibm plex mono', 'dosidicus emoji']
+        assert QtGui.QFont.substitutes('IBM Plex Mono') == ['dosidicus emoji']
+        desktop_style.install_style(_APP)               # again: nothing is added twice
+        assert len(QtGui.QFont.substitutes('Fio UI')) == 2
+        assert 'Dosidicus Emoji' in desktop_style.load_fonts()
+    finally:
+        _restore(before)
+        QtGui.QFont.removeSubstitutions('Fio UI')
+        QtGui.QFont.removeSubstitutions('IBM Plex Mono')

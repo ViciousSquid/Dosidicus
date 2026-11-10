@@ -465,11 +465,15 @@ class NetworkTab(BrainBaseTab):
         # Brain Designer button (enlarged to fill space)
         self.new_50x50_button = QtWidgets.QPushButton("🧠")
         self.new_50x50_button.setFixedSize(DisplayScaling.scale(100), DisplayScaling.scale(80))
+        # A plain black-and-white brain, drawn from the game's own line-emoji
+        # font (src/fonts) so it is the same drawing on every system.
         self.new_50x50_button.setStyleSheet("""
             QPushButton {
                 background-color: #e1f5fe;
                 border: 1px solid #029be5;
                 border-radius: 8px;
+                font-family: "Dosidicus Line Emoji";
+                color: #000000;
                 font-size: 24pt;  /* Slightly larger emoji */
             }
             QPushButton:hover {

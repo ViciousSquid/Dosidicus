@@ -7,6 +7,7 @@ commit into these six installable distributions:
 | --- | --- |
 | Windows x64 | `Dosidicus-VERSION-windows-x64.zip` |
 | Windows ARM64, compiled natively | `Dosidicus-VERSION-windows-arm64.zip` |
+| macOS, any Mac (universal) | `Dosidicus-VERSION-macos-universal.dmg` |
 | macOS Apple Silicon | `Dosidicus-VERSION-macos-arm64.zip` |
 | macOS Intel | `Dosidicus-VERSION-macos-x64.zip` |
 | Linux x64 | `Dosidicus-VERSION-linux-x64.tar.gz` |

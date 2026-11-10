@@ -7,8 +7,9 @@ Mac), its own menu bar, its own dialogs. The same window then comes out a
 different size and shape on every machine. Here the game brings its own:
 
   FONT     Fio UI (src/fonts, SIL Open Font License) for everything, IBM Plex
-           Mono where a fixed width is wanted. Loaded from the game's folder;
-           nothing is installed on the system.
+           Mono where a fixed width is wanted, and the game's own emoji.
+           Loaded from the game's folder; nothing is installed on the system.
+  TEXT     One text engine (FreeType) measures and draws it on all three.
   SIZE     A point is 1/96 inch everywhere, so 10 pt text is the same number
            of pixels on all three. On a dense screen (Retina, 150% Windows)
            the whole window is scaled, not just the text.
@@ -18,7 +19,8 @@ different size and shape on every machine. Here the game brings its own:
            panel happens to leave.
 
 What stays the system's: the window frame and title bar (they are drawn by
-the system, not the game), emoji (each system has its own emoji font), and
+the system, not the game); the names of keys in menus (a Mac's Command key
+is not Ctrl); an emoji the game itself does not use, typed by a player; and
 writing systems Fio UI does not cover, which fall back to a system font.
 
 prepare_qt() must run before the QApplication is made; install_style() right
@@ -32,6 +34,13 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 UI_FONT = 'Fio UI'
 MONO_FONT = 'IBM Plex Mono'
+#: The game's own emoji: Noto Color Emoji cut down to the ones the game uses
+#: (tools/subset_emoji_font.py). Each system has its own emoji font, so the
+#: same button showed three different brains.
+EMOJI_FONT = 'Dosidicus Emoji'
+#: The same emoji as plain black-and-white line drawings (from Noto Emoji),
+#: for where a quiet one is wanted: ask for this family by name.
+LINE_EMOJI_FONT = 'Dosidicus Line Emoji'
 #: The size of text nothing else sets: menus, dialogs, tabs, buttons.
 UI_FONT_SIZE = 10
 FONT_DPI = 96
@@ -355,7 +364,7 @@ def load_fonts():
         if font_id < 0:
             raise RuntimeError(f"Could not load the game's font: {path}")
         loaded.update(QtGui.QFontDatabase.applicationFontFamilies(font_id))
-    missing = {UI_FONT, MONO_FONT} - loaded
+    missing = {UI_FONT, MONO_FONT, EMOJI_FONT, LINE_EMOJI_FONT} - loaded
     if missing:
         raise RuntimeError("The game's fonts are missing from src/fonts: "
                            + ', '.join(sorted(missing)))
@@ -386,6 +395,13 @@ def install_style(app):
         QtGui.QFont.insertSubstitution(family, UI_FONT)
     for family in ('Courier New', 'Courier', 'Consolas', 'Menlo', 'monospace', 'Monospace'):
         QtGui.QFont.insertSubstitution(family, MONO_FONT)
+    # What a font has no letter for comes from the game's other fonts before
+    # any of the system's: arrows and ticks from the monospace, emoji from the
+    # game's emoji font. (Qt tries a family's substitutes, in order, for the
+    # characters the family lacks.)
+    for family, others in ((UI_FONT, [MONO_FONT, EMOJI_FONT]), (MONO_FONT, [EMOJI_FONT])):
+        QtGui.QFont.removeSubstitutions(family)         # installing twice adds none twice
+        QtGui.QFont.insertSubstitutions(family, others)
     style = GameStyle()
     app.setStyle(style)
     app._dosidicus_style = style            # the application does not keep it alive
@@ -467,7 +483,7 @@ def describe(app):
     }
 
 
-__all__ = ['UI_FONT', 'MONO_FONT', 'UI_FONT_SIZE', 'prepare_qt', 'install_style',
+__all__ = ['UI_FONT', 'MONO_FONT', 'EMOJI_FONT', 'LINE_EMOJI_FONT', 'UI_FONT_SIZE', 'prepare_qt', 'install_style',
            'load_fonts', 'ui_font', 'light_palette', 'screen_size', 'reported_size',
            'usable_size',
            'describe', 'GameStyle', 'font_directory']

@@ -18,3 +18,19 @@ different installed fonts.
 
 Both use the SIL Open Font License 1.1. The application loads the fonts
 directly through Qt; installation on the operating system is unnecessary.
+
+## In Dosidicus
+
+These are the fonts of the Fio editor, used unchanged as Dosidicus's fonts
+(src/desktop_style.py), plus:
+
+- Dosidicus Emoji (`DosidicusEmoji.ttf`): Noto Color Emoji from
+  https://github.com/googlefonts/noto-emoji, cut down to the emoji the game
+  uses and renamed, by `tools/subset_emoji_font.py` (license in
+  DosidicusEmoji-OFL.txt). Each system has its own emoji font; with this one
+  an emoji in the game is the same picture on Windows, macOS and Linux.
+- Dosidicus Line Emoji (`DosidicusLineEmoji.ttf`): the same emoji as plain
+  black-and-white line drawings, from Noto Emoji
+  (https://github.com/google/fonts/tree/main/ofl/notoemoji), one weight, cut
+  down and renamed by the same tool (license in DosidicusLineEmoji-OFL.txt).
+  Used where a quiet picture is wanted - the Brain Designer button.
