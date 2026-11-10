@@ -280,6 +280,11 @@ class RemoteEntityManager:
                 info['current_display_dimensions'] = size
         return True
 
+    #: A visitor's name and what it is doing, legible on a white tank.
+    NAME_COLOUR = QtGui.QColor(28, 31, 35)
+    STATUS_COLOUR = QtGui.QColor(90, 97, 104)
+    ARRIVING_COLOUR = QtGui.QColor(178, 106, 0)
+
     def _update_dependent_items_position(self, remote_squid_info, new_visual_x, new_visual_y):
         if remote_squid_info.get('status_text'):
             remote_squid_info['status_text'].setPos(new_visual_x, new_visual_y - 30)
@@ -360,8 +365,10 @@ class RemoteEntityManager:
             if id_text.scene(): id_text.scene().removeItem(id_text)
             self.scene.addItem(id_text)
         id_text.setPlainText(self._label(node_id, squid_data_payload))
-        id_text.setDefaultTextColor(QtGui.QColor(200,200,200,200))
-        id_text.setFont(QtGui.QFont("Fio UI", 8))
+        # A visitor's name has to be read against a white tank: dark and
+        # bold, not the pale grey it was.
+        id_text.setDefaultTextColor(self.NAME_COLOUR)
+        id_text.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
         id_text.setZValue(6) 
         id_text.setVisible(self.show_labels)
 
@@ -370,7 +377,7 @@ class RemoteEntityManager:
             if status_text.scene(): status_text.scene().removeItem(status_text)
             self.scene.addItem(status_text)
         status_text.setPlainText("ENTERING...") 
-        status_text.setDefaultTextColor(QtGui.QColor(255,255,0)) 
+        status_text.setDefaultTextColor(self.ARRIVING_COLOUR) 
         status_text.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
         status_text.setZValue(6)
         status_text.setVisible(self.show_labels)
@@ -431,7 +438,7 @@ class RemoteEntityManager:
         status_item = remote_squid_info.get('status_text')
         if status_item:
             status_item.setPlainText("ENTERING...")
-            status_item.setDefaultTextColor(QtGui.QColor(255,255,0)) 
+            status_item.setDefaultTextColor(self.ARRIVING_COLOUR) 
             status_item.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Bold))
             status_item.setVisible(self.show_labels) 
         
@@ -486,7 +493,7 @@ class RemoteEntityManager:
             if status_text_item.toPlainText().upper() != new_status_from_payload.upper() or remote_squid_info.get('was_arrival_text', False): # Case-insensitive compare for current text
                 status_text_item.setPlainText(new_status_from_payload.upper())
                 if remote_squid_info.get('was_arrival_text', False) or "ENTERING" in status_text_item.toPlainText(): 
-                    status_text_item.setDefaultTextColor(QtGui.QColor(200,200,200,230)) 
+                    status_text_item.setDefaultTextColor(self.STATUS_COLOUR) 
                     status_text_item.setFont(QtGui.QFont("Fio UI", 10, QtGui.QFont.Normal)) 
                     remote_squid_info['was_arrival_text'] = False
             status_text_item.setVisible(self.show_labels)
@@ -656,14 +663,18 @@ class RemoteEntityManager:
             pixmap = QtGui.QPixmap(os.path.join("images", "curious.png"))
             if pixmap.isNull():
                 return False
+            from src.display_scaling import DisplayScaling
+            pixmap = DisplayScaling.to_points(pixmap)    # at the tank's scale, as the resident's
             icon = QtWidgets.QGraphicsPixmapItem(pixmap)
             icon.setZValue(500)
             self.scene.addItem(icon)
             info['notice_icon'] = icon
         visual = info['visual']
+        # Just above its head, as the resident's own icons are (Squid.place_head_icon).
+        from src.display_scaling import DisplayScaling
         icon.setPos(visual.x() + visual.boundingRect().width() / 2
                     - icon.pixmap().width() / 2,
-                    visual.y() - 100)
+                    visual.y() - DisplayScaling.points(10) - icon.pixmap().height())
         icon.setVisible(True)
         QtCore.QTimer.singleShot(duration_ms,
                                  lambda: self.hide_notice_icon(node_id))
@@ -937,7 +948,7 @@ class RemoteEntityManager:
         if status_text_item:
             current_status=squid_display_data.get('data',{}).get('status','visiting').upper()
             if squid_display_data.get('was_arrival_text',False) and current_status not in ["ENTERING...","ARRIVING...",squid_display_data.get('data',{}).get('status','visiting').upper()]:
-                status_text_item.setDefaultTextColor(QtGui.QColor(200,200,200,230)); status_text_item.setFont(QtGui.QFont("Fio UI",10,QtGui.QFont.Normal))
+                status_text_item.setDefaultTextColor(self.STATUS_COLOUR); status_text_item.setFont(QtGui.QFont("Fio UI",10,QtGui.QFont.Normal))
                 status_text_item.setPlainText(squid_display_data.get('data',{}).get('status','visiting')); squid_display_data['was_arrival_text']=False
             status_text_item.setZValue(visual_item.zValue()+1 if visual_item else 6)
 

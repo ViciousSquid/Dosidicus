@@ -698,24 +698,50 @@ class Squid:
             self.ui.scene.removeItem(self.ng_icon)
             self.ng_icon = None
 
+    #: The gap between the top of the squid and the bottom of an icon above
+    #: its head, in pixels of the tank as designed (drawn at the tank's scale).
+    HEAD_ICON_GAP = 10
+
+    def place_head_icon(self, icon):
+        """Put an icon just above the squid's head - and out of sight while
+        the squid itself is (away visiting another tank).
+
+        Every head icon (neurogenesis, startled, sick, curious and the rest)
+        is placed here, so they all sit at the same height: their bottom edge
+        a small gap above the squid, centred on it. They used to be pinned a
+        fixed 100 pixels above it by their top edge - right for a full-size
+        icon on the screen the game was designed on, and floating further and
+        further above the squid the smaller the tank was drawn.
+        """
+        if icon is None:
+            return
+        from .display_scaling import DisplayScaling
+        pixmap = icon.pixmap()
+        icon.setPos(self.squid_x + self.squid_width // 2 - pixmap.width() // 2,
+                    self.squid_y - DisplayScaling.points(self.HEAD_ICON_GAP) - pixmap.height())
+        body = getattr(self, 'squid_item', None)
+        if body is not None:
+            icon.setVisible(bool(body.isVisible()))
+
+    def set_in_tank(self, present):
+        """Show or hide the squid's body - and with it everything drawn
+        above its head. A squid that swam out left its icons hanging in the
+        water where it had been."""
+        body = getattr(self, 'squid_item', None)
+        if body is not None:
+            body.setVisible(bool(present))
+        self.update_head_icon_positions()
+        manager = getattr(self, 'mental_state_manager', None)
+        if manager is not None:
+            manager.update_positions()
+
     def update_neurogenesis_icon_position(self):
         """Position the neurogenesis icon above the squid"""
-        if self.ng_icon is not None:
-            pixmap = self.ng_icon.pixmap()
-            # Bottom edge level with the other head icons' (see load_images).
-            drop = max(0, getattr(self, 'head_icon_height', pixmap.height()) - pixmap.height())
-            self.ng_icon.setPos(
-                self.squid_x + self.squid_width // 2 - pixmap.width() // 2 + self.ng_icon_offset.x(),
-                self.squid_y + self.ng_icon_offset.y() + drop
-            )
+        self.place_head_icon(self.ng_icon)
 
     def update_startled_icon_position(self):
         """Position the startled icon above the squid"""
-        if self.startled_icon is not None:
-            self.startled_icon.setPos(
-                self.squid_x + self.squid_width // 2 - self.startled_icon.pixmap().width() // 2 + self.startled_icon_offset.x(),
-                self.squid_y + self.startled_icon_offset.y()
-            )
+        self.place_head_icon(self.startled_icon)
 
     def update_head_icon_positions(self):
         """Re-pin every head-mounted icon to the squid's head.
@@ -1096,8 +1122,8 @@ class Squid:
                     
                     print(f"[MULTIPLAYER] Squid exiting through {direction} boundary")
                     
-                    # CHANGE: Completely hide the squid instead of reducing opacity
-                    self.squid_item.setVisible(False)
+                    # Gone from this tank - and its head icons with it.
+                    self.set_in_tank(False)
                     
                     # CHANGE: Set flag to indicate squid is away
                     self.is_transitioning = True
@@ -2551,9 +2577,7 @@ class Squid:
             self.sick_icon_item = None
 
     def update_sick_icon_position(self):
-        if self.sick_icon_item is not None:
-            self.sick_icon_item.setPos(self.squid_x + self.squid_width // 2 - self.sick_icon_item.pixmap().width() // 2 + self.sick_icon_offset.x(),
-                                       self.squid_y + self.sick_icon_offset.y())
+        self.place_head_icon(self.sick_icon_item)
 
     def is_near_plant(self):
         if self.tamagotchi_logic is None:

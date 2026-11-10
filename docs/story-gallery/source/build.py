@@ -1,12 +1,18 @@
-"""Build the story gallery from one desktop run and one Android run.
+"""Build the story gallery from one watched internet session.
 
-python build.py STORY_DIR ANDROID_DIR [--out DIR] [--fragment FILE]
+python build.py SESSION_DIR [--platforms DIR] [--out DIR] [--fragment FILE]
 
-STORY_DIR is what tools/capture_story.py wrote, ANDROID_DIR what
-tools/capture_android.py wrote. Every caption, thought, message, number and
-nudge on the page comes from their JSON. Writes index.html and img/*.webp in
---out (default: the folder above this one); --fragment also writes the page
-without its document skeleton, for a host that supplies one.
+SESSION_DIR is what tools/internet_session.py wrote: four games in four
+homes, each behind its own router, linked only by friend codes and then left
+alone. Every caption, thought, message, address, code and number on the page
+comes from its session.json; nothing here is written for the page except the
+headings and the sentences that join them. --platforms is the folder
+tools/capture_platforms.py's pictures were committed to
+(docs/platform-screenshots), for the last chapter.
+
+Writes index.html and img/*.webp in --out (default: the folder above this
+one); --fragment also writes the page without its document skeleton, for a
+host that supplies one.
 """
 import argparse
 import html
@@ -17,79 +23,252 @@ from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
-parser.add_argument('story', type=Path)
-parser.add_argument('android', type=Path)
+parser.add_argument('session', type=Path)
+parser.add_argument('--platforms', type=Path)
 parser.add_argument('--out', type=Path, default=HERE.parent)
 parser.add_argument('--fragment', type=Path)
 args = parser.parse_args()
-story_dir, android_dir, OUT = args.story, args.android, args.out
-story = json.loads((story_dir / 'story.json').read_text())
-android = json.loads((android_dir / 'android.json').read_text())
+session_dir, OUT = args.session, args.out
+session = json.loads((session_dir / 'session.json').read_text())
 (OUT / 'img').mkdir(parents=True, exist_ok=True)
-
-SIZES = {}
-
-
-def webp(src, name):
-    im = Image.open(src).convert('RGB')
-    out = OUT / 'img' / f'{name}.webp'
-    im.save(out, 'WEBP', lossless=True, method=6)
-    SIZES[name] = im.size
-    return f'img/{name}.webp'
-
-
-for name in story['shots']:
-    webp(story_dir / 'shots' / f'{name}.png', name)
-for name in android['shots']:
-    webp(android_dir / 'shots' / f'{name}.png', name)
+for old in (OUT / 'img').glob('*.webp'):
+    old.unlink()
 
 e = html.escape
-ziggy, inky = story['notes']['ziggy'], story['notes']['inky']
+SIZES = {}
+players = session['players']
+names = [p['name'] for p in players]
+timeline = session['timeline']
+shots = session['shots']
+began = session['codes_exchanged_at']
+minutes = session['minutes']
 
 
-def thought_after(thoughts, start):
-    return next((t for t in thoughts if t.startswith(start)), None)
+def webp(src, name, width=None):
+    image = Image.open(src).convert('RGB')
+    if width and image.width > width:
+        image = image.resize((width, round(image.height * width / image.width)), Image.LANCZOS)
+    image.save(OUT / 'img' / f'{name}.webp', 'WEBP', lossless=True, method=6)
+    SIZES[name] = image.size
 
 
-def fig(name, caption=None, wide=False):
+def fig(name, caption, source=None):
+    """A picture with its caption; '' if the run did not take it."""
+    if name not in SIZES:
+        path = source or session_dir / 'shots' / f'{name}.png'
+        if not path.exists():
+            return ''
+        webp(path, name)
     w, h = SIZES[name]
-    caption = caption or story['shots'].get(name, android['shots'].get(name, {})).get('caption', '')
-    return (f'<figure class="shot{" wide" if wide else ""}">'
-            f'<button class="zoom" type="button" data-full="img/{name}.webp" data-caption="{e(caption)}" '
-            f'aria-label="Enlarge: {e(caption)}">'
+    return (f'<figure class="shot"><button class="zoom" type="button" data-full="img/{name}.webp" '
+            f'data-caption="{e(caption)}" aria-label="Enlarge: {e(caption)}">'
             f'<img src="img/{name}.webp" width="{w}" height="{h}" alt="{e(caption)}" loading="lazy">'
             f'</button><figcaption>{e(caption)}</figcaption></figure>')
 
 
-def thoughts(who, lines):
-    lines = [l for l in lines if l]
+def row(figures, kind=None):
+    figures = [f for f in figures if f]
+    if not figures:
+        return ''
+    kind = kind or {1: 'one', 2: 'two'}.get(len(figures), 'three')
+    return f'<div class="row {kind}">{"".join(figures)}</div>'
+
+
+def mind(who, lines):
+    lines = [line for line in lines if line]
     if not lines:
         return ''
-    items = ''.join(f'<li>{e(l)}</li>' for l in lines)
-    return f'<aside class="mind"><p class="mind-label">{e(who)}’s own account</p><ul>{items}</ul></aside>'
+    items = ''.join(f'<li>{e(line)}</li>' for line in lines)
+    return (f'<aside class="mind"><p class="mind-label">{e(who)}’s own account</p>'
+            f'<ul>{items}</ul></aside>')
 
 
-def neurons(names):
-    return ''.join(f'<span class="chip social">{e(n)}</span>' for n in names)
+def chips(neurons):
+    return ''.join(f'<span class="chip social">{e(n)}</span>' for n in neurons)
 
 
-aware = [thought_after(ziggy['leave_thoughts'], 'It sensed another aquarium')]
-leave = [thought_after(ziggy['leave_thoughts'], 'Another aquarium is nearby')]
-fight_inky = [thought_after(inky['fight_thoughts'], 'I went for'),
-              thought_after(inky['fight_thoughts'], 'I lost') or thought_after(inky['fight_thoughts'], 'I won')]
-fight_ziggy = [thought_after(ziggy['home_thoughts'], 'Inky came at me'),
-               thought_after(ziggy['home_thoughts'], 'I won') or thought_after(ziggy['home_thoughts'], 'I lost')]
-home = [thought_after(ziggy['home_thoughts'], 'I am tired')]
-inky_msgs = [m for _, m in story['messages']['inky']]
-fight_msg = next((m for m in inky_msgs if m.startswith('Inky:')), '')
-egg_msg = next((m for m in inky_msgs if 'produced an egg' in m), '')
-epitaph = inky.get('epitaph', '').replace('<span>', '').replace('</span>', '').split('<br>')
-won, lost = inky['fight']['won'], inky['fight']['lost']
-death_cause = inky.get('death', {}).get('cause', '')
-parents = ' and '.join(inky.get('inherited_parents') or inky.get('inherited_from') or [])
-synapses = inky.get('inherited_synapses', 0)
-pip_social = android['notes']['pip'].get('social', [])
-nudges = story['nudges'] + [f'Android: {n}' for n in android['nudges']]
+def events(kind, who=None):
+    return [ev for ev in timeline if ev['kind'] == kind and (who is None or ev['who'] == who)]
+
+
+def clock(ev):
+    return ev['clock']
+
+
+def swatch(colour):
+    if not colour:
+        return 'as it hatched'
+    return (f'<span class="swatch" style="background: rgb({colour[0]},{colour[1]},{colour[2]})">'
+            f'</span> its player’s colour')
+
+
+def shot_caption(key):
+    return shots[key]['caption']
+
+
+def shots_like(prefix_of_tag, home=None):
+    """Shot keys whose tag starts with prefix, oldest first."""
+    found = [(info['at'], key) for key, info in shots.items()
+             if key.split('-', 1)[1].startswith(prefix_of_tag)
+             and (home is None or key.startswith(f'home{home}-'))]
+    return [key for _, key in sorted(found)]
+
+
+# ---------------------------------------------------------------- the facts
+grew = events('grew')
+links = events('link')
+left = events('left')
+arrivals = events('arrival')
+homecomings = events('home')
+beliefs = events('belief')
+revised = events('revised')
+fights = events('fight')
+memories = events('memory')
+entered = events('entered')
+node_names = {}
+for p in players:
+    node_names[p['name']] = p
+last_link = max((ev['at'] for ev in links), default=began) - began
+codes_needed = len(players) * (len(players) - 1)
+most_in_one_tank = max((ev.get('squid_in_tank', 0) for ev in arrivals), default=0)
+stayed_home = [n for n in names if not events('left', n)]
+home_of = {p['name']: p['home'] for p in players}
+
+
+def thoughts_of(who, starts=None, contains=None, limit=4):
+    found = []
+    for ev in events('thought', who):
+        text = ev['text']
+        if starts and not text.startswith(starts):
+            continue
+        if contains and contains not in text:
+            continue
+        if text not in found:
+            found.append(text)
+    return found[:limit]
+
+
+def visits_table():
+    rows = []
+    for ev in sorted(left + homecomings, key=lambda x: x['at']):
+        if ev['kind'] == 'left':
+            where = ev['line'].rsplit(' - ', 1)[-1] if ' - ' in ev['line'] else 'another tank'
+            rows.append(f"<tr><td>{clock(ev)}</td><td>{e(ev['who'])}</td>"
+                        f"<td>swam out of its own tank, to {e(where)}</td></tr>")
+        else:
+            rows.append(f"<tr><td>{clock(ev)}</td><td>{e(ev['who'])}</td><td>came home</td></tr>")
+    return ''.join(rows)
+
+
+def cast():
+    cells = []
+    for p in players:
+        cells.append(
+            f"<div><dt>{e(p['name'])}</dt><dd>{e(p['personality'])} · {swatch(p.get('colour'))}<br>"
+            f"home {p['home']}: <code>{e(p['private_address'])}</code> inside, "
+            f"<code>{e(p['seen_from_outside_as'] or 'not found')}</code> from outside<br>"
+            f"friend code <code>{e(p['friend_code'])}</code></dd></div>")
+    return ''.join(cells)
+
+
+def grown_section():
+    blocks = []
+    for name in names:
+        neurons = [ev['neuron'] for ev in events('grew', name)]
+        account = thoughts_of(name, contains='so I grew', limit=4)
+        if not neurons:
+            blocks.append(f'<h3>{e(name)}</h3><p>Grew nothing new in these {minutes:g} minutes.</p>')
+            continue
+        blocks.append(f'<h3>{e(name)}</h3><p class="chips">{chips(neurons)}</p>'
+                      + mind(name, account))
+    return ''.join(blocks)
+
+
+def belief_section():
+    if not beliefs:
+        return ('<p>No squid came to a belief about its world in this session: nothing '
+                'happened often enough after anything it did.</p>')
+    blocks = []
+    for name in names:
+        mine = events('belief', name)
+        if not mine:
+            continue
+        lines = thoughts_of(name, starts='I think', limit=3) + thoughts_of(name, starts='I used to think', limit=3)
+        blocks.append(mind(name, lines))
+    count = len(beliefs)
+    changed = len(revised)
+    lead = (f'<p>{count} belief{"s" if count != 1 else ""} formed in the session'
+            + (f', and {changed} of them {"were" if changed != 1 else "was"} given up again '
+               f'when the squid’s own later experience did not bear {"them" if changed != 1 else "it"} out'
+               if changed else '')
+            + '. Nothing tells a squid what is true. It notices what follows what it does, takes '
+              'that for how its world works, acts on it - and can find out it was wrong.</p>')
+    return lead + f'<div class="row minds">{"".join(blocks)}</div>'
+
+
+def fight_section():
+    if not fights:
+        return ('<p>Nobody fought. A fight starts in a squid’s own grown aggression neuron, and in '
+                f'these {minutes:g} minutes no squid grew one: none of them went at another while its '
+                'anxiety was high. '
+                + (f'{len(memories)} encounter{"s were" if len(memories) != 1 else " was"} remembered '
+                   'instead:</p>' if memories else 'No encounter was remembered either.</p>')
+                + mind('The squid', [f"{ev['who']}: {ev['text']}" for ev in memories][:6]))
+    lines = [f"{ev['who']}: {ev['text']}" for ev in fights]
+    figures = [fig(key, shot_caption(key)) for key in shots_like('fight')][:3]
+    return (f'<p>{len(fights)} fight{"s" if len(fights) != 1 else ""}, each remembered with why it '
+            'started and how it ended:</p>' + mind('The squid', lines) + row(figures))
+
+
+def visit_figures():
+    figures = [fig(key, shot_caption(key)) for key in shots_like('visit')][:3]
+    empties = [fig(key, shot_caption(key)) for key in shots_like('empty')][:3 - min(3, len(figures))]
+    return row(figures + empties)
+
+
+def platform_section():
+    folder = args.platforms
+    if not folder or not folder.is_dir():
+        return ''
+    labels = [('windows', 'Windows'), ('macos', 'macOS'), ('linux-x11', 'Linux, X11'),
+              ('linux-wayland', 'Linux, Wayland')]
+    tanks, brains = [], []
+    for label, title in labels:
+        tank, brain = folder / label / 'main.png', folder / label / 'brain-1.png'
+        if tank.exists():
+            webp(tank, f'platform-{label}-tank')
+            tanks.append(fig(f'platform-{label}-tank', f'The tank on {title}'))
+        if brain.exists():
+            webp(brain, f'platform-{label}-brain')
+            brains.append(fig(f'platform-{label}-brain', f'The Brain Tool on {title}'))
+    if not tanks:
+        return ''
+    return f"""
+<section id="everywhere" class="chapter">
+  <h2><span class="num alt">6</span>The same game on every system</h2>
+  <p>The four homes above could have been four different computers. The game brings its own font
+  (Fio UI), its own emoji, its own widget style and one text engine, so its windows are the same size
+  and the same layout on Windows, macOS and Linux, under X11 and under Wayland. These were taken on
+  GitHub’s own machines of each kind by <code>tools/capture_platforms.py</code>; the measurements and
+  the rest of the pictures are in <code>docs/platform-screenshots</code>.</p>
+  <div class="row platforms">{''.join(tanks)}</div>
+  <div class="row platforms">{''.join(brains)}</div>
+</section>"""
+
+
+first_left = left[0] if left else None
+alone = row([fig(f"home{p['home']}-alone", shot_caption(f"home{p['home']}-alone"))
+             for p in players if f"home{p['home']}-alone" in shots], 'platforms')
+ends = row([fig(f"home{p['home']}-end", shot_caption(f"home{p['home']}-end"))
+            for p in players if f"home{p['home']}-end" in shots], 'platforms')
+brains = row([fig(f"home{p['home']}-brain", shot_caption(f"home{p['home']}-brain"))
+              for p in players if f"home{p['home']}-brain" in shots][:2])
+aquarium = [ev for ev in grew if ev['neuron'] == 'aquarium_nearby']
+isolation = session.get('isolation', {})
+unanswered = all(v == 'no answer' for v in isolation.values()) if isolation else None
+heard_before = sum(p.get('tanks_heard_before_any_code', 0) for p in players)
+refused = sum((session['final'].get(n) or {}).get('packets_refused', 0) for n in names)
+counts = session.get('counts', {})
 
 CSS = (HERE / 'style.css').read_text()
 JS = (HERE / 'lightbox.js').read_text()
@@ -101,128 +280,112 @@ page = f"""<title>Dosidicus Story Gallery</title>
 </style>
 
 <header class="hero">
-  <p class="eyebrow">Dosidicus · peer-to-peer evolution</p>
-  <h1>A life across two tanks</h1>
-  <p class="lede">Two copies of the desktop game, networked over the multiplayer plugin’s LAN protocol, and two copies
-  of the Android app linked for a visit, captured as they ran. One squid notices another tank, goes there, fights,
-  mates, and dies. Its egg then starts a new game. Every squid here is moved by its own network, and every
-  number and line of thought is from the run.</p>
-  <dl class="cast">
-    <div><dt>Ziggy</dt><dd>adventurous · the traveller</dd></div>
-    <div><dt>Inky</dt><dd>timid · the resident</dd></div>
-    <div><dt>Pip &amp; Nova</dt><dd>the Android pair</dd></div>
-  </dl>
+  <p class="eyebrow">Dosidicus · internet play</p>
+  <h1>{len(players)} squid, {len(players)} homes, {minutes:g} minutes</h1>
+  <p class="lede">{len(players)} copies of the desktop game, each in a home of its own behind its own router,
+  found each other with friend codes and were then left alone for {minutes:g} minutes. Nothing told any squid
+  what to do. This is what happened, as it was written down while it happened: every address, code, thought,
+  message and number below is from the run.</p>
+  <dl class="cast">{cast()}</dl>
   <nav class="toc" aria-label="Chapters">
-    <a href="#aware">1 Aware</a><a href="#visit">2 Visit</a><a href="#fight">3 Fight</a><a href="#mate">4 Mate</a>
-    <a href="#dies">5 Dies</a><a href="#new-game">6 New game</a><a href="#networked">Two desktops</a>
-    <a href="#android">Android</a><a href="#nudges">What was nudged</a>
+    <a href="#apart">1 · Apart</a><a href="#codes">2 · Friend codes</a><a href="#visits">3 · Who went where</a>
+    <a href="#grew">4 · What they grew</a><a href="#believed">5 · What they came to believe</a>
+    <a href="#everywhere">6 · Every system</a><a href="#timeline">Everything, in order</a>
   </nav>
 </header>
 
 <main>
-<section id="aware" class="chapter">
-  <h2><span class="num">1</span>Ziggy becomes aware of another tank</h2>
-  <p>Inky’s game comes up on the same network. Ziggy had no way to sense another aquarium, so its brain grew one:
-  <code>aquarium_nearby</code>, the first neuron on a SOCIAL band that did not exist a moment before. Nothing is
-  pre-wired; social senses grow only from encounters.</p>
-  <div class="row two">{fig('ziggy-aware-tank')}{fig('ziggy-aware-brain')}</div>
-  {thoughts('Ziggy', aware)}
+<section id="apart" class="chapter">
+  <h2><span class="num">1</span>Apart</h2>
+  <p>Every home has the same private address, <code>{e(players[0]['private_address'])}</code>, as real homes do,
+  and a router that rewrites it to the router’s own outside address and lets nothing in that the home did not
+  first send to. Before any code was entered, the {len(players)} tanks between them had heard
+  <strong>{heard_before}</strong> other tanks{'' if unanswered is None else
+  ', and a message sent unasked from one home to another home’s router got '
+  + ('no answer' if unanswered else 'an answer')}.
+  Each squid was a new hatchling, alone:</p>
+  {alone}
 </section>
 
-<section id="visit" class="chapter">
-  <h2><span class="num">2</span>It decides to visit</h2>
-  <p>No rule sends it. With curiosity high, Ziggy’s own network takes it to the edge of its tank and out. Its body
-  crosses into Inky’s tank, but its brain keeps running at home. Inky’s game sends it what its body perceives,
-  and it sends back what it means to do.</p>
-  <div class="row one">{fig('ziggy-leaving', wide=True)}</div>
-  {thoughts('Ziggy', leave)}
+<section id="codes" class="chapter">
+  <h2><span class="num">2</span>Friend codes</h2>
+  <p>Each game asked the address server on the shared network what address it was seen at, and built its friend
+  code from the answer (the cast list above has them). The players passed the codes round: everyone entered
+  everyone else’s, {len(entered)} entries in all. The last of the {len(links)} links through the routers came up
+  <strong>{last_link:.0f} second{'s' if round(last_link) != 1 else ''}</strong> after the codes were entered;
+  {refused} message{'s were' if refused != 1 else ' was'} refused for showing no invitation.</p>
+  <p>Within moments {len(aquarium)} of the {len(players)} squid had grown a sense none of them hatched with:</p>
+  <p class="chips">{chips(sorted({ev['neuron'] for ev in aquarium}))}</p>
+  {mind(aquarium[0]['who'], thoughts_of(aquarium[0]['who'], contains='aquarium', limit=2)) if aquarium else ''}
 </section>
 
-<section id="networked" class="chapter split">
-  <h2><span class="num alt">⇄</span>Two desktop games, networked</h2>
-  <p>The same moment in two separate desktop processes, talking over UDP multicast, the same as two PCs on a LAN.
-  On the left, Ziggy’s home tank stands empty while Ziggy is away. On the right, Ziggy’s body enters Inky’s tank,
-  driven from the other process.</p>
-  <div class="row two pair">
-    {fig('ziggy-away-home', 'Ziggy’s game: its tank while Ziggy is away')}
-    {fig('inky-arrival', 'Inky’s game: Ziggy’s body arrives; its brain is still at home')}
-  </div>
+<section id="visits" class="chapter">
+  <h2><span class="num">3</span>Who went where</h2>
+  <p>{f"{e(first_left['who'])} was first out, {clock(first_left)} after the codes went in." if first_left else
+      'No squid left its tank.'}
+  {f'{len(left)} departures in all; the most squid in one tank at once was {most_in_one_tank}.' if left else ''}
+  {(e(', '.join(stayed_home)) + (' never left home.' if len(stayed_home) == 1 else ' never left home.')) if stayed_home and left else ''}
+  A squid leaves when its own network takes it out, and comes home when its own rule says so; a tank whose squid
+  is out can still be visited.</p>
+  <table class="visits"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>
+  <tbody>{visits_table()}</tbody></table>
+  {visit_figures()}
+  {mind(first_left['who'], thoughts_of(first_left['who'], starts='Another aquarium', limit=1)) if first_left else ''}
 </section>
 
-<section id="fight" class="chapter">
-  <h2><span class="num">3</span>They get into a fight</h2>
-  <p>Inky is holding a rock. When Ziggy comes close, the rock between them flashes dark red: it is what they are
-  fighting over. Then the scuffle. Who starts it is each squid’s aggression, and who wins comes from each one’s
-  ability, personality, experience and condition, never a script.</p>
-  <div class="row two">{fig('inky-fight-leadin')}{fig('inky-fight-cloud')}</div>
-  <div class="row two minds">{thoughts('Inky', fight_inky)}{thoughts('Ziggy', fight_ziggy)}</div>
-  {f'<p class="game-msg"><span>Inky’s game says</span>{e(fight_msg)}</p>' if fight_msg else ''}
+<section id="grew" class="chapter">
+  <h2><span class="num">4</span>What they grew</h2>
+  <p>A squid grows a neuron only for something it has no way to represent. None of them hatched knowing that
+  other squid exist. In these {minutes:g} minutes they grew {len(grew)} neurons between them, each with the
+  reason recorded in the squid’s own words:</p>
+  {grown_section()}
+  {brains}
 </section>
 
-<section id="mate" class="chapter">
-  <h2><span class="num">4</span>They mate</h2>
-  <p>Still in contact after the fight, the two mate: one heart beats over the pair. Inky lays an egg and, as a
-  parent, stops eating. The egg holds both parents’ weights; Ziggy’s came over the network as a gamete.</p>
-  <div class="row two">{fig('inky-mating')}{fig('inky-egg')}</div>
-  {f'<p class="game-msg"><span>Inky’s game says</span>{e(egg_msg)}</p>' if egg_msg else ''}
-  <h3>Ziggy goes home, changed</h3>
-  <p>Tired, Ziggy goes home to sleep, by its own rule. It comes back with a social network it did not have before
-  the visit:</p>
-  <p class="chips">{neurons(ziggy.get('social', []))}</p>
-  <div class="row two">{fig('ziggy-home')}{fig('ziggy-home-brain')}</div>
-  {thoughts('Ziggy', home)}
+<section id="believed" class="chapter">
+  <h2><span class="num">5</span>What they came to believe, and what they remember</h2>
+  {belief_section()}
+  <h3>Fights</h3>
+  {fight_section()}
+  <h3>At the end</h3>
+  {ends}
+</section>
+{platform_section()}
+
+<section id="timeline" class="chapter">
+  <h2>Everything, in order</h2>
+  <p>{len(timeline)} things were written down between the codes going in and the end of the session
+  ({', '.join(f'{count} {kind}' for kind, count in sorted(counts.items()))}). All of them:</p>
+  <details><summary>The whole session, line by line</summary>
+  <pre class="log">{e(chr(10).join(ev['line'] for ev in timeline))}</pre></details>
 </section>
 
-<section id="dies" class="chapter">
-  <h2><span class="num">5</span>Inky dies</h2>
-  <p>A parent keeps its egg and will not eat. Inky {e('starves' if death_cause == 'starved' else 'dies')}, and a
-  headstone marks the spot, beside the egg. Hovering over the headstone shows the epitaph:</p>
-  <div class="row one">{fig('inky-dead', wide=True)}</div>
-  <blockquote class="epitaph">{'<br>'.join(e(line) for line in epitaph)}</blockquote>
-</section>
-
-<section id="new-game" class="chapter">
-  <h2><span class="num">6</span>A new game starts</h2>
-  <p>The egg hatches, and that is a new game. There is no way out, just as a game starts with no save. The
-  hatchling begins with a newborn brain overlaid with half of each parent’s weights:
-  <strong>{synapses}</strong> synapses inherited from {e(parents)}, each recorded in the brain’s ledger with the
-  parent it came from. It has no memories, and its parent’s headstone stays in the tank.</p>
-  <div class="row three">{fig('inky-hatching')}{fig('inky-hatchling')}{fig('inky-hatchling-brain')}</div>
-</section>
-
-<section id="android" class="chapter">
-  <h2><span class="num alt">▣</span>An Android multiplayer session</h2>
-  <p>Two copies of the Android app (its Kivy UI and engine, phone-sized), each in its own process. Pip hosts, and
-  Nova finds Pip and connects. Nova’s body swims in Pip’s tank while its brain stays on Nova’s phone, which says
-  so. Pip, spoiling for a fight, scuffles with it, and Pip’s brain grows its own SOCIAL band:</p>
-  <p class="chips">{neurons(pip_social)}</p>
-  <div class="phones">
-    {fig('android-nova-home')}{fig('android-nova-found')}{fig('android-nova-connected')}
-    {fig('android-pip-connected')}{fig('android-pip-visitor')}{fig('android-nova-away')}
-    {fig('android-pip-fight')}{fig('android-pip-brain')}
-  </div>
-  <p class="note">Google Nearby needs two phones with real radios, so for this capture a loopback socket stands in
-  for it. It delivers the same events in the same order (peer found, connection initiated, accepted, connected,
-  bytes) behind the same <code>NearbyManager</code> calls. Everything above the transport is the app as shipped.</p>
-</section>
-
-<section id="nudges" class="chapter disclosure">
-  <h2>What was nudged</h2>
-  <p>A lifetime has to fit in a few minutes, and the scenes have to happen while the camera is on. So the capture
-  scripts set some drives and timings and log each change. They never choose an action for a squid. Every nudge,
-  as logged:</p>
-  <ol>{''.join(f'<li>{e(n)}</li>' for n in nudges)}</ol>
+<section id="chosen" class="chapter disclosure">
+  <h2>What was chosen, and what was not</h2>
+  <ol>
+    <li>Chosen, as four players would: each squid’s name and personality, and the colour three of them were
+    given on the About tab. A squid’s colour goes with it, so it is the same colour in every tank it visits.</li>
+    <li>Not touched: any drive, any timing, any chance. The squid were new hatchlings with the drives the game
+    gave them, time ran at the game’s own speed, nobody fed or cleaned, and the chance of mating was the game’s
+    own (a squid has to be an hour old before it can at all).</li>
+    <li>The “internet” is a private one made on a single machine out of Linux network namespaces: real address
+    translation and real routing, but not real home routers. These routers keep a tank’s port the same whoever
+    it talks to, which is what most home routers do and what makes “both players enter each other’s code”
+    work. A router that gives every destination a different port would need the port forwarded instead.</li>
+    <li>What this session showed is missing: two visitors in the same tank sense the tank’s own squid, but not
+    yet each other.</li>
+  </ol>
 </section>
 
 <section class="chapter how">
-  <h2>How these were made</h2>
+  <h2>How this was made</h2>
   <ul>
-    <li><strong>Desktop:</strong> <code>tools/capture_story.py</code> runs two real game processes (offscreen Qt)
-    with the multiplayer plugin on its multicast protocol, and screenshots each window.</li>
-    <li><strong>Android:</strong> <code>tools/capture_android.py</code> runs the Kivy app twice under a virtual
-    display and presses the buttons a player would: Host on one phone, Find and Connect on the other.</li>
-    <li>The game messages and thoughts quoted here are copied from each run’s log, not written for the page:
-    <code>docs/story-gallery/source/build.py</code> builds the page from the two runs’ JSON.</li>
+    <li><code>tools/internet_session.py</code> builds the homes and routers, starts one real game process in
+    each home (offscreen Qt), passes the friend codes round, and then only watches, writing every event to
+    <code>session.json</code> and saving each window as it goes.</li>
+    <li><code>docs/story-gallery/source/build.py</code> builds this page from that file. The thoughts and game
+    messages are copied from the run, not written for the page.</li>
+    <li>Run it again and the story is a different one: nothing here is scripted.</li>
   </ul>
 </section>
 </main>

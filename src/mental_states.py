@@ -62,6 +62,12 @@ class MentalStateManager:
                 state.icon_item = None
 
     def update_icon_position(self, icon_item):
+        # Just above the squid's head, where every head icon goes - and
+        # hidden while the squid is out of its tank (Squid.place_head_icon).
+        place = getattr(self.squid, 'place_head_icon', None)
+        if callable(place):
+            place(icon_item)
+            return
         icon_item.setPos(self.squid.squid_x + self.squid.squid_width // 2 - icon_item.pixmap().width() // 2 + self.icon_offset.x(),
                          self.squid.squid_y + self.icon_offset.y())
 

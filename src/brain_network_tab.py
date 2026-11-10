@@ -457,7 +457,9 @@ class NetworkTab(BrainBaseTab):
 
         # 2. Button container (single button for Brain Designer)
         self.new_button_container = QtWidgets.QWidget()
-        self.new_button_container.setFixedSize(DisplayScaling.scale(100), DisplayScaling.scale(100))
+        # As tall as its button and no taller, so it sits close above the
+        # Load and Reset buttons below it: the three are one group.
+        self.new_button_container.setFixedSize(DisplayScaling.scale(100), DisplayScaling.scale(80))
         btn_layout = QtWidgets.QHBoxLayout(self.new_button_container)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(0)

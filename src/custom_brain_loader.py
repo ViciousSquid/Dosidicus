@@ -28,29 +28,39 @@ def add_load_brain_button(network_tab, checkbox_layout):
         network_tab: The NetworkTab instance (self)
         checkbox_layout: The checkbox layout to add the button to
     """
-    # Add some spacing
-    checkbox_layout.addSpacing(20)
-    
-    # Create the button
-    load_btn = QtWidgets.QPushButton("Load Brain...")
+    # Load, reset and (above them) the Brain Designer button are one group:
+    # the same size, a few pixels apart.
+    try:
+        from .display_scaling import DisplayScaling
+    except ImportError:
+        from display_scaling import DisplayScaling
+    button_size = QtCore.QSize(DisplayScaling.scale(100), DisplayScaling.scale(80))
+    network_tab._brain_buttons_size = button_size
+    checkbox_layout.setSpacing(6)
+
+    # A floppy disk, drawn from the game's own line-emoji font (src/fonts):
+    # the same plain picture on every system. What it does is in its tooltip.
+    load_btn = QtWidgets.QPushButton("\U0001F4BE")
     load_btn.setToolTip("Load a custom brain architecture")
+    load_btn.setAccessibleName("Load Brain")
+    load_btn.setFixedSize(button_size)
     load_btn.setStyleSheet("""
         QPushButton {
-            background-color: #5c6bc0;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            padding: 4px 12px;
-            font-weight: bold;
-            font-size: 9pt;
+            background-color: #e8eaf6;
+            color: #000000;
+            border: 1px solid #5c6bc0;
+            border-radius: 8px;
+            font-family: "Dosidicus Line Emoji";
+            font-size: 22pt;
         }
         QPushButton:hover {
-            background-color: #7986cb;
+            background-color: #c5cae9;
         }
         QPushButton:pressed {
-            background-color: #3f51b5;
+            background-color: #9fa8da;
         }
     """)
+    network_tab.load_brain_button = load_btn
     
     # Create loader and connect
     loader = BrainLoader(network_tab)
@@ -62,14 +72,16 @@ def add_load_brain_button(network_tab, checkbox_layout):
     # --- RESET BUTTON (with “Are you sure?” guard) ---
     reset_btn = QtWidgets.QPushButton("↺")
     reset_btn.setToolTip("Reset to default brain")
-    reset_btn.setFixedSize(50, 50)
+    reset_btn.setFixedSize(button_size)
+    network_tab.reset_brain_button = reset_btn
     reset_btn.setStyleSheet("""
         QPushButton {
             background-color: #78909c;
             color: white;
             border: none;
-            border-radius: 3px;
+            border-radius: 8px;
             font-weight: bold;
+            font-size: 18pt;
         }
         QPushButton:hover { background-color: #90a4ae; }
     """)

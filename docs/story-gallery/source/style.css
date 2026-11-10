@@ -161,3 +161,18 @@ dialog#lightbox form { position: absolute; top: 8px; right: 8px; margin: 0; }
   .zoom { transition: transform .15s ease, box-shadow .15s ease; }
   .zoom:hover { transform: translateY(-2px); }
 }
+
+/* The internet session */
+.row.platforms { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .row.platforms { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.swatch { display: inline-block; width: 0.85em; height: 0.85em; border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.35); vertical-align: -0.08em; }
+.cast code { font-size: 0.85em; overflow-wrap: anywhere; }
+table.visits { border-collapse: collapse; margin: 1rem 0 1.5rem; width: 100%; max-width: 44rem; }
+table.visits th, table.visits td { text-align: left; padding: 0.35rem 0.9rem 0.35rem 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3); vertical-align: top; }
+table.visits td:first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+details summary { cursor: pointer; font-weight: 600; margin: 0.5rem 0; }
+pre.log { font-size: 0.8rem; line-height: 1.45; overflow-x: auto; white-space: pre-wrap;
+  overflow-wrap: anywhere; padding: 1rem; border-radius: 8px; background: rgba(128, 128, 128, 0.12);
+  max-height: 32rem; overflow-y: auto; }

@@ -2194,7 +2194,10 @@ class MultiplayerPlugin:
 
             local_squid.squid_x, local_squid.squid_y = entry_coords[0], entry_coords[1]
             local_squid.squid_item.setPos(local_squid.squid_x, local_squid.squid_y)
-            local_squid.squid_item.setVisible(True)
+            if hasattr(local_squid, 'set_in_tank'):
+                local_squid.set_in_tank(True)        # and its head icons with it
+            else:
+                local_squid.squid_item.setVisible(True)
             local_squid.squid_item.setOpacity(1.0)
             if local_squid.squid_item.graphicsEffect():
                 local_squid.squid_item.graphicsEffect().setEnabled(False)

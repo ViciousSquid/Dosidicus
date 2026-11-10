@@ -23,7 +23,8 @@ written down as it happens: links coming up, squid leaving and arriving,
 what they grow, think, remember and believe, and every fight with its
 reason. Nothing is nudged: the squid are new hatchlings with the drives the
 game gave them, time runs at the game's own speed, and the chance of mating
-is the game's own.
+is the game's own. What is chosen is what four players would choose: each
+squid's name, its personality, and for three of them a colour.
 
 What this does not show: a real home router. These routers keep a tank's
 port the same whoever it talks to, which is what most home routers do and
@@ -52,8 +53,10 @@ sys.path.insert(0, str(ROOT))
 
 PREFIX = 'dsq'
 STUN_ADDRESS, STUN_PORT = '100.64.0.1', 3478
-PLAYERS = (('Ziggy', 'ADVENTUROUS'), ('Inky', 'TIMID'),
-           ('Pesto', 'GREEDY'), ('Bolt', 'ENERGETIC'))
+#: The four players' squid: name, personality, and the colour its player gave
+#: it on the About tab (None: left as it hatched).
+PLAYERS = (('Ziggy', 'ADVENTUROUS', None), ('Inky', 'TIMID', (120, 170, 255)),
+           ('Pesto', 'GREEDY', (255, 105, 180)), ('Bolt', 'ENERGETIC', (120, 220, 140)))
 #: The screen the games lay themselves out for (they draw offscreen).
 SCREEN = '2560x1440'
 
@@ -168,7 +171,7 @@ def stun_server(log_path):
 # One game, in one home
 # ---------------------------------------------------------------------------
 def worker(output, number):
-    name, personality_name = PLAYERS[number - 1]
+    name, personality_name, colour = PLAYERS[number - 1]
     folder = output / f'home{number}'
     shots = output / 'shots'
     folder.mkdir(parents=True, exist_ok=True)
@@ -360,6 +363,10 @@ def worker(output, number):
             if plugin is None:
                 if now > 9 and window.splash._ended:
                     squid.name = name
+                    if colour:                  # its player's choice, as on the About tab
+                        from PyQt5 import QtGui
+                        squid.apply_tint(QtGui.QColor(*colour))
+                    state['colour'] = colour
                     state['uuid'] = str(squid.uuid)
                     shot('alone', f'{name}, a new {personality_name.lower()} hatchling, alone')
                     assert window.plugin_manager.enable_plugin('multiplayer')
@@ -471,6 +478,7 @@ def run(output, homes, minutes):
         for s in statuses:
             session['players'].append({
                 'home': s['home'], 'name': s['name'], 'personality': s['personality'],
+                'colour': s.get('colour'),
                 'private_address': s['private_address'],
                 'seen_from_outside_as': s['seen_from_outside_as'],
                 'friend_code': s['friend_code'],

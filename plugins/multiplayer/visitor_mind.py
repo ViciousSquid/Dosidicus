@@ -611,7 +611,10 @@ class VisitorMind:
             # end_visit. Whose tank, the first frame says (_open_session).
             if getattr(squid, 'squid_item', None) is not None:
                 try:
-                    squid.squid_item.setVisible(False)
+                    if hasattr(squid, 'set_in_tank'):
+                        squid.set_in_tank(False)     # its head icons go with it
+                    else:
+                        squid.squid_item.setVisible(False)
                 except Exception:
                     pass
         return self.visit_id
@@ -648,7 +651,10 @@ class VisitorMind:
             squid.can_move = True
             if getattr(squid, 'squid_item', None) is not None:
                 try:
-                    squid.squid_item.setVisible(True)
+                    if hasattr(squid, 'set_in_tank'):
+                        squid.set_in_tank(True)
+                    else:
+                        squid.squid_item.setVisible(True)
                 except Exception:
                     pass
 
