@@ -135,7 +135,7 @@ def test_a_window_that_fills_the_screen_is_the_same_size_on_every_system():
     os.environ[desktop_style.SCREEN_OVERRIDE] = '1920x1080'
     try:
         assert desktop_style.screen_size(screen) == (1920, 1080, 1.0)
-        assert desktop_style.usable_size(screen) == (1920, 980)
+        assert desktop_style.usable_size(screen) == (1920, 920)
         from src.display_scaling import DisplayScaling
         assert DisplayScaling.screen_pixels(screen) == (1920, 1080)
     finally:
@@ -165,9 +165,12 @@ def test_every_window_is_placed_in_the_same_spot_on_every_system():
     os.environ[desktop_style.SCREEN_OVERRIDE] = '1920x1080'
     try:
         area = desktop_style.layout_area(screen)
-        assert (area.left(), area.top(), area.width(), area.height()) == (0, 40, 1920, 980)
+        assert (area.left(), area.top(), area.width(), area.height()) == (0, 40, 1920, 952)
         assert area.top() == desktop_style.TOP_INSET            # below any menu bar or panel
-        assert 1080 - (area.top() + area.height()) == 60        # above any taskbar or dock
+        assert 1080 - (area.top() + area.height()) == 88        # above a Mac's Dock (78)
+        # A window that fills the height, title bar and all, ends above the Dock.
+        tallest = desktop_style.usable_size(screen)[1]
+        assert area.top() + desktop_style.TITLE_BAR + tallest == 1080 - 88
     finally:
         del os.environ[desktop_style.SCREEN_OVERRIDE]
     # Nothing that places a window asks the system what it has left free.

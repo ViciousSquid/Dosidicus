@@ -123,6 +123,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         area = layout_area(screen)
         x_pos = max(area.left(), area.right() - final_width - 100)
         y_pos = area.top()
+        self._placed_at = (x_pos, y_pos)
 
         self.move(x_pos, y_pos)
 
@@ -150,7 +151,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             height = min(max(final_height, hint.height()), usable_height)
             if (width, height) != (final_width, final_height):
                 self.resize(width, height)
-                self.move(max(area.left(), area.right() - width - 100), area.top())
+                self._placed_at = (max(area.left(), area.right() - width - 100), area.top())
+                self.move(*self._placed_at)
 
         # Set up timers
         self.init_timers()
@@ -1383,6 +1385,19 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_widget.state['position'] = (squid.squid_x, squid.squid_y)
         
         print("✅ Brain state synced from squid")
+
+
+    def showEvent(self, event):
+        """The first time the window is shown, put it where it was meant to
+        go once more. A window placed before the system has given it a frame
+        can end up a few pixels off (7 on Windows); placed again once it has
+        one, it is where every other system has it."""
+        super().showEvent(event)
+        if not getattr(self, '_placed_once', False):
+            self._placed_once = True
+            place = getattr(self, '_placed_at', None)
+            if place is not None:
+                QtCore.QTimer.singleShot(0, lambda: self.move(*place))
 
     def init_timers(self):
         # Hebbian learning timer

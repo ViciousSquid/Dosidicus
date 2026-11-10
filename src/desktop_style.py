@@ -47,7 +47,7 @@ UI_FONT_SIZE = 10
 FONT_DPI = 96
 #: Screen height kept clear for the system's taskbar, dock, panel or menu bar:
 #: one number, so a window that fills the screen is the same size everywhere.
-SYSTEM_CHROME = 100
+SYSTEM_CHROME = 160         # = TOP_INSET + TITLE_BAR + BOTTOM_INSET, below
 
 #: `DOSIDICUS_SCREEN=1920x1080`: lay the game out for this screen instead of
 #: the one found. For taking the same picture on machines whose screens differ.
@@ -588,6 +588,13 @@ def usable_size(screen):
 #: Kept clear above the windows the game places: lower than any system's
 #: menu bar or panel, so a window put here is not pushed somewhere else.
 TOP_INSET = 40
+#: Kept clear below them: taller than a Mac's Dock (78 pixels on a 1080p
+#: screen, where a window that reached into it was cut 37 pixels short by
+#: the system), a Windows taskbar and a Linux panel.
+BOTTOM_INSET = 88
+#: A window's own title bar, which the system draws above what the game sizes.
+TITLE_BAR = 32
+assert SYSTEM_CHROME == TOP_INSET + TITLE_BAR + BOTTOM_INSET
 
 
 def layout_area(screen):
@@ -606,7 +613,8 @@ def layout_area(screen):
         left, top = origin.x(), origin.y()
     except Exception:
         left, top = 0, 0
-    return QtCore.QRect(left, top + TOP_INSET, width, max(240, height - SYSTEM_CHROME))
+    return QtCore.QRect(left, top + TOP_INSET, width,
+                        max(240, height - TOP_INSET - BOTTOM_INSET))
 
 
 def describe(app):
@@ -633,5 +641,5 @@ def describe(app):
 
 __all__ = ['UI_FONT', 'MONO_FONT', 'EMOJI_FONT', 'LINE_EMOJI_FONT', 'UI_FONT_SIZE', 'prepare_qt', 'install_style',
            'load_fonts', 'ui_font', 'light_palette', 'screen_size', 'reported_size',
-           'usable_size', 'layout_area', 'TOP_INSET',
+           'usable_size', 'layout_area', 'TOP_INSET', 'BOTTOM_INSET', 'TITLE_BAR',
            'describe', 'GameStyle', 'font_directory']
