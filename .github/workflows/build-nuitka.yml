@@ -432,11 +432,13 @@ jobs:
           lipo universal/Dosidicus.app/Contents/MacOS/PyQt5/qt-plugins/platforms/libqcocoa.dylib \
             -verify_arch x86_64 arm64
 
-      - name: Sign and verify
+      - name: Ad-hoc sign and verify
         run: |
           # Joining changes every compiled file, so every signature is redone.
           codesign --deep --force --sign - universal/Dosidicus.app
           codesign --verify --deep --strict --verbose=2 universal/Dosidicus.app
+          codesign --display --verbose=4 universal/Dosidicus.app 2>&1 \
+            | grep -Fxq "Signature=adhoc"
 
       - name: Start it on Apple Silicon
         run: bash tools/macos_smoke_test.sh "$PWD/universal/Dosidicus.app" arm64
@@ -489,11 +491,18 @@ jobs:
           shasum -a 256 -c Dosidicus-macos-universal.dmg.sha256
           cd ..
           hdiutil verify candidate/Dosidicus-macos-universal.dmg
+          # The image a player downloads is ad-hoc signed, and still is after
+          # travelling here as an artifact.
+          codesign --verify --verbose=2 candidate/Dosidicus-macos-universal.dmg
+          codesign --display --verbose=4 candidate/Dosidicus-macos-universal.dmg 2>&1 \
+            | grep -Fxq "Signature=adhoc"
           MOUNT="$RUNNER_TEMP/dosidicus-universal"
           mkdir -p "$MOUNT"
           hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" candidate/Dosidicus-macos-universal.dmg
           trap 'hdiutil detach "$MOUNT" -force || true' EXIT
           codesign --verify --deep --strict --verbose=2 "$MOUNT/Dosidicus.app"
+          codesign --display --verbose=4 "$MOUNT/Dosidicus.app" 2>&1 \
+            | grep -Fxq "Signature=adhoc"
           SMOKE_LOG="$GITHUB_WORKSPACE/smoke-macos.log" \
             bash tools/macos_smoke_test.sh "$MOUNT/Dosidicus.app" x86_64
 

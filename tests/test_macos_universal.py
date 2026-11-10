@@ -203,3 +203,22 @@ def test_the_nuitka_build_makes_the_universal_dmg_itself():
         < text.index('name: nuitka-macos-universal-dmg')
     # And a release carries it.
     assert "'Dosidicus-macos-universal.dmg'" in (ROOT / 'tools' / 'release_support.py').read_text()
+
+
+def test_every_mac_disk_image_is_ad_hoc_signed_and_checked_to_be():
+    """The app inside is ad-hoc signed, the disk image itself is too, and the
+    build stops unless both say so - for the Apple Silicon, Intel and
+    universal images alike, since all three are made by the one script."""
+    script = (ROOT / 'tools' / 'build_macos_dmg.sh').read_text(encoding='utf-8')
+    assert 'codesign --force --sign - "$DMG"' in script                 # the image itself
+    assert 'codesign --verify --verbose=2 "$DMG"' in script
+    assert script.count('is_adhoc "') == 3                              # app, image, app in image
+    assert 'grep -Fxq "Signature=adhoc"' in script
+    # Signed before it is mounted and inspected, and before any checksum.
+    assert script.index('codesign --force --sign - "$DMG"') < script.index('hdiutil attach')
+    workflow = (ROOT / '.github' / 'workflows' / 'build-nuitka.yml').read_text(encoding='utf-8')
+    assert workflow.count('bash tools/build_macos_dmg.sh') == 2        # per-architecture, universal
+    assert workflow.index('bash tools/build_macos_dmg.sh universal/Dosidicus.app') \
+        < workflow.index('shasum -a 256 Dosidicus-macos-universal.dmg >')
+    assert workflow.count('grep -Fxq "Signature=adhoc"') == 3
+    assert 'codesign --deep --force --sign - universal/Dosidicus.app' in workflow
