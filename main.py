@@ -40,6 +40,20 @@ _EARLY_APP = None
 #: Launches that never show the game, and so never ask for a language.
 NO_SPLASH_FLAGS = ('-c', '--clean', '-designer', '--designer', '-h', '--help')
 
+#: Checks that multiplayer networking works in this copy of the game - the
+#: built one included - and exits, without opening a window
+#: (plugins/multiplayer/selftest.py).
+NETWORK_SELF_TEST = '--network-self-test'
+
+
+def network_self_test_if_asked():
+    if NETWORK_SELF_TEST not in sys.argv[1:]:
+        return
+    import logging
+    logging.disable(logging.WARNING)        # the result, not the socket chatter
+    from plugins.multiplayer.selftest import run
+    sys.exit(run())
+
 
 def choose_language_first():
     """As early as possible - before the game is even imported - show the
@@ -66,6 +80,7 @@ def choose_language_first():
 
 
 if __name__ == '__main__':
+    network_self_test_if_asked()
     choose_language_first()
 
 import time
@@ -1213,6 +1228,9 @@ def main():
                        help='Clean __pycache__ and logs folders before starting')
     parser.add_argument('-designer', '--designer', action='store_true',
                        help='Launch Brain Designer standalone')
+    parser.add_argument(NETWORK_SELF_TEST, action='store_true',
+                       help='Check that multiplayer networking works in this copy '
+                            'of the game, and exit')
     args = parser.parse_args()
 
     # Perform cleanup if requested before logging setup

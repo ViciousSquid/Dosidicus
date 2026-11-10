@@ -20,6 +20,7 @@ on:
       - "tools/build_macos_dmg.sh"
       - "tools/merge_macos_universal.py"
       - "tools/macos_smoke_test.sh"
+      - "plugins/multiplayer/selftest.py"
       - "tests/test_macos_runtime.py"
       - "src/macos_runtime.py"
       # The game loads its fonts as it starts: a font a system refuses is a
@@ -260,6 +261,28 @@ jobs:
         run: |
           & ./release/Dosidicus.exe --help
           if ($LASTEXITCODE -ne 0) { throw "Compiled application failed --help" }
+
+      # Multiplayer in the built game itself, not in the source it was built
+      # from: two tanks on this machine, linked by a friend code, each
+      # hearing the other (plugins/multiplayer/selftest.py).
+      - name: Network self-test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          DOSIDICUS_SELF_TEST_LOG: ${{ github.workspace }}\network-self-test.log
+        run: |
+          $run = Start-Process -FilePath ./release/Dosidicus.exe -ArgumentList '--network-self-test' -Wait -PassThru -NoNewWindow
+          if (Test-Path $env:DOSIDICUS_SELF_TEST_LOG) { Get-Content $env:DOSIDICUS_SELF_TEST_LOG }
+          if ($run.ExitCode -ne 0) { throw "Multiplayer networking does not work in the built game" }
+          if (-not (Select-String -Path $env:DOSIDICUS_SELF_TEST_LOG -Pattern 'Network self-test passed' -Quiet)) {
+            throw "The built game did not run the network self-test"
+          }
+
+      - name: Network self-test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ./release/Dosidicus --network-self-test | tee network-self-test.log
+          grep -q 'Network self-test passed' network-self-test.log
 
       - name: Smoke test (Linux)
         if: runner.os == 'Linux'

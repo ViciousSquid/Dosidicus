@@ -56,6 +56,14 @@ for _ in $(seq 1 60); do
       fi
       echo "Started and stayed up as $(uname -m), with its data in a writable folder,"
       echo "and left its own bundle exactly as it was signed"
+      # Multiplayer in this very build: two tanks on this Mac, linked by a
+      # friend code, each hearing the other (plugins/multiplayer/selftest.py).
+      kill "$PID" 2>/dev/null || true
+      wait "$PID" 2>/dev/null || true
+      "$BIN" --network-self-test
+      if [ -w "$APP" ]; then
+        codesign --verify --deep --strict "$APP"
+      fi
       exit 0
     fi
   fi
