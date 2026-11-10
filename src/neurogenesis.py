@@ -225,15 +225,15 @@ UNSEEN_SENSES = (AQUARIUM_SENSE,)
 #: Each social neuron is grown from experience, not chosen: the first time
 #: everything listed is happening at once while another squid is in view - a
 #: percept the world reports ('in_fight'), an action neuron of the squid's own
-#: firing, or alarm (anxiety at SOCIAL_ALARM). aggression is the squid's own
-#: network going at another squid while alarmed: a hostile approach. Rarest
+#: firing, or high anxiety (anxiety at SOCIAL_ALARM). aggression is the squid's own
+#: network going at another squid while its anxiety is high: a hostile approach. Rarest
 #: first, since one grows per tick and a fight lasts only a few.
 SOCIAL_EXPERIENCE = {'social_fight': ('in_fight',),
                      'aggression': ('act_play', 'anxiety'),
                      'social_flee': ('act_flee',),
                      'social_play': ('act_play',)}
 
-#: The anxiety at which a squid counts as alarmed, for SOCIAL_EXPERIENCE.
+#: The anxiety that counts as high, for SOCIAL_EXPERIENCE.
 SOCIAL_ALARM = 60.0
 
 #: How can_see_squid is wired when the first sighting grows it - the one place
@@ -1162,7 +1162,7 @@ class EnhancedNeurogenesis:
     def _grow_social_neuron(self, concept: str, sources) -> Optional[str]:
         verb = _SOCIAL_VERBS[concept]
         state = self.brain_widget.state
-        while_ = ' while alarmed' if 'anxiety' in sources else ''
+        while_ = ' while its anxiety was high' if 'anxiety' in sources else ''
         deficit = Deficit(
             kind='representation', key=f'concept:{concept}',
             summary=f'It {verb} another squid{while_} and had no neuron for that',

@@ -177,6 +177,20 @@ class CausalConfig:
     min_confidence_to_teach: float = 0.35
 
 
+#: How a belief about a grown social sense is said: (when it follows,
+#: when it stops). "Fleeing makes recognises squid rise" is the arithmetic;
+#: this is what a squid would mean by it.
+_SENSE_IN_WORDS = {
+    'squid_nearby': ('brings squid close', 'makes squid keep away'),
+    'recognises_squid': ('brings a squid I know', 'makes a squid I know go away'),
+    'remembers_good_encounter': ('brings a squid I get on with',
+                                 'makes a squid I get on with go away'),
+    'remembers_bad_encounter': ('brings a squid I do not get on with',
+                                'makes a squid I do not get on with go away'),
+    'aquarium_nearby': ('makes another aquarium turn up', 'makes the other aquarium go away'),
+}
+
+
 class ActionOutcomeLedger:
     """Discovers which of the squid's own actions cause what, and learns from it."""
 
@@ -686,6 +700,9 @@ class ActionOutcomeLedger:
             thing = humanise(sense[len('can_see_'):])
             return (f"{doing} makes {thing} go out of sight" if effect < 0
                     else f"{doing} brings {thing} into sight")
+        words = _SENSE_IN_WORDS.get(sense)
+        if words:
+            return f"{doing} {words[1] if effect < 0 else words[0]}"
         return f"{doing} makes {humanise(sense)} {'fall' if effect < 0 else 'rise'}"
 
     def beliefs(self) -> List[Dict[str, Any]]:

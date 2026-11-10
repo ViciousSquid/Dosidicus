@@ -7,7 +7,7 @@ ANY squid, so the lesson generalises to squid it has never met:
 
   * a bad encounter - beaten in a fight, robbed, frightened - weakens the
     pull towards other squid (act_play, curiosity, social_play) and
-    strengthens alarm at them (anxiety, act_flee, social_flee);
+    strengthens fear of them (anxiety, act_flee, social_flee);
   * a good one does the opposite.
 
 So two squid born alike drift apart with what happens to them: the one that

@@ -278,3 +278,30 @@ def test_what_fio_ui_lacks_comes_from_the_games_other_fonts_first():
         _restore(before)
         QtGui.QFont.removeSubstitutions('Fio UI')
         QtGui.QFont.removeSubstitutions('IBM Plex Mono')
+
+
+def test_a_font_the_system_refuses_does_not_stop_the_game(monkeypatch):
+    """macOS would not load the first emoji font, and the game did not start.
+    A refused font is noted and the game goes on with the rest."""
+    real = QtGui.QFontDatabase.addApplicationFont
+
+    def refuse_emoji(path):
+        return -1 if 'DosidicusEmoji' in str(path) else real(path)
+    monkeypatch.setattr(QtGui.QFontDatabase, 'addApplicationFont', staticmethod(refuse_emoji))
+    loaded = desktop_style.load_fonts()                      # no exception
+    assert 'Fio UI' in loaded and 'Dosidicus Emoji' not in loaded
+    assert desktop_style.FONT_PROBLEMS == ['could not load DosidicusEmoji.ttf',
+                                           'no Dosidicus Emoji']
+    monkeypatch.undo()
+    assert 'Dosidicus Emoji' in desktop_style.load_fonts()
+    assert desktop_style.FONT_PROBLEMS == []
+
+
+def test_the_colour_emoji_font_has_outlines_for_the_systems_that_insist_on_them():
+    """macOS will not load a font with no outline table. The colour emoji are
+    pictures, so they are given an empty outline each: an ordinary TrueType
+    font to the system, the same pictures to FreeType, which draws them."""
+    data = (desktop_style.font_directory() / 'DosidicusEmoji.ttf').read_bytes()
+    count = int.from_bytes(data[4:6], 'big')
+    tables = {data[12 + 16 * i:16 + 16 * i].decode('latin-1') for i in range(count)}
+    assert {'glyf', 'loca', 'CBDT', 'CBLC', 'cmap'} <= tables

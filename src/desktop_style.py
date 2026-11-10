@@ -356,18 +356,33 @@ def light_palette() -> QtGui.QPalette:
     return palette
 
 
+#: Fonts in src/fonts that this system would not load, and families the game
+#: wanted and did not get - for the notes on a screenshot, and for a bug
+#: report. Empty when all is well.
+FONT_PROBLEMS = []
+
+
 def load_fonts():
-    """Load every font in src/fonts. Returns the families now available."""
+    """Load every font in src/fonts. Returns the families now available.
+
+    A font the system will not load is noted (FONT_PROBLEMS) and the game
+    goes on without it: its text then comes from whatever the system has,
+    which is not the same picture but is a game that starts. (A font being
+    refused must never again stop the game: macOS refused the first emoji
+    font outright.)
+    """
+    del FONT_PROBLEMS[:]
     loaded = set()
     for path in sorted(font_directory().glob('*.ttf')):
         font_id = QtGui.QFontDatabase.addApplicationFont(str(path))
         if font_id < 0:
-            raise RuntimeError(f"Could not load the game's font: {path}")
+            FONT_PROBLEMS.append(f'could not load {path.name}')
+            continue
         loaded.update(QtGui.QFontDatabase.applicationFontFamilies(font_id))
-    missing = {UI_FONT, MONO_FONT, EMOJI_FONT, LINE_EMOJI_FONT} - loaded
-    if missing:
-        raise RuntimeError("The game's fonts are missing from src/fonts: "
-                           + ', '.join(sorted(missing)))
+    for family in sorted({UI_FONT, MONO_FONT, EMOJI_FONT, LINE_EMOJI_FONT} - loaded):
+        FONT_PROBLEMS.append(f'no {family}')
+    for problem in FONT_PROBLEMS:
+        print(f"[fonts] {problem} - using the system's instead", file=sys.stderr)
     return loaded
 
 
@@ -480,6 +495,7 @@ def describe(app):
         'screen_assumed': list(_override() or ()) or None,
         'window_colour': app.palette().color(QtGui.QPalette.Window).name(),
         'platform': app.platformName(),
+        'font_problems': list(FONT_PROBLEMS),
     }
 
 

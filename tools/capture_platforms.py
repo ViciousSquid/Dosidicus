@@ -108,6 +108,7 @@ def capture(output, label, brain_size=None):
             'brain_drawn_by': drawn_by(family, '\U0001F9E0'),
             'arrow_drawn_by': drawn_by(family, '\u21ba'),
             'letter_drawn_by': drawn_by(family, 'A')}
+    notes['problems'].extend(desktop_style.FONT_PROBLEMS)
     notes['font_substitutes'] = {family: QtGui.QFont.substitutes(family)
                                  for family in (desktop_style.UI_FONT, desktop_style.MONO_FONT)}
 

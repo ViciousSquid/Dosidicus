@@ -189,6 +189,17 @@ def _payload(memory: Dict[str, Any]) -> Dict[str, Any]:
     return {}
 
 
+def _fought_with(mine: Dict[str, Any]) -> str:
+    """What a squid fought back with, by the name of the statistic it is.
+    Fights remembered before this was called anxiety say 'alarm'."""
+    name = str((mine or {}).get('committed_by') or 'anxiety')
+    return 'anxiety' if name == 'alarm' else humanise_name(name)
+
+
+def humanise_name(name: str) -> str:
+    return str(name).replace('_', ' ')
+
+
 def fights(memories: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Every fight it remembers, newest first, with why it started and ended."""
     from .fighting import AGGRESSION_THRESHOLD
@@ -208,7 +219,7 @@ def fights(memories: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         else:
             mine = detail.get('mine') or {}
             how = (f"it was attacked, and fought back with its "
-                   f"{mine.get('committed_by', 'alarm')} at {float(mine.get('commitment', 0)):.0f}")
+                   f"{_fought_with(mine)} at {float(mine.get('commitment', 0)):.0f}")
         rows.append({'key': key, 'opponent': value.get('opponent', 'another squid'),
                      'opponent_uuid': value.get('opponent_uuid', ''),
                      'won': value.get('outcome') == 'won', 'started_it': started,
@@ -367,7 +378,7 @@ def to_html(known: Dict[str, Any]) -> str:
         parts.append('<br>'.join(lines))
     else:
         parts.append("<b>Aggression</b>: it has no aggression neuron - it has never "
-                     "gone at another squid while alarmed. It is placid and relaxed.")
+                     "gone at another squid while its anxiety was high. It is placid and relaxed.")
 
     strangers = known['strangers']
     if strangers['grown']:
@@ -466,7 +477,7 @@ def fight_thoughts(record: Dict[str, Any], me: str = 'first') -> List[str]:
                  f"past the {AGGRESSION_THRESHOLD:.0f} it takes to start a fight."]
     else:
         lines = [f"{opponent} came at me. I fought back with my "
-                 f"{mine.get('committed_by', 'alarm')} at {float(mine.get('commitment', 0) or 0):.0f}."]
+                 f"{_fought_with(mine)} at {float(mine.get('commitment', 0) or 0):.0f}."]
     lines.append(f"I {'won' if won else 'lost'}: my ability {float(mine.get('ability', 0) or 0):.0f} "
                  f"against their {float(theirs.get('ability', 0) or 0):.0f} gave me a "
                  f"{chance:.0%} chance.")

@@ -64,6 +64,41 @@ def emoji_in_the_game():
     return found
 
 
+def _add_empty_outlines(font):
+    """Give a font that is only pictures (Noto Color Emoji: bitmaps in CBDT,
+    no outlines at all) an outline table with nothing in it.
+
+    macOS will not load a font without outlines - the game could not start
+    there - though it never draws these: on every system the game's text is
+    drawn by FreeType, which takes the pictures. With an empty outline for
+    every glyph the file is an ordinary TrueType font to the system that
+    registers it, and the same pictures to the engine that draws it.
+    """
+    from fontTools.ttLib import newTable
+    from fontTools.ttLib.tables._g_l_y_f import Glyph
+    order = font.getGlyphOrder()
+    glyf = newTable('glyf')
+    glyf.glyphOrder = order
+    glyf.glyphs = {}
+    for name in order:
+        glyph = Glyph()
+        glyph.numberOfContours = 0
+        glyph.xMin = glyph.yMin = glyph.xMax = glyph.yMax = 0
+        glyf.glyphs[name] = glyph
+    font['glyf'] = glyf
+    font['loca'] = newTable('loca')
+    font['head'].indexToLocFormat = 0
+    font['head'].glyphDataFormat = 0
+    maxp = font['maxp']
+    maxp.tableVersion = 0x00010000
+    for field in ('maxPoints', 'maxContours', 'maxCompositePoints', 'maxCompositeContours',
+                  'maxTwilightPoints', 'maxStorage', 'maxFunctionDefs', 'maxInstructionDefs',
+                  'maxStackElements', 'maxSizeOfInstructions', 'maxComponentElements',
+                  'maxComponentDepth'):
+        setattr(maxp, field, 0)
+    maxp.maxZones = 1
+
+
 def make(source, output=OUTPUT, family=FAMILY, parent='Noto Color Emoji', weight=None):
     from fontTools import subset
     from fontTools.ttLib import TTFont
@@ -90,6 +125,8 @@ def make(source, output=OUTPUT, family=FAMILY, parent='Noto Color Emoji', weight
             record.string = FAMILY.replace(' ', '')
         elif record.nameID == 3:
             record.string = f'{FAMILY}: a subset of {parent}'
+    if 'glyf' not in font and 'CFF ' not in font:
+        _add_empty_outlines(font)
     output.parent.mkdir(parents=True, exist_ok=True)
     font.save(str(output))
     kept = len(set(font.getBestCmap()))

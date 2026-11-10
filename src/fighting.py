@@ -8,7 +8,7 @@ attacked.
 
   PREDISPOSITION (fight_predisposition) - the squid's own `aggression`
   neuron, which neurogenesis grows the first time its network goes at
-  another squid while alarmed. It reads 0 when the squid is placid and
+  another squid while its anxiety was high. It reads 0 when the squid is placid and
   relaxed and 100 when it is fully aggro. A squid that has never grown one
   can be attacked but cannot start a fight; one that has starts a fight when
   it is in contact with another squid and is more aggro than not. Personality only
@@ -18,7 +18,7 @@ attacked.
   aggression does not touch: the squid's body (health, hunger, tiredness,
   sickness), its experience (fights fought and won), and how hard its
   network commits to this fight - an attacker with its aggression, a
-  defender with its alarm (or its social_fight neuron, once it knows how to
+  defender with its anxiety (or its social_fight neuron, once it knows how to
   fight), which is how a cornered timid squid can win.
 
   RESOLUTION (resolve_fight) - the better squid usually wins; there is a
@@ -58,13 +58,13 @@ def fight_predisposition(state: Dict[str, Any]) -> Tuple[float, Dict[str, float]
 
     Its grown `aggression` neuron: 0 placid and relaxed, 100 fully aggro -
     and 0 if it has never grown one. A squid that swims up to another out of
-    curiosity is playing, and an alarmed squid with no aggression neuron is
+    curiosity is playing, and an anxious squid with no aggression neuron is
     frightened, not fighting.
     """
     grown = 'aggression' in state
     value = _level(state['aggression']) if grown else 0.0
     return round(value, 1), {'aggression': round(value, 1), 'grown': grown,
-                             'alarm': round(_above_rest(state.get('anxiety', 50.0)), 1)}
+                             'anxiety': round(_above_rest(state.get('anxiety', 50.0)), 1)}
 
 
 def fitness(*, health=100.0, hunger=0.0, sleepiness=0.0, sick=False,
@@ -90,12 +90,12 @@ def commitment(state: Dict[str, Any], attacking: bool) -> Tuple[float, str]:
     """How hard this squid's network throws itself into this fight, 0-100."""
     if attacking:
         return fight_predisposition(state)[0], 'aggression'
-    alarm = _above_rest(state.get('anxiety', 50.0))
+    anxiety = _above_rest(state.get('anxiety', 50.0))
     startled = 100.0 if _level(state.get('is_startled', 0.0)) > 50.0 else 0.0
     knows_how = _above_rest(state['social_fight']) if 'social_fight' in state else 0.0
-    if knows_how > max(alarm, startled):
+    if knows_how > max(anxiety, startled):
         return knows_how, 'social_fight'
-    return max(alarm, startled), 'alarm'
+    return max(anxiety, startled), 'anxiety'
 
 
 def fighting_ability(fit: float, commit: float) -> float:

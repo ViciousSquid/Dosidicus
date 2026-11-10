@@ -4,7 +4,7 @@ Held to the rules:
   * a fight is started by a squid's grown `aggression` neuron - 0 placid and
     relaxed, 100 fully aggro - never by its personality label or dice;
   * who wins comes from body, experience and how hard each network commits -
-    an attacker with its aggression, a defender with its alarm - so a squid
+    an attacker with its aggression, a defender with its anxiety - so a squid
     quick to fight is not thereby good at it;
   * a fight can mark a squid for good: its resting aggression rises and never
     falls, and every rise says why;
@@ -22,7 +22,7 @@ from src.social_learning import learn_from_encounter
 
 
 def aggressive_brain():
-    """A stubborn squid that went at another while alarmed, and grew aggression."""
+    """A stubborn squid that went at another while its anxiety was high, and grew aggression."""
     brain = HeadlessBrain()
     brain.personality = 'stubborn'
     brain.state['anxiety'] = 75.
@@ -37,7 +37,7 @@ def aggressive_brain():
 def test_aggression_is_a_grown_neuron_with_its_cause():
     brain = aggressive_brain()
     origin = brain.ledger.origins['aggression']
-    assert origin.deficit_summary == 'It went at another squid while alarmed and had no neuron for that'
+    assert origin.deficit_summary == 'It went at another squid while its anxiety was high and had no neuron for that'
     assert brain.neuron_shapes['aggression'] == 'hexagon'
     assert not brain.is_connector_neuron('aggression')
 
@@ -56,17 +56,17 @@ def test_aggression_reads_from_placid_to_fully_aggro():
 def test_a_squid_without_an_aggression_neuron_cannot_start_a_fight():
     calm = {'anxiety': 100., 'act_play': 100.}
     assert fighting.fight_predisposition(calm) == (0.0, {'aggression': 0.0, 'grown': False,
-                                                          'alarm': 100.0})
+                                                          'anxiety': 100.0})
 
 
 def test_ability_is_not_aggression_an_attacked_timid_squid_can_win():
     # Fully aggro, but hurt, hungry and tired.
     attacker_fit, why_a = fighting.fitness(health=45., hunger=90., sleepiness=85.)
     attacker = fighting.side({'aggression': 95.}, attacker_fit, why_a, attacking=True)
-    # Never starts fights - no aggression neuron at all - but fit and alarmed.
+    # Never starts fights - no aggression neuron at all - but fit and anxious.
     defender_fit, why_d = fighting.fitness(health=100., hunger=20., sleepiness=20.)
     defender = fighting.side({'anxiety': 95.}, defender_fit, why_d, attacking=False)
-    assert attacker['committed_by'] == 'aggression' and defender['committed_by'] == 'alarm'
+    assert attacker['committed_by'] == 'aggression' and defender['committed_by'] == 'anxiety'
     record = fighting.resolve_fight(attacker, defender, rng=lambda: .5)
     assert record['first_chance'] < .3 and not record['first_won']
 
@@ -75,9 +75,9 @@ def test_experience_and_knowing_how_to_fight_count():
     green = fighting.fitness()[0]
     veteran = fighting.fitness(fights_won=6, fights_lost=4)[0]
     assert veteran > green
-    alarm_only = fighting.commitment({'anxiety': 60.}, attacking=False)
+    anxiety_only = fighting.commitment({'anxiety': 60.}, attacking=False)
     trained = fighting.commitment({'anxiety': 60., 'social_fight': 95.}, attacking=False)
-    assert trained[0] > alarm_only[0] and trained[1] == 'social_fight'
+    assert trained[0] > anxiety_only[0] and trained[1] == 'social_fight'
 
 
 def test_the_better_squid_usually_wins_but_it_is_not_certain():
