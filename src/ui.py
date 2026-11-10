@@ -24,9 +24,12 @@ from .preferences import PreferencesWindow
 from .localisation import Localization
 
 class ActionButton(QtWidgets.QPushButton):
-    """Custom button with hover and press color states"""
-    def __init__(self, text, hover_color, pressed_color, font_size=16, parent=None):
+    """A button in its own pastel colour: a shade deeper under the pointer,
+    the full colour while pressed."""
+    def __init__(self, text, hover_color, pressed_color, font_size=16, parent=None,
+                 base_color="white"):
         super().__init__(text, parent)
+        self.base_color = base_color
         self.hover_color = hover_color
         self.pressed_color = pressed_color
         self.font_size = font_size
@@ -43,7 +46,7 @@ class ActionButton(QtWidgets.QPushButton):
             bg_color = self.hover_color
             text_color = "black"
         else:
-            bg_color = "white"
+            bg_color = self.base_color
             text_color = "black"
         
         self.setStyleSheet(f"""
@@ -1112,15 +1115,18 @@ class Ui:
         button_font_size = DisplayScaling.font_size(button_font_size)
 
         loc = Localization.instance()
+        # Feed pastel green, Clean pastel blue, Medicine pastel red:
+        # (label, at rest, under the pointer, pressed, action).
         button_configs = [
-            (loc.get("feed_btn"), "#C8E6C9", "#4CAF50", "feed_action"),
-            (loc.get("clean_btn"), "#B3E5FC", "#2196F3", "clean_action"),
-            (loc.get("medicine_btn"), "#FFCDD2", "#F44336", "medicine_action")
+            (loc.get("feed_btn"), "#C8E6C9", "#A5D6A7", "#4CAF50", "feed_action"),
+            (loc.get("clean_btn"), "#B3E5FC", "#81D4FA", "#2196F3", "clean_action"),
+            (loc.get("medicine_btn"), "#FFCDD2", "#EF9A9A", "#F44336", "medicine_action")
         ]
 
         self.action_buttons = []
-        for text, hover_color, pressed_color, action_name in button_configs:
-            button = ActionButton(text, hover_color, pressed_color, button_font_size)
+        for text, base_color, hover_color, pressed_color, action_name in button_configs:
+            button = ActionButton(text, hover_color, pressed_color, button_font_size,
+                                  base_color=base_color)
             button.action_name = action_name
             proxy = self.scene.addWidget(button)
             proxy.setZValue(10000)

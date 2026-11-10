@@ -4,6 +4,15 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import os
 
+# The game prints emoji in its log lines. Where the output is a pipe or an
+# old console (Windows: cp1252) those cannot be encoded, and the print - and
+# with it the game - died. Print what can be printed instead.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors='replace')
+    except (AttributeError, ValueError, OSError):
+        pass
+
 # BOOTSTRAP: Add the current directory and src directory to sys.path
 # This ensures "from src.ui import Ui" works even if launched from elsewhere.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

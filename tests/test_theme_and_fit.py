@@ -153,3 +153,23 @@ def test_feed_clean_and_medicine_share_the_whole_width_of_the_window():
     tank.window_width = 1000
     Ui.layout_action_buttons(tank)
     assert {button.width() for button, _ in tank.action_buttons} == {321}
+
+
+def test_each_button_rests_in_its_own_pastel():
+    """Feed pastel green, Clean pastel blue, Medicine pastel red - at rest,
+    not only under the pointer."""
+    import inspect
+    from src import ui
+    from src.ui import ActionButton
+    text = inspect.getsource(ui)
+    for label, pastel in (('feed_btn', '#C8E6C9'), ('clean_btn', '#B3E5FC'),
+                          ('medicine_btn', '#FFCDD2')):
+        assert f'(loc.get("{label}"), "{pastel}"' in text
+    button = ActionButton('FEED', '#A5D6A7', '#4CAF50', 12, base_color='#C8E6C9')
+    assert 'background-color: #C8E6C9' in button.styleSheet()
+    button.is_hovered = True
+    button.update_style()
+    assert 'background-color: #A5D6A7' in button.styleSheet()
+    button.is_pressed = True
+    button.update_style()
+    assert 'background-color: #4CAF50' in button.styleSheet()

@@ -47,6 +47,7 @@ jobs:
       # Lay the game out for one screen on every machine, whatever it has.
       DOSIDICUS_SCREEN: 1920x1080
       PYTHONUNBUFFERED: "1"
+      PYTHONUTF8: "1"
 
     steps:
       - uses: actions/checkout@v4
