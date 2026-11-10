@@ -81,7 +81,7 @@
       127
     ],
     "menu": [
-      219,
+      296,
       184
     ]
   },
@@ -188,9 +188,9 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 14,
+    "anxiety": 16,
     "happiness": 100,
     "neurons": 19
   },
-  "seconds": 59.8
+  "seconds": 58.3
 }

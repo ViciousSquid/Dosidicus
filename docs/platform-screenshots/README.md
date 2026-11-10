@@ -11,14 +11,14 @@ Compared with **windows**:
 
 | System | Text measurements | Window sizes | Widgets in the same place (fixed windows) | Pixels that differ |
 |---|---|---|---|---|
-| macos | identical | DIFFERENT | 69 of 70 | brain-1 0.5%, brain-2 1.6%, brain-3 2.1%, brain-4 0.5%, brain-5 1.0%, brain-6 0.8%, brain-7 0.8%, brain-8 1.0%, journey 5.0%, main 1.1%, menu: sizes differ, message 2.7%, splash 0.4%, statistics 1.3% |
-| linux-x11 | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 2.1%, brain-3 2.3%, brain-4 0.6%, brain-5 0.9%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.2%, main 1.2%, menu 2.5%, message 3.1%, splash 0.4%, statistics 1.5% |
-| linux-wayland | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 3.9%, brain-3 2.3%, brain-4 0.3%, brain-5 0.7%, brain-6 0.9%, brain-7 0.8%, brain-8 1.1%, journey 5.2%, main 0.9%, menu 2.5%, message 3.6%, splash 0.4%, statistics 1.9% |
+| macos | identical | DIFFERENT | 69 of 70 | brain-1 0.5%, brain-2 3.9%, brain-3 1.4%, brain-4 0.5%, brain-5 0.6%, brain-6 0.8%, brain-7 0.7%, brain-8 1.0%, journey 5.0%, main 1.0%, menu: sizes differ, message 2.7%, splash 0.4%, statistics 1.3% |
+| linux-x11 | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 4.6%, brain-3 1.7%, brain-4 0.6%, brain-5 0.6%, brain-6 0.9%, brain-7 0.8%, brain-8 1.1%, journey 5.2%, main 1.1%, menu 2.5%, message 3.1%, splash 0.4%, statistics 1.6% |
+| linux-wayland | identical | identical | 70 of 70 | brain-1 0.6%, brain-2 3.9%, brain-3 1.7%, brain-4 0.3%, brain-5 0.6%, brain-6 0.9%, brain-7 0.8%, brain-8 1.1%, journey 5.2%, main 1.1%, menu 2.5%, message 3.6%, splash 0.4%, statistics 1.5% |
 
 Not the same:
 
-- macos / menu: `{'class': 'QMenu', 'name': '', 'x': 0, 'y': 0, 'w': 284, 'h': 184}` on windows, `{'class': 'QMenu', 'name': '', 'x': 0, 'y': 0, 'w': 219, 'h': 184}` on macos
-- macos / menu: [284, 184] on windows, [219, 184] on macos
+- macos / menu: `{'class': 'QMenu', 'name': '', 'x': 0, 'y': 0, 'w': 284, 'h': 184}` on windows, `{'class': 'QMenu', 'name': '', 'x': 0, 'y': 0, 'w': 296, 'h': 184}` on macos
+- macos / menu: [284, 184] on windows, [296, 184] on macos
 
 Fixed windows: splash, main, statistics, message, menu, brain-1. The other Brain Tool tabs list what one particular squid has learned, so their contents differ between any two runs.
 
