@@ -65,6 +65,19 @@ from .propagation import signal_of
 DEFICIT_KINDS = ('representation', 'regulation', 'expression',
                  'differentiation', 'causal_differentiation', 'connectivity')
 
+#: The deficits a NEURON is the remedy for: the ones where there is something
+#: the squid cannot represent at all. A situation no neuron fires for, and one
+#: of its own actions it cannot tell from another.
+#:
+#: The rest are diagnosed, shown to the player and left to learning, because a
+#: synapse is what is missing in each of them: a drive that will not come down
+#: (regulation) needs the squid to learn to do something about it; something
+#: it knows and does not act on (expression) needs a path from the cue to the
+#: action; a neuron pulled two ways (differentiation) and one nothing reaches
+#: (connectivity) are both questions of wiring. Growing a neuron for any of
+#: those gives the brain more to carry and nothing it can newly tell apart.
+NEURON_WORTHY = ('representation', 'causal_differentiation')
+
 # The range each drive is comfortable in. Outside it, the squid is in trouble
 # and the network is supposed to be doing something about it.
 COMFORT_BANDS: Dict[str, Tuple[float, float]] = {
@@ -118,6 +131,37 @@ def regulation_specialisation(stat: str, too_high: bool) -> str:
     }
     return table.get((stat, too_high),
                      'general_stress_coping' if too_high else 'general_reward')
+
+
+def signature_parts(signature: str) -> List[List[Any]]:
+    """A situation signature as [[neuron, +1 or -1], ...].
+
+    "can_see_food|hunger-high|anxiety-low" is food in sight (+1), hunger high
+    (+1) and anxiety low (-1). A drive in its middle band says nothing and is
+    left out. This is the one place a signature is turned back into the
+    circumstances it names.
+    """
+    parts: List[List[Any]] = []
+    for piece in (signature or '').split('|'):
+        piece = piece.strip()
+        if not piece:
+            continue
+        name, _, band = piece.partition('-')
+        if band == 'mid':
+            continue
+        parts.append([name, -1 if band == 'low' else 1])
+    return parts
+
+
+def combination_signature(parts: Iterable[Iterable[Any]]) -> str:
+    """The signature a list of [[neuron, sign], ...] is known by."""
+    pieces = []
+    for name, sign in sorted((str(p[0]), int(p[1])) for p in parts):
+        if name in CORE_STAT_NEURONS:
+            pieces.append(f"{name}-{'low' if sign < 0 else 'high'}")
+        else:
+            pieces.append(name)
+    return '|'.join(pieces)
 
 
 def _band_word(value: float) -> str:
@@ -286,6 +330,11 @@ class CapabilityMonitor:
         self._band_history: Dict[str, Deque[bool]] = {}
 
         self.active: Dict[str, Deficit] = {}
+        #: deficit key -> the time before which it is not raised again. Set
+        #: when a neuron grown for it was taken back because nothing ever came
+        #: to depend on it: the brain tried representing that, and it did not
+        #: matter, so it is not tried again straight away.
+        self.declined: Dict[str, float] = {}
         self.resolved: Deque[Tuple[float, str, str]] = deque(maxlen=40)
         self.evaluations = 0
         self.last_evaluation: List[Deficit] = []
@@ -486,6 +535,7 @@ class CapabilityMonitor:
         self.evaluations += 1
         found: List[Deficit] = []
         for detector in (self._detect_connectivity, self._detect_regulation,
+                         self._detect_combination,
                          self._detect_representation, self._detect_expression,
                          self._detect_differentiation,
                          self._detect_causal_differentiation):
@@ -708,6 +758,13 @@ class CapabilityMonitor:
         for signature, entry in self._signatures.items():
             if entry['count'] < cfg.signature_recurrence:
                 continue
+            # One sense, or one drive away from rest, already has a neuron
+            # that stands for it: itself. Only a COMBINATION can be something
+            # the brain has no way of representing.
+            if len(signature_parts(signature)) < 2:
+                continue
+            if self.clock() < self.declined.get(f"representation:{signature}", 0.0):
+                continue
             defining = set(entry['defining'])
             stats: Dict[str, _Running] = entry['stats']
 
@@ -758,6 +815,43 @@ class CapabilityMonitor:
                           'defining': list(entry['defining'])},
                 suggested_type='novelty',
                 specialization=self._representation_specialisation(entry['defining'])))
+        return out
+
+    def _detect_combination(self) -> List[Deficit]:
+        """An action that pays only when two things are true TOGETHER.
+
+        Found by the squid's own trials (action_discovery.wanted_combinations):
+        with either cue present the action does better when the other is too.
+        No single synapse can express that, and no neuron fires for the pair,
+        so this is a combination the brain cannot represent - and, unlike a
+        situation that merely keeps coming round, one that is already known to
+        matter.
+        """
+        discovery = getattr(self.brain, 'action_discovery', None)
+        if discovery is None:
+            return []
+        out: List[Deficit] = []
+        for want in discovery.wanted_combinations():
+            parts = [[cue, 1] for cue in want['cues']]
+            signature = combination_signature(parts)
+            key = f"representation:{signature}"
+            if self.clock() < self.declined.get(key, 0.0):
+                continue
+            readable = ' and '.join(c.replace('_', ' ') for c in want['cues'])
+            behaviour = want['behaviour'].replace('_', ' ')
+            out.append(Deficit(
+                kind='representation', key=key,
+                summary=(f"{behaviour} pays off when {readable} are true together "
+                         f"({want['benefit_together']:+.3f}) and not with either "
+                         f"alone, and no neuron fires for the two together"),
+                target=signature, sources=list(want['cues']),
+                remedy=f"fire only when {readable} are both the case",
+                severity=min(1.0, 0.6 + want['strength']),
+                evidence={'signature': signature, 'combination': parts,
+                          'found_by': 'its own trials', 'motor': want['motor'],
+                          **{k: v for k, v in want.items()
+                             if k not in ('cues', 'motor')}},
+                suggested_type='novelty', specialization='situation'))
         return out
 
     @staticmethod
@@ -1160,6 +1254,7 @@ class CapabilityMonitor:
             'var': dict(self._var),
             'co': [[a, b, v] for (a, b), v in self._co.items()],
             'bands': {k: list(v) for k, v in self._band_history.items()},
+            'declined': dict(self.declined),
         }
 
     def from_dict(self, data: dict) -> None:
@@ -1197,6 +1292,8 @@ class CapabilityMonitor:
         for row in data.get('co') or []:
             if isinstance(row, (list, tuple)) and len(row) == 3:
                 self._co[(str(row[0]), str(row[1]))] = float(row[2])
+        self.declined = {str(k): float(v)
+                         for k, v in (data.get('declined') or {}).items()}
         self._band_history = {}
         for stat, values in (data.get('bands') or {}).items():
             self._band_history[str(stat)] = deque(
@@ -1213,5 +1310,6 @@ class CapabilityMonitor:
         self._var.clear()
         self._band_history.clear()
         self.active.clear()
+        self.declined.clear()
         self.resolved.clear()
         self.last_evaluation = []

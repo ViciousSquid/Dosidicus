@@ -263,6 +263,14 @@ class Squid:
         """Read action neurons with the desktop's exact threshold/ranking rule."""
         from src.decision_engine import select_action, action_activations, wants
         from src.brain_constants import FALLBACK_ACTION
+        # As on desktop: settle what earlier actions led to, then - now and
+        # then - an unwired action neuron fires by itself and takes its chance
+        # in the same contest as everything else (src/action_discovery.py).
+        discovery = getattr(self.brain, 'action_discovery', None)
+        urge = None
+        if discovery is not None:
+            discovery.process_closed()
+            urge = discovery.excite(brain_state)
         decision, confidence, urgency = select_action(brain_state)
         if self._bound_action and self.brain.sim_time < self._bound_until:
             decision = self._bound_action
@@ -276,7 +284,9 @@ class Squid:
             "chosen": decision, "confidence": confidence,
             "urgency": urgency, "engine": "3.1 neural actions",
         }
-        self.brain.causal_learning.on_action(decision, brain_state)
+        episode_id = self.brain.causal_learning.on_action(decision, brain_state)
+        if discovery is not None:
+            discovery.committed(episode_id, urge, decision, dict(self.brain.state))
         self.brain.current_action = decision
         return self._execute(decision, food_items)
 
@@ -293,7 +303,9 @@ class Squid:
             self.is_fleeing = True
             self.flee_step()
         elif decision == "approaching_plant":
-            plants = getattr(self, 'plant_targets', [])
+            # Only a plant it can see - as on desktop, it cannot head for one
+            # it has not looked at.
+            plants = getattr(self, 'visible_plants', [])
             if plants:
                 target = min(plants, key=lambda d: self._dist(d['x'], d['y']))
                 self.move_towards(target['x'], target['y'])

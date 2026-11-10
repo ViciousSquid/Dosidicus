@@ -571,6 +571,7 @@ class BrainLoader:
         target_now = getattr(getattr(bw, 'plasticity', None), 'clock', time.time)()
         cognitive = rebase_cognitive_state(brain.get('cognitive_state', {}), target_now, kind='wall')
         for key, attribute in (('provenance', 'ledger'), ('causal_learning', 'causal_learning'),
+                               ('action_discovery', 'action_discovery'),
                                ('capability', 'capability'), ('plasticity', 'plasticity'),
                                ('consolidation', 'consolidation'),
                                ('enhanced_neurogenesis', 'enhanced_neurogenesis')):

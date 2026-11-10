@@ -23,6 +23,7 @@ from __future__ import annotations
 import time
 from typing import Dict, List, Optional, Tuple
 
+from .brain_constants import is_motor_synapse
 from .sleep_consolidation import ReplayConfig, SleepReplayEngine
 
 Pair = Tuple[str, str]
@@ -143,6 +144,10 @@ class ConsolidationManager:
             edge = (n2, n1)
         if edge is None:
             return  # replay deepens existing structure, it does not invent it
+        if is_motor_synapse(edge):
+            # What the squid does is settled by what came of doing it, awake.
+            # Replay rehearses what it has come to expect.
+            return
 
         old = float(bw.weights[edge])
         direction = 1.0 if old >= 0 else -1.0
@@ -161,7 +166,11 @@ class ConsolidationManager:
         protected = self._protected_neurons()
 
         def is_immune(n1, n2):
-            return n1 in protected or n2 in protected
+            # A motor synapse is never scaled back or pruned by a night's
+            # sleep: an instinct that shrank a little every night would be
+            # gone in a month, and nobody would have taught the squid to stop.
+            return (n1 in protected or n2 in protected
+                    or is_motor_synapse((n1, n2)) or is_motor_synapse((n2, n1)))
 
         try:
             plan = self.engine.plan_prune(bw.weights, is_immune)

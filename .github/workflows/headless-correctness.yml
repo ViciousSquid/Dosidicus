@@ -12,6 +12,12 @@ on:
       - 'src/brain_constants.py'
       - 'src/propagation.py'
       - 'src/plasticity.py'
+      - 'src/action_discovery.py'
+      - 'src/neurogenesis.py'
+      - 'src/capability.py'
+      - 'tests/test_learning_to_live.py'
+      - 'tests/test_action_discovery.py'
+      - 'tests/test_plant_vision.py'
       - 'tests/test_headless_training.py'
       - 'tests/test_headless_causal_training.py'
       - '.github/workflows/headless-correctness.yml'
@@ -36,4 +42,4 @@ jobs:
       - name: Verify headless training and causal correctness
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q tests/test_headless_training.py tests/test_headless_causal_training.py
+        run: python -m pytest -q tests/test_headless_training.py tests/test_headless_causal_training.py tests/test_action_discovery.py tests/test_plant_vision.py tests/test_learning_to_live.py

@@ -1265,9 +1265,10 @@ class Simulation:
             self._notice_newcomers(squid)
             # A plant, as on desktop, is seen through the view cone or not at
             # all, and reaches the brain through the sense it grows for one.
-            squid.brain.perceive('plant_in_view', 100. if any(
-                self._sees_squid_at(squid.x, squid.y, squid.direction, p['x'], p['y'])
-                for p in squid.plant_targets) else 0.)
+            squid.visible_plants = [
+                p for p in squid.plant_targets
+                if self._sees_squid_at(squid.x, squid.y, squid.direction, p['x'], p['y'])]
+            squid.brain.perceive('plant_in_view', 100. if squid.visible_plants else 0.)
             # Another squid, as on desktop, is percepts, not sense organs: the
             # shared engine grows its social senses from them the first time they
             # matter. Off-screen arrivals are not perceived.

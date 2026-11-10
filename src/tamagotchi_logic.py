@@ -37,6 +37,9 @@ try:
 except ImportError:
     _PERF_TRACKING_AVAILABLE = False
 
+#: How much calmer a squid gets, each tick, while it is hiding in a plant.
+PLANT_CALM_PER_TICK = 2.5
+
 class TamagotchiLogic:
 
     def __init__(self, user_interface, squid, brain_window):
@@ -1627,8 +1630,9 @@ class TamagotchiLogic:
                 causal = getattr(self.brain_window.brain_widget, 'causal_learning', None)
                 if causal is not None:
                     try:
-                        causal.on_action(action_to_track,
-                                         self.brain_window.brain_widget.state)
+                        if not self._note_learned_action(self.brain_window.brain_widget):
+                            causal.on_action(action_to_track,
+                                             self.brain_window.brain_widget.state)
                     except Exception as e:
                         print(f"[CausalLearning] could not open episode: {e}")
                 
@@ -1654,6 +1658,19 @@ class TamagotchiLogic:
             if bw is not None:
                 if hasattr(bw, 'propagate_activations'):
                     bw.propagate_activations()
+                # Settle what its earlier actions led to and, now and then,
+                # let an unwired action neuron fire by itself. The spike is
+                # in the network before the output bindings and the decision
+                # engine read it, so whether the squid acts on it is decided
+                # the way everything it does is decided.
+                discovery = getattr(bw, 'action_discovery', None)
+                if discovery is not None:
+                    try:
+                        discovery.tick(bw.state,
+                                       asleep=getattr(self.squid, 'is_sleeping', False)
+                                       or getattr(self.squid, 'is_transitioning', False))
+                    except Exception as e:
+                        print(f"[ActionDiscovery] tick failed: {type(e).__name__}: {e}")
                 neuro = getattr(bw, 'enhanced_neurogenesis', None)
                 if neuro is not None and hasattr(neuro, 'update_neuron_activations'):
                     neuro.update_neuron_activations(bw.state)
@@ -2109,6 +2126,37 @@ class TamagotchiLogic:
         if self.debug_mode:
             print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
 
+    def _note_learned_action(self, bw) -> bool:
+        """If the squid has just started one of its LEARNED actions - going to
+        a plant, playing, lying down to rest - open that action's outcome
+        window under the action neuron's own name and file it as a trial.
+
+        True when it did, in which case the caller must not also open an
+        episode from the status string: the same activity under two names is
+        two episodes sharing the credit for one outcome.
+        """
+        from .action_discovery import behaviour_under_way
+        from .brain_constants import ACTION_THRESHOLDS
+        discovery = getattr(bw, 'action_discovery', None)
+        squid = self.squid
+        if discovery is None or squid is None:
+            return False
+        asleep = bool(getattr(squid, 'is_sleeping', False))
+        fell_asleep = asleep and not getattr(self, '_was_asleep_last_tick', False)
+        self._was_asleep_last_tick = asleep
+        rest = float(bw.state.get('act_rest', 0.0) or 0.0)
+        chose_rest = (rest >= ACTION_THRESHOLDS['act_rest']
+                      or getattr(discovery, 'urge', None) == 'act_rest')
+        drive = squid.get_neural_drive() if hasattr(squid, 'get_neural_drive') else None
+        behaviour = behaviour_under_way(
+            (drive or {}).get('action'), fell_asleep, chose_rest)
+        if behaviour is None:
+            if asleep and discovery.brain.causal_learning.current_action == 'sleeping':
+                return True      # still the rest it chose; one bout, one episode
+            return False
+        discovery.acted(behaviour, bw.state)
+        return True
+
     def _normalize_action_name(self, status_string):
         """
         Convert verbose status strings into trackable action categories.
@@ -2145,10 +2193,13 @@ class TamagotchiLogic:
         
         # Plant interactions
         elif 'plant' in status_lower:
-            if 'hiding' in status_lower:
-                return 'hiding'
-            elif 'comfort' in status_lower or 'approaching' in status_lower or 'seeking' in status_lower:
-                return 'seeking_plant'
+            # Going to a plant and staying in it is ONE action - the one the
+            # act_shelter neuron stands for - and has to be one episode, or
+            # the relief of hiding is credited to a different action from the
+            # one that got the squid there.
+            if ('hiding' in status_lower or 'comfort' in status_lower
+                    or 'approaching' in status_lower or 'seeking' in status_lower):
+                return 'approaching_plant'
             elif 'noticing' in status_lower:
                 return 'noticing_plant'
         
@@ -2519,7 +2570,12 @@ class TamagotchiLogic:
                 # Check for special status effects on anxiety reduction.
                 if self.squid.status == "hiding behind plant":
                     previous_anxiety = self.squid.anxiety
-                    self.squid.anxiety = max(0, self.squid.anxiety - (0.5 * self.simulation_speed))
+                    # Hiding in a plant is how a squid's anxiety comes down:
+                    # there are no neurons that lower it by themselves any
+                    # more. Strong enough to be felt within the few seconds an
+                    # action's consequence is watched for, or the squid could
+                    # hide a hundred times and never be able to tell it helped.
+                    self.squid.anxiety = max(0, self.squid.anxiety - (PLANT_CALM_PER_TICK * self.simulation_speed))
                     if self.squid.anxiety < previous_anxiety:
                         memory_value = "Being near plants is calming (Anxiety reduction)"
                         self.squid.memory_manager.add_short_term_memory(

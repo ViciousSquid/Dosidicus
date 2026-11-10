@@ -44,7 +44,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
 
-from .brain_constants import CORE_STAT_NEURONS, PURE_INPUT_NEURONS
+from .brain_constants import CORE_STAT_NEURONS, PURE_INPUT_NEURONS, is_motor_synapse
 from .neural_provenance import Episode, KnowledgeItem, humanise
 
 # How each drive contributes to whether an outcome was good or bad for the
@@ -764,6 +764,14 @@ class ActionOutcomeLedger:
         cap = self.config.max_reward_delta
         for edge, delta in deltas.items():
             if not delta:
+                continue
+            # Not the synapses that choose actions. This broadcast reaches
+            # everything that was active before the outcome, which is right
+            # for what the squid EXPECTS and wrong for what it DOES: a cue
+            # that merely happened to be there would be credited with the
+            # result. Motor synapses need the cue-present / cue-absent
+            # comparison that src/action_discovery.py makes.
+            if is_motor_synapse(edge) or is_motor_synapse((edge[1], edge[0])):
                 continue
             delta = max(-cap, min(cap, float(delta)))
             note = (f"{humanise(episode.action)} led to "

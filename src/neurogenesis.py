@@ -17,10 +17,34 @@ growth itself:
   * and stand down (strengthening what already exists) when the network has
     enough structure of that kind already.
 
-Everything that was here before is still here - functional specialisation,
-per-type caps, the stress-neuron anxiety cap, reciprocal wiring, positional
-placement, appearance, pruning, achievements, save/load. What changed is the
-question that starts it.
+WHAT EARNS A NEURON (v5)
+------------------------
+A neuron is grown only for something the squid CANNOT REPRESENT: a thing it
+perceives and has no sense organ for (a plant, another squid), one of its own
+actions it cannot tell from another, or a combination of circumstances that no
+neuron it has fires for. Everything else a brain might be short of - a drive it
+cannot bring down, a thing it knows and does not act on - is a missing or weak
+SYNAPSE, and is left to learning. A neuron is not a patch.
+
+That rule retired three things this module used to do:
+
+  * growing a "regulator" for a drive that was stuck, and then lowering the
+    drive by arithmetic according to how many regulators there were. The squid
+    felt better and was no more capable; the number moved and nothing was
+    learned. A stuck drive is now something the squid has to learn to DO
+    something about.
+  * wiring a newborn neuron to whatever happened to be active when it was
+    born. That gave every new neuron a strong inhibitory synapse onto any
+    action the squid was not performing at the time, and a few births later
+    it could no longer eat.
+  * a quota per kind of neuron. With one kind of reason to grow there is one
+    limit: the brain's overall size (config max_neurons), and a neuron that
+    never comes to matter is taken back (review_probation).
+
+A neuron grown for a combination RESTS AT ZERO and fires only when everything
+it stands for is present (propagation.register_quiet_neuron, and the threshold
+in FunctionalNeuron). Neurons in a brain saved before v5 keep exactly the
+behaviour they were saved with.
 """
 
 import time
@@ -30,7 +54,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Set, Any
 
-from .capability import Deficit, regulation_specialisation
+from .capability import Deficit, NEURON_WORTHY, regulation_specialisation
+from .propagation import register_quiet_neuron
 from .brain_constants import (SOCIAL_SENSOR, SOCIAL_SENSORS, SOCIAL_NEURONS, SQUID_SENSORS,
                               AQUARIUM_SENSE, REQUIRED_SOCIAL_SENSES,
                               GROWN_SENSES, WORLD_SENSES, PLANT_SENSOR,
@@ -102,6 +127,43 @@ EVOCATIVE_NAMES_BY_TYPE: Dict[str, List[str]] = {
     'reward':    ["play_reward", "achievement_signal"],
     'connector': ["junction", "waypoint"],
 }
+
+
+#: How strongly each circumstance drives a neuron grown for their combination.
+COMBINATION_WEIGHT = 0.8
+
+#: How far a drive is taken to be from rest when it counts as part of a
+#: situation ("hunger high"): the middle of the band the capability monitor
+#: calls high or low. A sense that is on contributes its full signal.
+_DRIVE_IN_BAND = 35.0
+_SENSE_ON = 50.0
+
+#: How long a combination neuron has to come to matter to something before it
+#: is taken back, in the brain's own seconds, and how long the brain then
+#: leaves that combination alone.
+PROBATION_SECONDS = 1800.0
+DECLINED_SECONDS = 7200.0
+
+#: A synapse out of a neuron this strong means something has come to depend
+#: on it.
+ESTABLISHED_WEIGHT = 0.15
+
+
+def combination_name(parts) -> str:
+    """What a neuron for these circumstances is called: what it stands for.
+
+    [['can_see_plant', 1], ['anxiety', 1]] -> 'sees_plant_and_anxiety_high'.
+    """
+    from .brain_constants import CORE_STAT_NEURONS
+    words = []
+    for name, sign in sorted((str(p[0]), int(p[1])) for p in parts):
+        if name in CORE_STAT_NEURONS:
+            words.append(f"{name}_{'low' if sign < 0 else 'high'}")
+        elif name.startswith('can_see_'):
+            words.append('sees_' + name[len('can_see_'):])
+        else:
+            words.append(name if sign >= 0 else f"not_{name}")
+    return '_and_'.join(words) or 'situation'
 
 
 #: What each neuron grown for other squid was created to represent - the
@@ -384,9 +446,26 @@ class FunctionalNeuron:
         # resting_history says what raised it, when.
         self.resting_level: Optional[float] = None
         self.resting_history: List[Dict[str, Any]] = []
+        # A neuron grown to stand for a COMBINATION of circumstances: which
+        # ones ([name, +1 present / high, -1 low] each), and how much input it
+        # needs before it says anything - set so that every one of them has to
+        # be there. Empty for any other neuron, and for every neuron grown
+        # before v5.
+        self.combines: List[str] = []
+        self.combination: List[List[Any]] = []
+        self.threshold: float = 0.0
+        # Silent unless driven (rests at 0), rather than resting at 50.
+        self.quiet: bool = False
+        # Whether it has come to matter to anything yet. A combination neuron
+        # is born asserting nothing; if nothing ever comes to depend on it, it
+        # is taken back (EnhancedNeurogenesis.review_probation).
+        self.established: bool = False
+        self.born_at: float = 0.0
 
     @property
     def display_name(self) -> str:
+        if self.combination:
+            return self.name.replace("_", " ").capitalize()
         if self.represents_concept in ALL_CONCEPTS:
             return self.name.replace("_", " ").title()
         type_key = f"neuron_type_{self.neuron_type}"
@@ -429,6 +508,15 @@ class FunctionalNeuron:
         neuron.resting_level = float(rest) if isinstance(rest, (int, float)) else None
         neuron.resting_history = [dict(entry) for entry in data.get('resting_history', [])
                                   if isinstance(entry, dict)][-50:]
+        neuron.combination = [list(part) for part in data.get('combination', [])
+                              if isinstance(part, (list, tuple)) and len(part) == 2]
+        neuron.combines = [str(part[0]) for part in neuron.combination]
+        neuron.threshold = float(data.get('threshold', 0.0) or 0.0)
+        neuron.quiet = bool(data.get('quiet', False))
+        neuron.established = bool(data.get('established', not neuron.quiet))
+        neuron.born_at = float(data.get('born_at', 0.0) or 0.0)
+        if neuron.quiet:
+            register_quiet_neuron(neuron.name)
         return neuron
 
     def to_dict(self):
@@ -445,6 +533,11 @@ class FunctionalNeuron:
             'represents_concept': self.represents_concept,
             'resting_level': self.resting_level,
             'resting_history': [dict(entry) for entry in self.resting_history],
+            'combination': [list(part) for part in self.combination],
+            'threshold': self.threshold,
+            'quiet': self.quiet,
+            'established': self.established,
+            'born_at': self.born_at,
             'creation_context': {
                 'trigger_type': self.creation_context.trigger_type,
                 'timestamp': self.creation_context.timestamp,
@@ -748,6 +841,154 @@ class EnhancedNeurogenesis:
         return self._create_neuron_internal(context, trigger_value, is_emergency,
                                             deficit=self.pending_deficit)
     
+    # ------------------------------------------------------------------
+    # Combinations
+    # ------------------------------------------------------------------
+    def _combination_for(self, deficit: Optional[Deficit]) -> List[List[Any]]:
+        """The circumstances a representation deficit asks for a neuron for."""
+        from .capability import signature_parts
+        if deficit is None or deficit.kind != 'representation':
+            return []
+        if deficit.evidence.get('concept', '') in ALL_CONCEPTS:
+            return []
+        parts = deficit.evidence.get('combination')
+        if not parts:
+            parts = signature_parts(deficit.evidence.get('signature', '')
+                                    or deficit.target)
+        positions = getattr(self.brain_widget, 'neuron_positions', None) or {}
+        return [[str(name), 1 if int(sign) >= 0 else -1]
+                for name, sign in parts if name in positions]
+
+    def _set_combination_threshold(self, neuron: 'FunctionalNeuron') -> None:
+        """Make the neuron fire for ALL of what it combines, and for no less.
+
+        Each circumstance contributes a known amount of input when it holds.
+        The threshold is put half of the smallest contribution below their
+        total, so losing any one of them - even the weakest - leaves the
+        neuron under it and silent; and the gain is set so that with
+        everything present it is fully on. That is the whole difference
+        between a neuron and a pair of synapses: two synapses add, and this
+        does not.
+        """
+        from .brain_constants import CORE_STAT_NEURONS
+        weights = self.brain_widget.weights
+        contributions = []
+        for name, _sign in neuron.combination:
+            weight = abs(float(weights.get((name, neuron.name), 0.0)))
+            if weight <= 0.0:
+                continue
+            reach = _DRIVE_IN_BAND if name in CORE_STAT_NEURONS else _SENSE_ON
+            contributions.append(reach * weight)
+        if not contributions:
+            return
+        slack = 0.5 * min(contributions)
+        neuron.threshold = round(sum(contributions) - slack, 4)
+        neuron.strength_multiplier = round(100.0 / slack, 4)
+
+    def combination_thresholds(self) -> Dict[str, float]:
+        """{neuron: threshold} for propagation - see propagation.propagate."""
+        return {name: fn.threshold for name, fn in self.functional_neurons.items()
+                if getattr(fn, 'threshold', 0.0)}
+
+    def defined_by_inputs(self) -> Set[str]:
+        """Neurons whose incoming synapses say what they ARE, and so are not
+        the correlational rule's to move (plasticity.commit `fixed_inputs`)."""
+        return {name for name, fn in self.functional_neurons.items()
+                if getattr(fn, 'quiet', False)}
+
+    # ------------------------------------------------------------------
+    # Earning a place
+    # ------------------------------------------------------------------
+    def _matters(self, name: str) -> bool:
+        """Has anything come to depend on this neuron?"""
+        return any(src == name and abs(w) >= ESTABLISHED_WEIGHT
+                   for (src, _dst), w in self.brain_widget.weights.items())
+
+    def review_probation(self) -> Optional[str]:
+        """Confirm combination neurons that came to matter; take back one that
+        did not. Returns the name of a neuron taken back, if one was.
+
+        A combination neuron is born asserting nothing - no outgoing synapse
+        at all. It earns its place when experience gives it one: an action it
+        turned out to be the cue for, or something it turned out to predict.
+        If that has not happened within PROBATION_SECONDS it is removed, the
+        removal is recorded, and the brain does not grow one for the same
+        combination again for a good while. Growing is how the squid tries
+        out a way of seeing its world; this is how a way that led nowhere is
+        let go, so the brain a player reads is made of things that matter.
+        """
+        now = self.clock()
+        for name, neuron in list(self.functional_neurons.items()):
+            if not getattr(neuron, 'quiet', False) or neuron.established:
+                continue
+            if self._matters(name):
+                neuron.established = True
+                neuron.utility_score = max(neuron.utility_score, 0.5)
+                if self._on_neuron_leveled_callback:
+                    try:
+                        self._on_neuron_leveled_callback(name, 1.0)
+                    except Exception as e:
+                        print(f"Level callback error: {e}")
+                continue
+            if now - neuron.born_at < PROBATION_SECONDS:
+                continue
+            self._take_back(name, "nothing ever came to depend on it")
+            return name
+        return None
+
+    def _take_back(self, name: str, why: str) -> None:
+        """Remove a grown neuron and everything attached to it, on the record."""
+        from .capability import combination_signature
+        bw = self.brain_widget
+        neuron = self.functional_neurons.get(name)
+        if neuron is not None and neuron.combination:
+            monitor = self.capability
+            if monitor is not None:
+                key = f"representation:{combination_signature(neuron.combination)}"
+                monitor.declined[key] = self.clock() + DECLINED_SECONDS
+                origin_key = (neuron.origin_deficit or {}).get('key')
+                if origin_key:
+                    monitor.declined[origin_key] = self.clock() + DECLINED_SECONDS
+        for edge in [e for e in list(bw.weights) if name in e]:
+            bw.remove_weight(edge, mechanism='prune',
+                             reason=f"{name} was taken back - {why}")
+        bw.neuron_positions.pop(name, None)
+        bw.state.pop(name, None)
+        if hasattr(bw, 'forget_action_representation'):
+            bw.forget_action_representation(name)
+        if hasattr(bw, 'visible_neurons'):
+            bw.visible_neurons.discard(name)
+        if neuron is not None:
+            if neuron.neuron_type == 'novelty':
+                self.novelty_neuron_count = max(0, self.novelty_neuron_count - 1)
+            del self.functional_neurons[name]
+        ledger = getattr(bw, 'ledger', None)
+        if ledger is not None:
+            ledger.record_neuron_pruned(name, reason=why)
+        self._place_grown()
+        print(f"🗑️ {loc('log_pruned', default='Pruned')}: {name} ({why})")
+
+    def _make_room(self) -> bool:
+        """At the size limit: give up a neuron that has not earned its place.
+
+        Only a combination neuron still on probation can be displaced. A brain
+        full of neurons that all matter does not grow, which is the limit
+        doing its job.
+        """
+        name = self._displaceable()
+        if name is None:
+            return False
+        self._take_back(name, "it had not come to matter, and the brain "
+                              "needed the room for something that might")
+        return True
+
+    def _displaceable(self) -> Optional[str]:
+        """The oldest combination neuron that has not come to matter, if any."""
+        candidates = [(fn.born_at, name) for name, fn in self.functional_neurons.items()
+                      if getattr(fn, 'quiet', False) and not fn.established
+                      and not self._matters(name)]
+        return min(candidates)[1] if candidates else None
+
     def _make_reciprocal_connections(self, new_neuron: str,
                                      deficit: Optional[Deficit] = None
                                      ) -> List[Tuple[str, str, float, str]]:
@@ -1070,74 +1311,50 @@ class EnhancedNeurogenesis:
         # type, by specialisation or from whatever else was active at birth.
         named_concept = social or world_sense
 
-        # 0. EMERGENCY: a maximum-severity deficit is an emergency by
-        #    definition - the squid is in trouble the network cannot get it out
-        #    of. Acute anxiety remains an emergency for backward compatibility.
-        if not is_emergency:
-            if deficit is not None and deficit.severity >= 1.0:
-                is_emergency = True
-            elif trigger_type == 'stress' and ctx.active_neurons.get('anxiety', 50) >= 90:
-                is_emergency = True
-                print(f"🚨 {loc('log_emergency_context', default='Emergency context detected (Anxiety > 90)')}")
-
-        # 1. HARD TYPE CAP & STRENGTHENING LOGIC
-        # A cap that has been reached is itself an answer: the brain already
-        # has structure of this kind, so deepen it rather than duplicating it.
-        default_caps = {'stress': 5, 'novelty': 6, 'reward': 6, 'connector': 10}
-        max_for_this_type = self.config.neurogenesis.get('max_per_type', default_caps).get(trigger_type, 5)
-
-        # Ensure stress is strictly 5
-        if trigger_type == 'stress': max_for_this_type = 5
-
-        current_type_count = len([name for name, fn in self.functional_neurons.items()
-                                  if fn.neuron_type == trigger_type
-                                  and fn.represents_concept not in ALL_CONCEPTS])
-
         spec = (deficit.specialization if deficit is not None
                 else self._preview_specialization(ctx))
 
-        # IF CAP REACHED: STRENGTHEN EXISTING (Even in Emergency)
-        if current_type_count >= max_for_this_type and not named_concept:
-            msg = loc('log_type_cap_reached', default="Type cap reached for {type} ({count}/{max}), strengthening existing", type=trigger_type, count=current_type_count, max=max_for_this_type)
-            print(f"   {msg}")
+        # What it will stand for, when it is a combination of circumstances.
+        combination = self._combination_for(deficit)
 
-            # If emergency, we perform a strengthening action as the coping mechanism
-            if is_emergency:
-                print(f"   💪 Emergency: Boosting stress tolerance via existing neurons.")
-                if 'anxiety' in self.brain_widget.state:
-                    self._apply_anxiety_relief(15.0, "Emergency strengthen", is_emergency=True)
-
-            self._strengthen_existing_neuron(trigger_type, spec)
-            # Deepening existing structure is a growth action and is paced like
-            # one. Without this the engine strengthened on every single
-            # evaluation once a type cap was reached.
-            self._last_growth_at = self.clock()
-            self.stood_down.append((time.time(),
-                                    deficit.key if deficit else trigger_type,
-                                    f"already has {current_type_count} {trigger_type} "
-                                    f"neurons; strengthened one instead"))
-            return None
-
-        # 2. GLOBAL NEURON LIMIT
+        # THE ONE LIMIT: the brain's size. There is no quota per kind of
+        # neuron any more - there is one kind of reason to grow. A sense organ
+        # for something newly perceived is exempt, because nothing that already
+        # exists could stand in for it; anything else has to find room, which
+        # means a neuron that never came to matter gives up its place.
         current_total = self._live_neuron_count()
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
-        if current_total >= max_neurons and not is_emergency and not required_concept:
-            print(f"   Max neurons reached ({current_total}/{max_neurons})")
-            return None
-        elif is_emergency and current_total >= max_neurons:
-             print(f"⚠️ {loc('log_global_cap_bypass', default='Emergency override: Bypassing global neuron limit!')}")
+        if current_total >= max_neurons and not required_concept:
+            if not self._make_room():
+                print(f"   Max neurons reached ({current_total}/{max_neurons})")
+                return None
 
         # 3. NAME. Showmanship (config.ini [Neurogenesis] showmanship) gives the
         #    neuron an evocative name instead of type_specialisation. It is a
         #    presentation choice made once, here, rather than a wrapper that
         #    renames the neuron after the fact and has to migrate a dozen
         #    dictionaries to do it.
-        base_name = concept if named_concept else self._choose_name(trigger_type, spec)
+        if named_concept:
+            base_name = concept
+        elif combination:
+            # Named for what it stands for, always: a neuron that fires for
+            # "food in sight while hungry" is called that, not something
+            # evocative, because its name is the first thing anyone reads.
+            base_name = combination_name(combination)
+        else:
+            base_name = self._choose_name(trigger_type, spec)
         neuron_name = self._get_unique_neuron_name(base_name)
 
         func_neuron = FunctionalNeuron(neuron_name, trigger_type, ctx,
                                        origin_deficit=deficit.to_dict() if deficit else {})
         func_neuron.specialization = spec
+        func_neuron.born_at = self.clock()
+        func_neuron.established = not combination
+        if combination:
+            func_neuron.combination = [list(part) for part in combination]
+            func_neuron.combines = [str(part[0]) for part in combination]
+            func_neuron.quiet = True
+            register_quiet_neuron(neuron_name)
         self.functional_neurons[neuron_name] = func_neuron
         if trigger_type == 'novelty': self.novelty_neuron_count += 1
         self.last_creation_by_type[trigger_type] = self.clock()
@@ -1148,7 +1365,7 @@ class EnhancedNeurogenesis:
         self.brain_widget.neuron_positions[neuron_name] = position
         self._place_grown()
         self._set_neuron_appearance(neuron_name, func_neuron)
-        self.brain_widget.state[neuron_name] = 50.0
+        self.brain_widget.state[neuron_name] = 0.0 if func_neuron.quiet else 50.0
         if grown_sensor:
             # A sense organ from now on, as can_see_food is: the world writes
             # it (propagation.CONCEPT_PERCEPTS), and no synapse may point at
@@ -1159,24 +1376,20 @@ class EnhancedNeurogenesis:
             self.brain_widget.state[neuron_name] = (
                 (100.0 if reading > 0 else 0.0) if binary else reading)
 
-        # Immediate anxiety relief on growing a coping neuron, scaled by how
-        # many the squid already has. This is the structure taking effect, not
-        # a reward for the event that produced it.
-        if trigger_type == 'stress' and not named_concept and 'anxiety' in self.brain_widget.state:
-            new_anxiety = self._apply_anxiety_relief(
-                15.0, f"Stress Neuron '{neuron_name}' created", is_emergency=is_emergency)
-            print(f"   📉 Stress Neuron Created: Anxiety now at {new_anxiety:.1f} (cap: {self._get_anxiety_cap():.0f})")
-
-        # 4. WIRING. Specialisation wiring first (what a neuron of this kind
-        #    always does), then the remedy wiring the deficit specifically
-        #    calls for, which overrides it.
+        # 4. WIRING. Only what the deficit calls for. A neuron grown for a
+        #    reason is wired for that reason and nothing else: it is no longer
+        #    also connected to whatever was active at the moment it was born
+        #    (get_functional_connections), which is how a new neuron came to
+        #    hold down every action the squid was not performing just then.
+        #    That older wiring remains for a neuron created with no deficit at
+        #    all - the Designer, a test.
         #    The two plans are merged BEFORE anything is written, so each
         #    synapse is created once with its final value. Writing the
         #    specialisation weight and then overwriting it with the remedy
         #    weight put three meaningless intermediate values in the neuron's
         #    permanent record.
         plan: Dict[Tuple[str, str], Tuple[float, str]] = {}
-        connections = ({} if named_concept else
+        connections = ({} if (named_concept or deficit is not None) else
                        func_neuron.get_functional_connections(list(self.brain_widget.neuron_positions.keys())))
         for target, weight in connections.items():
             if abs(weight) < 0.05: continue
@@ -1188,15 +1401,27 @@ class EnhancedNeurogenesis:
         for (src, dst), (weight, purpose) in plan.items():
             if self._wire(src, dst, weight, purpose, deficit):
                 wiring.append((src, dst, weight, purpose))
-        if not named_concept:
+        if func_neuron.quiet:
+            # A combination neuron is complete as born: driven by what it
+            # combines, and asserting nothing. Its outputs are for experience
+            # to supply - a path back from what it drives would make it half
+            # of a loop, and a synapse added "so it can do something" would be
+            # a claim nobody has evidence for.
+            self._set_combination_threshold(func_neuron)
+            discovery = getattr(self.brain_widget, 'action_discovery', None)
+            motor = deficit.evidence.get('motor') if deficit is not None else None
+            if discovery is not None and motor:
+                # What its trials already showed about the pair is what is
+                # known about the neuron, so the path to the action is laid
+                # from that evidence now rather than re-earned from nothing.
+                discovery.adopt_combination(neuron_name, func_neuron.combines, motor,
+                                            deficit=deficit)
+        elif not named_concept:
             wiring.extend(self._make_reciprocal_connections(neuron_name, deficit))
-
-        # A neuron that cannot be driven, or cannot drive anything, is not a
-        # neuron - it is an entry in a dictionary. Growing one is worse than
-        # growing nothing, because it counts against the caps and has to be
-        # rescued later. Check the post-condition here, where it can still be
-        # met, rather than leaving the connectivity detector to find it.
-        wiring.extend(self._ensure_viable(neuron_name, func_neuron, deficit))
+            # A neuron that cannot be driven, or cannot drive anything, is not
+            # a neuron - it is an entry in a dictionary. Check the
+            # post-condition here, where it can still be met.
+            wiring.extend(self._ensure_viable(neuron_name, func_neuron, deficit))
 
         if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
         self.brain_widget.neurogenesis_highlight = {
@@ -1293,20 +1518,13 @@ class EnhancedNeurogenesis:
             plan.append((neuron_name, stat, corrective, 'remedy'))
 
         elif deficit.kind == 'representation':
-            # Take the sensors that define the situation as its inputs, signed
-            # by how they present, so this neuron and nothing else fires for it.
-            for source in deficit.sources:
-                if source not in state:
-                    continue
-                value = state.get(source)
-                if isinstance(value, bool):
-                    value = 100.0 if value else 0.0
-                if not isinstance(value, (int, float)):
-                    continue
-                weight = max(-0.9, min(0.9, (float(value) - 50.0) / 50.0 * 0.8))
-                if abs(weight) < 0.2:
-                    weight = 0.6
-                plan.append((source, neuron_name, weight, 'remedy'))
+            # Driven by each thing it combines, and by nothing else. The
+            # threshold that makes it fire only for all of them together is
+            # set once the synapses exist (_set_combination_threshold).
+            for name, sign in func_neuron.combination:
+                if name in state:
+                    plan.append((name, neuron_name,
+                                 COMBINATION_WEIGHT * (1 if sign >= 0 else -1), 'remedy'))
 
         elif deficit.kind == 'expression':
             cue = deficit.evidence.get('cue')
@@ -1902,18 +2120,40 @@ class EnhancedNeurogenesis:
 
     def find_deficit(self, brain_state: Optional[Dict[str, float]] = None
                      ) -> Optional[Deficit]:
-        """The most severe thing this brain currently cannot do.
+        """The most severe thing this brain currently cannot REPRESENT.
 
-        Prefers the monitor's evidence-backed diagnosis. Falls back to an
-        acute reading of the live state so a squid in genuine, immediate
-        trouble is not left waiting for a statistical window to fill.
+        A drive pinned at an extreme used to be answered here with an
+        emergency neuron. It no longer is: a squid in trouble needs to do
+        something, and a new neuron does not do anything (_acute_deficit is
+        kept as a diagnosis the tools can show).
         """
         monitor = self.capability
         if monitor is not None:
-            actionable = monitor.actionable()
-            if actionable:
-                return actionable[0]
-        return self._acute_deficit(brain_state)
+            # Only what a neuron is the remedy for. Everything else the
+            # monitor finds stays on its list - the player can read it, and
+            # learning is what has to answer it.
+            for deficit in monitor.actionable():
+                if deficit.kind in NEURON_WORTHY and self._worth_a_neuron(deficit):
+                    return deficit
+        return None
+
+    @staticmethod
+    def _worth_a_neuron(deficit: Deficit) -> bool:
+        """Is this something the squid cannot represent AND has reason to?
+
+        A combination of circumstances that merely keeps coming round is not
+        enough. Nearly every pairing of a sense and a mood recurs, and a
+        neuron for each of them is forty neurons that distinguish things
+        nothing depends on (measured: two squid in four grew exactly that
+        many, and were no better at anything for it). A combination earns a
+        neuron when the squid's own actions have turned out differently
+        because of it - action_discovery.wanted_combinations - which is to
+        say when there is something it needs to tell apart and cannot.
+        """
+        if deficit.kind != 'representation':
+            return True
+        evidence = deficit.evidence or {}
+        return bool(evidence.get('found_by') or evidence.get('concept'))
 
     def _acute_deficit(self, brain_state: Optional[Dict[str, float]] = None
                        ) -> Optional[Deficit]:
@@ -2024,31 +2264,29 @@ class EnhancedNeurogenesis:
         """Reasons a real deficit still does not get new structure."""
         now = self.clock()
 
+        if deficit.kind not in NEURON_WORTHY and \
+                deficit.evidence.get('concept', '') not in ALL_CONCEPTS:
+            return ("a synapse is what is missing here, not a neuron - "
+                    "this is for learning to answer")
+        if not self._worth_a_neuron(deficit):
+            return ("this keeps coming round, but nothing the squid does has "
+                    "yet turned out differently because of it")
+
         if self._first_real_tick is None:
             return "the brain has not started living yet"
         if now - self._first_real_tick < 5.0:
             return "the brain has only just started"
 
-        max_neurons = self.config.neurogenesis.get('max_neurons', 32)
-        current_count = self._live_neuron_count()
-        if current_count >= max_neurons and deficit.severity < 1.0:
-            return f"the brain is already at its {max_neurons}-neuron ceiling"
-
         cooldown = float(self.config.neurogenesis.get('cooldown', 60))
         remaining = self.get_global_cooldown_remaining()
         if remaining > 0:
-            # A maximum-severity deficit is a genuine emergency and may grow
-            # sooner - but not instantly. Without a floor, a squid whose drives
-            # are all pinned grows a burst of neurons in a few seconds, which is
-            # the event-driven behaviour this rewrite exists to remove.
-            if deficit.severity >= 1.0:
-                elapsed = cooldown - remaining
-                emergency_floor = max(10.0, cooldown * 0.25)
-                if elapsed < emergency_floor:
-                    return (f"an emergency, but only {elapsed:.0f}s since the last "
-                            f"neuron (needs {emergency_floor:.0f}s)")
-            else:
-                return f"only {remaining:.0f}s into the {cooldown:.0f}s growth cooldown"
+            return f"only {remaining:.0f}s into the {cooldown:.0f}s growth cooldown"
+
+        max_neurons = self.config.neurogenesis.get('max_neurons', 32)
+        current_count = self._live_neuron_count()
+        if current_count >= max_neurons and self._displaceable() is None:
+            return (f"the brain is at its {max_neurons}-neuron size and every "
+                    f"neuron in it has earned its place")
         return None
 
     def growth_report(self) -> Dict[str, Any]:
@@ -2087,81 +2325,14 @@ class EnhancedNeurogenesis:
                     if abs(float(value) - 50.0) > 15.0:
                         func_neuron.activation_count += 1
                         func_neuron.last_activated = now_ts
+            self.review_probation()
 
-            # 3. === SCALED STRESS REDUCTION MECHANIC ===
-            # Each stress neuron contributes to anxiety suppression, with scaling based on count
-            if 'anxiety' in brain_state:
-                current_anxiety = brain_state['anxiety']
-                stress_count = self._get_stress_neuron_count()
-                anxiety_cap = self._get_anxiety_cap()
-                
-                # First, enforce the cap - anxiety should never exceed the cap
-                if current_anxiety > anxiety_cap:
-                    current_anxiety = anxiety_cap
-                    brain_state['anxiety'] = anxiety_cap
-                    self.brain_widget.state['anxiety'] = anxiety_cap
-                
-                total_reduction = 0.0
-                
-                for name, fn in self.functional_neurons.items():
-                    if getattr(fn, 'neuron_type', '') == 'stress':
-                        multiplier = getattr(fn, 'strength_multiplier', 1.0)
-                        
-                        # Force stress neuron to activate proportionally to anxiety
-                        driven = 50.0 + (current_anxiety - 50.0) * 1.2
-                        driven = max(50.0, min(100.0, driven))
-                        
-                        current_val = self.brain_widget.state.get(name, 50.0)
-                        final_val = max(current_val, driven)
-                        self.brain_widget.state[name] = final_val
-                        
-                        if final_val > 55:
-                            infl = (final_val - 50.0) / 50.0 
-                            # Base force per neuron, scaled by strength multiplier
-                            reduction_force = 25.0 * multiplier * infl
-                            total_reduction += reduction_force
-
-                if total_reduction > 0:
-                    # Scale reduction based on stress neuron count (cumulative resilience)
-                    # More neurons = faster anxiety reduction
-                    count_multiplier = 1.0 + (0.3 * stress_count)  # 1.0 to 2.5x
-                    total_reduction *= count_multiplier
-                    
-                    # Crisis response multipliers
-                    if current_anxiety > 80:
-                        total_reduction *= 3.0  # Strong crisis response
-                    elif current_anxiety > 60:
-                        total_reduction *= 1.5
-                    
-                    # Apply reduction with timestep factor
-                    reduction_amount = total_reduction * 0.3
-                    new_anxiety = max(0.0, current_anxiety - reduction_amount)
-                    
-                    # Enforce cap again after reduction
-                    new_anxiety = min(new_anxiety, anxiety_cap)
-                    
-                    # Apply to brain state dictionaries
-                    brain_state['anxiety'] = new_anxiety
-                    self.brain_widget.state['anxiety'] = new_anxiety
-                    
-                    # CRITICAL: Also apply to the actual squid!
-                    if (hasattr(self.brain_widget, 'tamagotchi_logic') and 
-                        self.brain_widget.tamagotchi_logic and
-                        hasattr(self.brain_widget.tamagotchi_logic, 'squid') and
-                        self.brain_widget.tamagotchi_logic.squid):
-                        squid = self.brain_widget.tamagotchi_logic.squid
-                        
-                        # Also enforce cap on squid's current anxiety before we compare
-                        if squid.anxiety > anxiety_cap:
-                            squid.anxiety = anxiety_cap
-                        
-                        old_squid_anxiety = squid.anxiety
-                        squid.anxiety = new_anxiety
-                        
-                        if reduction_amount > 1.0:  # Only log significant reductions
-                            print(f"   🧘 Stress suppression ({stress_count} neurons): "
-                                  f"{old_squid_anxiety:.1f} → {new_anxiety:.1f} "
-                                  f"(-{reduction_amount:.1f}, cap: {anxiety_cap:.0f})")
+            # 3. (Removed in v5.) Stress neurons used to be forced on in
+            #    proportion to anxiety here, and anxiety then reduced and
+            #    capped by arithmetic according to how many of them there were.
+            #    The squid's anxiety is now moved only by what happens to it
+            #    and by its own synapses; a stress neuron from an older save
+            #    still acts, through the synapses it was wired with.
 
             # 4. Visualizations
             if not getattr(self.brain_widget, 'animations_enabled', True): return

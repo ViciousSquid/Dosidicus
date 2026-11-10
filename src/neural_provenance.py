@@ -50,6 +50,7 @@ MECHANISMS: Dict[str, str] = {
     'hebbian':       "they kept happening together",
     'stdp':          "one reliably fired just before the other",
     'causal_reward': "an action it took led to a result worth repeating",
+    'causal_motor_discovery': "it tried the action with this cue and without it, and it turned out differently",
     'consolidation': "it was replayed during sleep",
     'neurogenesis':  "a new neuron was wired in",
     'designer':      "you wired it by hand",

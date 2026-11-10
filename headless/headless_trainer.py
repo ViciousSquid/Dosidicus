@@ -253,7 +253,7 @@ class HeadlessSquid:
         # the only place in the tank where anxiety falls quickly, and nothing
         # tells the squid so: it has to end up there, and notice.
         if self.sheltered:
-            relief = 1.5 + (0.5 if self.personality == Personality.TIMID else 0.0)
+            relief = 4.0 + (1.0 if self.personality == Personality.TIMID else 0.0)
             self.anxiety = max(0.0, self.anxiety - relief * dt)
         elif not self.is_startled and self.hunger < 70:
             # Left alone and fed, it settles - slowly.
@@ -278,7 +278,14 @@ class HeadlessSquid:
         elif self.satisfaction > 60:
             self.happiness = min(100, self.happiness + 0.05 * dt)
             
-        # Curiosity wanders
+        # Curiosity builds while nothing is happening and is spent by going
+        # to look. It used to be a random walk, which left the squid
+        # incurious - and so motionless - for long stretches for no reason at
+        # all; a body that sits still cannot meet anything to learn from.
+        if self.status in ("idle", "roaming"):
+            self.curiosity += 0.25 * dt
+        else:
+            self.curiosity -= 0.10 * dt
         self.curiosity += self.rng.uniform(-0.5, 0.5) * dt
         self.curiosity = max(0, min(100, self.curiosity))
         
@@ -381,6 +388,8 @@ class HeadlessSimulation:
             'flee_actions': 0,
             'escaped_startles': 0,
             'unavoided_startle_ticks': 0,
+            'shelter_approaches': 0,
+            'hidden_startles': 0,   # a fright it got out of by hiding
             'sheltered_ticks': 0,   # among a plant's leaves, by its own choice
             'chosen_rests': 0,      # went to sleep BEFORE exhaustion took it
             'collapses': 0,         # exhaustion took it
@@ -495,7 +504,8 @@ class HeadlessSimulation:
     # A plant is seen from as far off as food is, and sheltered in from much
     # closer: seeing one and being in one are different facts.
     PLANT_SIGHT_RADIUS = 0.32
-    PLANT_SHELTER_RADIUS = 0.07
+    PLANT_SHELTER_RADIUS = 0.085
+    PLANT_SWIM_STEP = 0.075
 
     def _nearest_visible_plant(self):
         if not self.plants:
@@ -506,11 +516,6 @@ class HeadlessSimulation:
         if math.hypot(plant['x'] - x, plant['y'] - y) <= self.PLANT_SIGHT_RADIUS:
             return plant
         return None
-
-    def _among_leaves(self) -> bool:
-        x, y = self.squid.x, self.squid.y
-        return any(math.hypot(p['x'] - x, p['y'] - y) <= self.PLANT_SHELTER_RADIUS
-                   for p in self.plants)
 
     def _refresh_food_sense(self):
         self.squid.food_visible = self._nearest_visible_food() is not None
@@ -546,7 +551,11 @@ class HeadlessSimulation:
                     self.food_items.remove(food)
                     squid.feed()
                     self.stats['food_eaten'] += 1
-            # Desire to eat with nothing in sight never creates free food.
+            else:
+                # Wanting food with none in sight never creates any. It sends
+                # the squid looking, which is what the game's squid does too
+                # (DecisionEngine._execute falls back to drifting).
+                self._move_randomly()
         elif action == "fleeing":
             squid.is_fleeing = True
             self.stats['flee_actions'] += 1
@@ -580,15 +589,24 @@ class HeadlessSimulation:
                 dx, dy = plant['x'] - squid.x, plant['y'] - squid.y
                 distance = math.hypot(dx, dy)
                 if distance > self.PLANT_SHELTER_RADIUS:
-                    step = min(self.FOOD_SWIM_STEP, distance)
+                    step = min(self.PLANT_SWIM_STEP, distance)
                     squid.x += (dx / distance) * step
                     squid.y += (dy / distance) * step
-
-        # Where the body ended up, whatever it meant to do.
-        if self._among_leaves() and not squid.is_sleeping:
-            squid.sheltered = True
-            if action == "approaching_plant":
-                self.stats['sheltered_ticks'] += 1
+                    self.stats['shelter_approaches'] += 1
+                # Relief belongs to a squid that CHOSE to shelter and got
+                # there. Merely drifting past a plant earns none: if it did,
+                # whatever the squid happened to be doing at the time would
+                # take the credit, and nothing could be learned from it.
+                if math.hypot(plant['x'] - squid.x,
+                              plant['y'] - squid.y) <= self.PLANT_SHELTER_RADIUS:
+                    squid.sheltered = True
+                    self.stats['sheltered_ticks'] += 1
+                    if squid.is_startled:
+                        # Hidden among the leaves, whatever frightened it
+                        # cannot reach it: hiding is a second way out of a
+                        # fright, beside fleeing.
+                        squid.is_startled = False
+                        self.stats['hidden_startles'] += 1
 
         # A startle that the animal does not flee from has a consequence,
         # rather than being merely an inert set of sensor bits.
@@ -619,6 +637,16 @@ class HeadlessSimulation:
                             100.0 if self.squid.plant_visible else 0.0)
         self.brain.propagate(observe_learning=self.config.learning_enabled)
 
+        # What its own actions led to is settled BEFORE anything new is tried,
+        # and then - sometimes - an unwired action neuron fires by itself.
+        # That is a spike in a neuron, not a choice: the same contest below
+        # decides what the body does, and a real urge always beats it.
+        discovery = self.brain.action_discovery if self.config.learning_enabled else None
+        urge = None
+        if discovery is not None:
+            discovery.process_closed()
+            urge = discovery.excite(self.brain.state)
+
         if self.squid.is_sleeping:
             chosen = "sleeping"
         elif (self.brain.state.get("act_collapse", 0.0)
@@ -638,7 +666,11 @@ class HeadlessSimulation:
         # learner compares this pre-action state to a subsequent observed
         # state, rather than crediting the squid for a random food event.
         if self.config.learning_enabled:
-            self.brain.causal_learning.on_action(chosen, self.brain.state)
+            episode_id = self.brain.causal_learning.on_action(chosen, self.brain.state)
+            # The cues are what the BRAIN had in front of it when it acted -
+            # its senses, including any it has grown, and its drives.
+            discovery.committed(episode_id, urge, chosen, dict(self.brain.state))
+            self.stats.update(discovery.statistics())
         counts = self.stats['actions_selected']
         counts[chosen] = counts.get(chosen, 0) + 1
         self._act_on_neural_decision(chosen)

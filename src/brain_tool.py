@@ -916,6 +916,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             'action_representations': dict(
                 getattr(self.brain_widget, 'action_representations', {}) or {}),
             'causal_learning': _dump('causal_learning'),
+            # What it has found out about its own actions: which it has tried
+            # with and without which cue, and how each turned out.
+            'action_discovery': _dump('action_discovery'),
             'capability': _dump('capability'),
             'plasticity': _dump('plasticity'),
             'consolidation': _dump('consolidation'),
@@ -1030,6 +1033,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # permanent cognitive history" only holds if the history is in the file.
         for key, attr in (('provenance', 'ledger'),
                           ('causal_learning', 'causal_learning'),
+                          ('action_discovery', 'action_discovery'),
                           ('capability', 'capability'),
                           ('plasticity', 'plasticity'),
                           ('consolidation', 'consolidation')):

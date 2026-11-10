@@ -76,6 +76,30 @@ _RESTS_AT_ZERO = (set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS) | set(ACTION_NEU
                   | {AGGRESSION_NEURON})
 
 
+def rests_at_zero(name: str) -> bool:
+    """Is this a neuron whose silence means nothing at all?"""
+    return name in _RESTS_AT_ZERO
+
+
+def register_quiet_neuron(name: str) -> None:
+    """Classify a grown neuron as one that is SILENT unless driven.
+
+    A neuron grown to stand for a situation ("food in sight while hungry")
+    has to be able to say nothing. The neurons the squid used to grow rested
+    at the 50 midpoint and passed on how far they were from it, in either
+    direction - so a neuron for a situation that was not happening sat below
+    50 and pushed everything it touched the WRONG way, through a synapse that
+    was supposed to help. Measured: a positive +0.40 synapse from such a
+    neuron was delivering -19.97 to the eating neuron.
+
+    Registered here it rests at 0, like a sense or an action, and contributes
+    exactly nothing until its situation is present. Process-wide by name, as
+    grown sense organs are; these neurons are named for what they stand for,
+    so no neuron from an older save can share a name with one.
+    """
+    _RESTS_AT_ZERO.add(str(name))
+
+
 def _follow_sensor_registration(name: str, _binary: bool, added: bool) -> None:
     """Keep the resting-level set in step with sensors registered at runtime.
 
@@ -227,8 +251,16 @@ def propagate(state: Dict[str, object],
               strengths: Optional[Mapping[str, float]] = None,
               noise: Optional[Mapping[str, float]] = None,
               smoothing: float = DEFAULT_SMOOTHING,
-              resting: Optional[Mapping[str, float]] = None) -> Dict[str, float]:
+              resting: Optional[Mapping[str, float]] = None,
+              thresholds: Optional[Mapping[str, float]] = None) -> Dict[str, float]:
     """Compute one timestep for every target neuron, in place.
+
+    `thresholds` is how much input a neuron needs before it does anything:
+    target = rest + (input - threshold) * strength. It is what lets one neuron
+    stand for a COMBINATION - driven by two things, with a threshold either
+    alone cannot reach, it fires only when both are there. Without it a neuron
+    with two inputs is just their sum, and says nothing a pair of synapses
+    could not.
 
     `resting` overrides baseline_of() for this brain's neurons whose resting
     level life has moved (FunctionalNeuron.resting_level) - what a neuron
@@ -241,6 +273,7 @@ def propagate(state: Dict[str, object],
     strengths = strengths or {}
     noise = noise or {}
     resting = resting or {}
+    thresholds = thresholds or {}
 
     # 1. Sum weighted input from a single consistent snapshot, so all neurons
     #    step together rather than the result depending on dict order.
@@ -253,7 +286,11 @@ def propagate(state: Dict[str, object],
         rest = resting.get(name)
         if rest is None:
             rest = baseline_of(name)
-        target_val = rest + net_input[name] * strength
+        drive = net_input[name]
+        threshold = thresholds.get(name)
+        if threshold:
+            drive -= float(threshold)
+        target_val = rest + drive * strength
 
         jitter = float(noise.get(name, 0.0) or 0.0)
         if jitter:

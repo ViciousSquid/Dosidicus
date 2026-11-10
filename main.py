@@ -302,19 +302,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tamagotchi_logic.plugin_manager = self.plugin_manager
         self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
 
-        # New in 2.4.5.0 : Create a unique personality starter neuron
-        squid = self.tamagotchi_logic.squid
-        brain_widget = self.brain_window.brain_widget
-        if (squid and squid.personality and
-            brain_widget and hasattr(brain_widget, 'enhanced_neurogenesis')):
-
-            if not squid._has_personality_starter_neuron():
-                neuron = brain_widget.enhanced_neurogenesis.create_personality_starter_neuron(
-                    squid.personality.value,
-                    brain_widget.state
-                )
-                if neuron:
-                    print(f"🧬 Personality starter neuron created: {neuron}")
         
         # Load and initialize plugins after core components
         logging.debug("Loading plugins")
@@ -827,18 +814,6 @@ class MainWindow(QtWidgets.QMainWindow):
                   f" ({mutated} mutated)")
             self.squid.inherited_from = parents
 
-        # Create personality starter neuron if needed
-        squid = self.tamagotchi_logic.squid
-        brain_widget = self.brain_window.brain_widget
-        if (squid and squid.personality and
-            brain_widget and hasattr(brain_widget, 'enhanced_neurogenesis')):
-            if not squid._has_personality_starter_neuron():
-                neuron = brain_widget.enhanced_neurogenesis.create_personality_starter_neuron(
-                    squid.personality.value,
-                    brain_widget.state
-                )
-                if neuron:
-                    print(f"🧬 Personality starter neuron created: {neuron}")
         
         # Plugins back up against the new squid, set up as at startup so they
         # track the newborn. Multiplayer stays off until the player turns it

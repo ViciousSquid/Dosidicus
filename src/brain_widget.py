@@ -196,6 +196,15 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         from .causal_learning import ActionOutcomeLedger
         self.causal_learning = ActionOutcomeLedger(self)
 
+        # How it learns what is worth doing: now and then an unwired action
+        # neuron fires by itself, and a cue -> action synapse forms only when
+        # the action turned out differently with the cue than without it.
+        from .action_discovery import ActionDiscovery, DEFAULT_RATE
+        self.action_discovery = ActionDiscovery(
+            self, rate=float(getattr(self.config, 'hebbian', {}).get(
+                'motor_exploration_rate', DEFAULT_RATE)),
+            seed=int(time.time() * 1000) % (2 ** 31))
+
         # Structural plasticity. One engine, capability-driven.
         self.enhanced_neurogenesis = EnhancedNeurogenesis(self, self.config)
         self.experience_buffer = self.enhanced_neurogenesis.experience_buffer
@@ -2297,6 +2306,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             connectors=connectors,
             new_neurons=new_neurons,
             externally_driven=self.externally_driven,
+            fixed_inputs=(self.enhanced_neurogenesis.defined_by_inputs()
+                          if hasattr(getattr(self, 'enhanced_neurogenesis', None),
+                                     'defined_by_inputs') else ()),
         )
         self._on_hebbian_complete(result)
         return result
@@ -2567,6 +2579,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.ledger.reset()
         self.capability.reset()
         self.causal_learning.reset()
+        self.action_discovery.reset()
         self.plasticity.reset()
         self.consolidation.from_dict({})
         self.consolidation.clear_buffer()
@@ -2809,9 +2822,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 if isinstance(props, dict) and props.get('noise'):
                     noise[name] = props['noise']
 
+        growth = getattr(self, 'enhanced_neurogenesis', None)
+        thresholds = (growth.combination_thresholds()
+                      if hasattr(growth, 'combination_thresholds') else None)
         changed = propagate(self.state, self.weights, targets,
                             strengths=strengths, noise=noise, smoothing=smoothing,
-                            resting=resting)
+                            resting=resting, thresholds=thresholds)
 
         # Evidence is gathered AFTER the forward pass, so every mechanism sees
         # this tick's sensors alongside the activations those sensors actually

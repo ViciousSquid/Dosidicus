@@ -847,8 +847,7 @@ class TransparencyTests(unittest.TestCase):
 
     def test_a_grown_neuron_is_never_told_its_purpose_was_inferred(self):
         """It has a birth record. The tool must consult it before guessing."""
-        for _ in range(26):
-            self.org.bout(['wiggle', 'flutter'], {'satisfaction': +3.0})
+        self._sees_a_plant()
         grown = self.org.grown()
         self.assertTrue(grown)
         lab = self._lab()
@@ -860,9 +859,15 @@ class TransparencyTests(unittest.TestCase):
                              "the Laboratory guessed at a neuron whose reason "
                              "for existing is written down in the ledger")
 
+    def _sees_a_plant(self):
+        """The simplest thing that earns a neuron: perceiving something there
+        is no neuron for. (Before v5 this fixture relied on the brain growing
+        a neuron for a drive it could not regulate, which it no longer does.)"""
+        self.org.brain.perceive('plant_in_view', 100.0)
+        self.org.idle(3)
+
     def test_a_grown_neuron_explains_itself_in_the_laboratory(self):
-        for _ in range(26):
-            self.org.bout(['wiggle', 'flutter'], {'satisfaction': +3.0})
+        self._sees_a_plant()
         grown = self.org.grown()
         self.assertTrue(grown)
         name = grown[-1]['neuron']

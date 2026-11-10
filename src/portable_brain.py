@@ -17,6 +17,7 @@ from .plasticity import PlasticityEngine, PlasticityConfig
 from .capability import CapabilityMonitor
 from .causal_learning import ActionOutcomeLedger
 from .neural_provenance import CausalLedger, RecordedSynapses
+from .action_discovery import ActionDiscovery
 from .consolidation import ConsolidationManager
 from .neurogenesis import EnhancedNeurogenesis
 from .learning import LearningConfig
@@ -29,6 +30,13 @@ class TrainingConfig:
     # Learning parameters
     # Evaluation runs must disable learning while retaining action selection.
     learning_enabled: bool = True
+    #: How often, per tick with nothing urgent to do and at ordinary
+    #: curiosity, one of the squid's unwired action neurons fires by itself
+    #: (src/action_discovery.py). 0 switches motor exploration off.
+    action_discovery_rate: float = 0.03
+    #: False is the placebo arm of an experiment: the squid still tries
+    #: things, and nothing is learned from how they turn out.
+    action_discovery_teaching: bool = True
     learning_rate: float = 0.1
     weight_decay: float = 0.01
     max_hebbian_pairs: int = 2
@@ -149,6 +157,17 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         self.plasticity = PlasticityEngine(
             PlasticityConfig.from_learning_config(learning_config))
         self.consolidation = ConsolidationManager(self)
+        # What it has found out about its own actions. Present in every brain
+        # so that knowledge loads and saves with it; whether it also explores
+        # is the rate's business.
+        self.action_discovery = ActionDiscovery(
+            self, rate=max(0.0, min(1.0, float(self.config.action_discovery_rate))),
+            seed=(self.config.seed if self.config.seed is not None else 0),
+            teaching=self.config.action_discovery_teaching,
+            # One tick moves the headless body one step; an urge has to last a
+            # few to get it anywhere, as a drive lasts several seconds in the
+            # game.
+            bout_ticks=5)
         self.enhanced_neurogenesis = EnhancedNeurogenesis(self, learning_config)
         self.enhanced_neurogenesis.clock = lambda: self.sim_seconds
         # The monitor reads the same simulated clock, so "a deficit must
@@ -498,6 +517,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
     _PROVENANCE_PARTS = (
         ('provenance', 'ledger'),
         ('causal_learning', 'causal_learning'),
+        ('action_discovery', 'action_discovery'),
         ('capability', 'capability'),
         ('plasticity', 'plasticity'),
         ('consolidation', 'consolidation'),
@@ -568,6 +588,15 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         The default preserves normal training and game behaviour.
         """
         self.drive_external_neurons(grow=observe_learning)
+        # A sense grown the moment something was first perceived (a plant,
+        # another squid) is a grown neuron like any other, and has to be
+        # counted as one or it is saved as if the squid were born with it.
+        grown = self.enhanced_neurogenesis.functional_neurons
+        if len(grown) > len(self.custom_neurons):
+            for name in grown:
+                if name not in self.custom_neurons:
+                    self.custom_neurons.add(name)
+                    self.new_neurons.add(name)
         if observe_learning:
             self.observe_for_learning()
 
@@ -583,7 +612,8 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         resting = {name: fn.resting_level for name, fn in functional.items()
                    if getattr(fn, 'resting_level', None) is not None}
         return propagate(self.state, self.weights, targets, strengths=strengths,
-                         resting=resting)
+                         resting=resting,
+                         thresholds=self.enhanced_neurogenesis.combination_thresholds())
 
     def compute_neural_modulation(self, gain: float = 0.30):
         from .propagation import compute_neural_modulation
@@ -618,7 +648,8 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
             excluded=self.excluded_neurons,
             connectors=self._connector_neuron_names(),
             new_neurons=self.new_neurons,
-            externally_driven=self.externally_driven)
+            externally_driven=self.externally_driven,
+            fixed_inputs=self.enhanced_neurogenesis.defined_by_inputs())
 
         updated = []
         for edge, update in (result.get('weight_updates') or {}).items():

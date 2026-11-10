@@ -399,6 +399,24 @@ def is_registered_input_sensor(name: str) -> bool:
     return name in _REGISTERED_SENSORS
 
 
+def is_motor_synapse(edge) -> bool:
+    """True for a synapse INTO an action neuron: one that decides what the
+    squid does.
+
+    These are learned differently from every other synapse, and this is the
+    one place that says which they are. A synapse into a drive is a statement
+    about the world ("food in sight goes with feeling good") and the
+    correlational rule is the right teacher for it. A synapse into an action
+    is a statement about what is WORTH DOING, and correlation cannot teach
+    that: the source drives the action, so the two always move together and
+    the rule concludes that whatever the squid already does is right. Motor
+    synapses change only from what actually came of the action - see
+    src/action_discovery.py.
+    """
+    return (isinstance(edge, tuple) and len(edge) == 2
+            and edge[1] in ACTION_NEURONS)
+
+
 def is_network_driven(name: str) -> bool:
     """True if this neuron's activation is computed by forward propagation."""
     return name not in NON_PROPAGATED_NEURONS

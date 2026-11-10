@@ -50,7 +50,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .brain_constants import NON_PROPAGATED_NEURONS, is_learning_target
+from .brain_constants import (NON_PROPAGATED_NEURONS, is_learning_target,
+                              is_motor_synapse)
 
 Pair = Tuple[str, str]
 
@@ -284,14 +285,29 @@ class PlasticityEngine:
     def commit(self, weights: Dict[Pair, float], neuron_names: Iterable[str],
                excluded: Iterable[str] = (), connectors: Iterable[str] = (),
                new_neurons: Iterable[str] = (),
-               externally_driven: Iterable[str] = ()) -> Dict:
+               externally_driven: Iterable[str] = (),
+               fixed_inputs: Iterable[str] = ()) -> Dict:
         """Turn accumulated evidence into weight changes.
+
+        Two kinds of synapse are not this rule's to move, and are skipped
+        before the cycle's budget is spent on them:
+
+          * MOTOR synapses (into an action neuron). Their source drives the
+            action, so the two are correlated by construction and this rule
+            can only ever conclude that the squid should do more of what it
+            already does. They learn from outcomes - src/action_discovery.py.
+          * the inputs of a neuron named in `fixed_inputs`. A neuron grown to
+            stand for one situation is DEFINED by what feeds it; letting those
+            synapses drift toward whatever it happens to correlate with would
+            quietly change what the neuron means while its name stayed the
+            same.
 
         Returns a payload shaped like the one BrainWidget._on_hebbian_complete
         already consumes, so the Learning tab and the network view keep working.
         """
         cfg = self.config
         new_neurons = set(new_neurons or ())
+        fixed_inputs = set(fixed_inputs or ())
         candidates = set(self.eligible_neurons(neuron_names, excluded, connectors))
 
         # Rank pairs by the strength of the evidence, not by a snapshot.
@@ -301,6 +317,9 @@ class PlasticityEngine:
                 continue
             opportunities = self._opportunities.get(pair, 0)
             if opportunities <= 0:
+                continue
+            edge = self.orient(pair, weights, externally_driven)
+            if edge is None or is_motor_synapse(edge) or edge[1] in fixed_inputs:
                 continue
             mean_cov = self._correlation(pair, sum_xy, opportunities)
             if abs(mean_cov) < cfg.trace_epsilon:

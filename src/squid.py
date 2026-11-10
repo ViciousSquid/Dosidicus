@@ -505,30 +505,6 @@ class Squid:
         self._cached_can_see_food = result.can_see_food
         self._cached_can_see_plant = result.can_see_plant
 
-    def _has_personality_starter_neuron(self) -> bool:
-        """Return True if any starter neuron for this personality already exists."""
-        if not hasattr(self, 'brain_widget') or not self.brain_widget:
-            return True          # skip creation if brain not ready
-        if not self.personality:
-            return True
-
-        # Map enum -> prefix used in neurogenesis.py
-        prefix_map = {
-            Personality.TIMID:      "timid_caution",
-            Personality.ADVENTUROUS: "explorer_drive",
-            Personality.LAZY:        "energy_conservation",
-            Personality.ENERGETIC:   "restless_activity",
-            Personality.INTROVERT:   "solitude_preference",
-            Personality.GREEDY:      "insatiable_hunger",
-            Personality.STUBBORN:    "sushi_preference",
-        }
-        prefix = prefix_map.get(self.personality)
-        if not prefix:               # unknown personality → skip
-            return True
-
-        existing = self.brain_widget.neuron_positions.keys()
-        return any(n.startswith(prefix) for n in existing)
-    
     def update_view_direction(self):
         """
         Called every 1 second by a QTimer.

@@ -460,6 +460,11 @@ class KnowledgeExtractionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.sim = HeadlessSimulation(TrainingConfig(seed=2024, blank=True))
+        # A plant within sight. A blank brain has no way to move, so it only
+        # ever grows anything if there is something to perceive from where it
+        # hatched - and since v5 a thing perceived with no neuron for it is
+        # what a neuron is grown FOR.
+        cls.sim.plants = [{'x': 0.6, 'y': 0.5}]
         cls.sim.run(ticks=1200, progress_interval=0)
         cls.directory = tempfile.TemporaryDirectory()
         cls.path = os.path.join(cls.directory.name, "studied.json")
