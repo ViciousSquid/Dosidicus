@@ -864,7 +864,11 @@ class Simulation:
             peer = v.get('peer_visit')
             if peer and peer.session:
                 peer.session.note_fight(won)
+            # Under the names the visiting squid reads (VisitorMind); the old
+            # names are kept beside them for builds that read those.
             v['report']('fight_resolved', {'fight_id': record['fight_id'], 'won': not won,
+                'you_started': not resident_attacks, 'your_ability': theirs['ability'],
+                'their_ability': mine['ability'],
                 'started': not resident_attacks, 'ability': theirs['ability'],
                 'other_ability': mine['ability'], 'chance': 1. - record['first_chance']})
         v["res_won" if won else "res_lost"] = v.get("res_won" if won else "res_lost", 0) + 1

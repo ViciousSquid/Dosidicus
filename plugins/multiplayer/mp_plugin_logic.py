@@ -1097,6 +1097,13 @@ class MultiplayerPlugin:
         if max(mine, theirs) < fighting.AGGRESSION_THRESHOLD:
             return None
         if mine >= theirs:
+            # What the other squid had just done, if it had just taken
+            # something: not what decided the fight - its own aggression did
+            # that - but what it was aggressive ABOUT, for the record.
+            taken = self.conspecific_view.provocation(peer_uuid) \
+                if hasattr(self.conspecific_view, 'provocation') else None
+            if taken is not None:
+                why = dict(why, provoked_by=taken['what'])
             return {'attacker': 'resident', 'why': why}
         return {'attacker': 'visitor', 'why': {'aggression': round(theirs, 1)}}
 

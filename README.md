@@ -68,13 +68,15 @@ What that shows, on eight squid over a 20,000-tick life (`python headless/lifeti
 
 | Frozen, in unseen worlds | At birth | After 20,000 ticks |
 |---|---|---|
-| Mean anxiety | 76.1 | 57.2 |
-| Food eaten | 10.0 | 10.0 |
-| Mean hunger | 33.5 | 34.4 |
-| Mean health | 94.3 | 94.2 |
-| Neurons grown | 0 | 2 (the same two, in every squid) |
+| Mean anxiety | 76.1 | 53.1 (every squid between 41 and 59) |
+| Food eaten | 10.0 | 10.1 |
+| Mean hunger | 33.5 | 34.0 |
+| Mean health | 94.3 | 92.5 (seven unchanged; one at 80 - see below) |
+| Neurons grown | 0 | the same two in every squid; one squid grew two more |
 
 Nobody told it how. Each squid saw a plant and grew a sense for one (`can_see_plant`); tried sheltering, at first for no reason; found that it helped only when it was frightened *and* a plant was in sight; had no neuron for that combination, so grew one (`anxiety_high_and_sees_plant`); and from then on hid when frightened. Cut the one synapse it learned and the ability is gone. The controls - no plants, exploring without learning from it, no exploring - each remove it too (`tests/test_learning_to_live.py`).
+
+**It is not always right, and is not meant to be.** A squid has no way of knowing what is true; it has what happened to it. One of the eight took to lying down when alarmed, on its own evidence, and was hurt more for it. A single striking coincidence is enough for a belief - it inks, and another squid that was leaving anyway leaves, and it comes to think ink drives squid off, and to ink when one appears. If the next squid stays, it finds that out too, drops the belief and the habit, and remembers having been wrong. All of it is recorded as what the squid believes and why, never as fact.
 
 Three rules make that possible:
 

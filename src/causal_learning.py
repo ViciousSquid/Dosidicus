@@ -31,6 +31,19 @@ This module gives the squid the missing half.
        consequence that arrives seconds after the action still reach the
        synapses that produced it.
 
+    5. A MODEL OF ITS WORLD, WHICH IS ITS OWN. Alongside what an action does
+       to its drives, the squid keeps what the action seemed to do to what it
+       PERCEIVES: it inked, and the other squid was gone; it swam about, and
+       food came into view. These are beliefs (`beliefs()`), held on however
+       little it has to go on - one striking occasion is enough - and there
+       is nothing anywhere in the squid to check them against. If the other
+       squid was leaving anyway, the squid has no way of knowing that, and it
+       believes its ink drove it off. It goes on believing it until its own
+       later experience says otherwise, which may be never. Every belief
+       carries the occasions it rests on, so it can always say why it thinks
+       so; none of them is marked true or false, because nothing here could
+       know.
+
 Everything it concludes is written to the provenance ledger with the episode
 attached, so "what experience caused it to learn this?" has an answer that
 names the action, the cue and the consequence.
@@ -44,7 +57,8 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
 
-from .brain_constants import CORE_STAT_NEURONS, PURE_INPUT_NEURONS, is_motor_synapse
+from .brain_constants import (CORE_STAT_NEURONS, PURE_INPUT_NEURONS,
+                              is_motor_synapse, is_world_sense)
 from .neural_provenance import Episode, KnowledgeItem, humanise
 
 # How each drive contributes to whether an outcome was good or bad for the
@@ -148,6 +162,8 @@ class _OpenEpisode:
     cue: Dict[str, float]
     baseline_state: Dict[str, float]
     ticks: int = 0
+    #: What its senses of the world reported when the action began.
+    senses: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -184,6 +200,17 @@ class ActionOutcomeLedger:
 
         # action -> stat -> Contingency
         self.contingencies: Dict[str, Dict[str, Contingency]] = defaultdict(dict)
+        # action -> sense -> what that sense did over the action's windows;
+        # and, per sense, over every window whatever the squid was doing.
+        # Together: what it BELIEVES each action does to what it perceives.
+        self.expectations: Dict[str, Dict[str, Contingency]] = defaultdict(dict)
+        self._sense_windows: Dict[str, Contingency] = {}
+        #: (action, sense) -> the belief as it is held, in words.
+        self._held: Dict[Tuple[str, str], str] = {}
+        #: Beliefs it held and gave up, most recent last: what it thought,
+        #: when it stopped, and on how much experience. Being wrong, and
+        #: finding out, is as much the squid's history as anything it learned.
+        self.revised: Deque[Dict[str, Any]] = deque(maxlen=40)
 
         # Baseline drift of each drive over one outcome window, measured while
         # NOT performing the action in question. Without this the squid would
@@ -335,6 +362,7 @@ class ActionOutcomeLedger:
             cue=self._capture_cue(snapshot),
             baseline_state={k: v for k, v in snapshot.items()
                             if k in CORE_STAT_NEURONS},
+            senses={k: v for k, v in snapshot.items() if is_world_sense(k)},
         )
         self._open.append(episode)
         return episode.episode_id
@@ -521,6 +549,7 @@ class ActionOutcomeLedger:
             # outcomes stop moving weights and only genuine surprises do.
             scope = scopes.get(open_ep.episode_id, {open_ep.action})
             self._record_window(open_ep, scope, snapshot, now)
+            self._note_what_changed(open_ep, snapshot, now)
             valence = 0.0
             for stat, delta in consequence.items():
                 weight = VALENCE_WEIGHTS.get(stat, 0.0)
@@ -578,6 +607,172 @@ class ActionOutcomeLedger:
         for episode in closed:
             self._assign_credit(episode)
         return closed
+
+    # ------------------------------------------------------------------
+    # What it believes its actions do to the world
+    # ------------------------------------------------------------------
+    #: How much more (or less) often a sense has to change after an action
+    #: than it does otherwise for the squid to believe the action did it, on
+    #: the sense's 0-100 scale; and how striking one single occasion has to
+    #: be to count without being repeated.
+    BELIEF_EFFECT = 25.0
+    BELIEF_AT_ONCE = 60.0
+
+    def _note_what_changed(self, episode: _OpenEpisode,
+                           snapshot: Dict[str, float], now: float) -> None:
+        """File what each sense of the world did over this action's window."""
+        for sense, before in episode.senses.items():
+            after = snapshot.get(sense)
+            if after is None:
+                continue
+            delta = after - before
+            everything = self._sense_windows.get(sense)
+            if everything is None:
+                everything = self._sense_windows[sense] = Contingency('window', sense)
+            everything.observe(delta, now)
+            table = self.expectations[episode.action]
+            entry = table.get(sense)
+            if entry is None:
+                entry = table[sense] = Contingency(action=episode.action, stat=sense)
+            entry.observe(delta, now)
+
+            key = (episode.action, sense)
+            held = self._believes(entry)
+            if held is not None and key not in self._held:
+                self._held[key] = self._belief_in_words(episode.action, sense, held[0])
+                self._announce_belief(entry, episode)
+            elif held is None and key in self._held:
+                self._change_mind(entry, self._held.pop(key), now)
+
+    def _otherwise(self, entry: Contingency) -> float:
+        """How that sense moves over a window when the squid is doing something
+        else - by its own record, which is the only one there is."""
+        everything = self._sense_windows.get(entry.stat)
+        if everything is None:
+            return 0.0
+        others = everything.n - entry.n
+        if others <= 0:
+            return 0.0
+        return (everything.sum_delta - entry.sum_delta) / others
+
+    def _believes(self, entry: Contingency) -> Optional[Tuple[float, float]]:
+        """(effect, confidence) if the squid holds this belief, else None.
+
+        Repetition makes it surer, but is not required: one occasion striking
+        enough is a belief already. That is how a coincidence becomes
+        something the squid thinks it knows.
+        """
+        if entry.n < 1:
+            return None
+        effect = entry.mean_delta - self._otherwise(entry)
+        if abs(effect) < self.BELIEF_EFFECT:
+            return None
+        # The sense has to have CHANGED when the squid did this, and in that
+        # direction. Without this, the one time a squid vanished after ink
+        # would also leave the squid believing that everything else it does
+        # keeps squid in view - true of the arithmetic, and not a thing
+        # anybody would come to think.
+        if entry.mean_delta * effect <= 0 or abs(entry.mean_delta) < self.BELIEF_EFFECT:
+            return None
+        if entry.n < 2 and abs(effect) < self.BELIEF_AT_ONCE:
+            return None
+        confidence = min(1.0, abs(effect) / 100.0) * (1.0 - 1.0 / (entry.n + 1.0))
+        return effect, round(confidence, 3)
+
+    @staticmethod
+    def _belief_in_words(action: str, sense: str, effect: float) -> str:
+        doing = humanise(action)
+        if sense.startswith('can_see_'):
+            thing = humanise(sense[len('can_see_'):])
+            return (f"{doing} makes {thing} go out of sight" if effect < 0
+                    else f"{doing} brings {thing} into sight")
+        return f"{doing} makes {humanise(sense)} {'fall' if effect < 0 else 'rise'}"
+
+    def beliefs(self) -> List[Dict[str, Any]]:
+        """What the squid believes its actions do to what it perceives.
+
+        Its own model, from its own occasions. Nothing here says whether any
+        of it is so.
+        """
+        out = []
+        for action, table in self.expectations.items():
+            for sense, entry in table.items():
+                held = self._believes(entry)
+                if held is None:
+                    continue
+                effect, confidence = held
+                out.append({
+                    'action': action, 'sense': sense, 'effect': round(effect, 1),
+                    'confidence': confidence, 'occasions': entry.n,
+                    'otherwise': round(self._otherwise(entry), 1),
+                    'last_seen': entry.last_seen,
+                    'statement': self._belief_in_words(action, sense, effect),
+                })
+        out.sort(key=lambda b: -b['confidence'])
+        return out
+
+    def _announce_belief(self, entry: Contingency, episode: _OpenEpisode) -> None:
+        """A belief has just formed: think it, and remember it."""
+        held = self._believes(entry)
+        if held is None:
+            return
+        effect, confidence = held
+        statement = self._belief_in_words(entry.action, entry.stat, effect)
+        times = "once" if entry.n == 1 else f"{entry.n} times"
+        thought = (f"I think {statement}. It has happened {times} when I did "
+                   f"that, and it does not usually happen otherwise.")
+        brain = self.brain
+        try:
+            from .social_knowledge import think
+            think(brain, thought)
+        except Exception:
+            pass
+        squid = getattr(getattr(brain, 'tamagotchi_logic', None), 'squid', None)
+        memory = getattr(squid, 'memory_manager', None)
+        if memory is not None and hasattr(memory, 'add_long_term_memory'):
+            try:
+                memory.add_long_term_memory(
+                    'belief', f"belief:{entry.action}:{entry.stat}",
+                    {'summary': f"Came to believe that {statement}",
+                     'statement': statement, 'action': entry.action,
+                     'about': entry.stat, 'occasions': entry.n,
+                     'effect': round(effect, 1), 'confidence': confidence,
+                     'episode': episode.episode_id, 'valence': 0.0})
+            except Exception:
+                pass
+
+    def _change_mind(self, entry: Contingency, statement: str, now: float) -> None:
+        """Its own later experience has stopped bearing a belief out.
+
+        Not a correction from outside - there is no outside. It went on doing
+        the thing, and what it expected stopped following, until by its own
+        record there was nothing left to the idea. It thinks that, and
+        remembers having been wrong.
+        """
+        record = {'statement': statement, 'action': entry.action,
+                  'about': entry.stat, 'at': now, 'occasions': entry.n}
+        self.revised.append(record)
+        thought = (f"I used to think {statement}. I have done that "
+                   f"{entry.n} times now and it has mostly not followed. "
+                   f"I do not think so any more.")
+        brain = self.brain
+        try:
+            from .social_knowledge import think
+            think(brain, thought)
+        except Exception:
+            pass
+        squid = getattr(getattr(brain, 'tamagotchi_logic', None), 'squid', None)
+        memory = getattr(squid, 'memory_manager', None)
+        if memory is not None and hasattr(memory, 'add_long_term_memory'):
+            try:
+                memory.add_long_term_memory(
+                    'belief', f"revised:{entry.action}:{entry.stat}:{entry.n}",
+                    {'summary': f"Stopped believing that {statement}",
+                     'statement': statement, 'action': entry.action,
+                     'about': entry.stat, 'occasions': entry.n,
+                     'changed_mind': True, 'valence': 0.0})
+            except Exception:
+                pass
 
     def _record_co_occurrence(self, expiring: List[_OpenEpisode]) -> None:
         """Note, for each closing episode, which other actions overlapped it.
@@ -842,6 +1037,51 @@ class ActionOutcomeLedger:
                            "that change"),
                 kind='contingency', updated=entry.last_seen))
 
+        # What it believes its actions do to the world around it. Worded as
+        # belief because that is all it is: the squid's own reading of its own
+        # occasions, with nothing to check it against.
+        for belief in self.beliefs():
+            times = ("one occasion" if belief['occasions'] == 1
+                     else f"{belief['occasions']} occasions")
+            items.append(KnowledgeItem(
+                subject=humanise(belief['sense']),
+                statement=f"It believes that {belief['statement']}.",
+                experience=(f"{times} on which it was {humanise(belief['action'])} "
+                            f"and that is what followed"),
+                action=belief['action'],
+                consequence=(f"{humanise(belief['sense'])} changed by "
+                             f"{belief['effect'] + belief['otherwise']:+.0f} on average, "
+                             f"against {belief['otherwise']:+.0f} when it is doing "
+                             f"something else"),
+                reason=("it happened when the squid did this and does not "
+                        "usually happen otherwise. Whether its doing this is "
+                        "WHY it happened, the squid cannot know; this is what "
+                        "it has come to expect"),
+                confidence=belief['confidence'],
+                strength=belief['effect'] / 100.0,
+                behaviour=("what it expects of an action is part of how the "
+                           "action comes to be chosen: one that seemed to help "
+                           "is tried again in the same situation"),
+                kind='belief', updated=belief['last_seen']))
+
+        # What it used to believe, and gave up.
+        for record in self.revised:
+            items.append(KnowledgeItem(
+                subject=humanise(record['about']),
+                statement=(f"It used to believe that {record['statement']}, "
+                           f"and no longer does."),
+                experience=(f"{record['occasions']} occasions in all on which it "
+                            f"was {humanise(record['action'])}; on the later ones "
+                            f"that did not follow"),
+                action=record['action'],
+                consequence="what it expected stopped happening",
+                reason=("its own later experience stopped bearing the idea "
+                        "out. Nothing told it so; it went on doing the thing "
+                        "and found out"),
+                confidence=0.0, strength=0.0,
+                behaviour="it no longer expects that of this action",
+                kind='revised', updated=record['at']))
+
         # What it knows it does NOT know. An honest account of the squid's
         # knowledge has to include the questions its experience cannot answer,
         # otherwise two permanent half-strength claims read as two facts.
@@ -927,6 +1167,10 @@ class ActionOutcomeLedger:
             'last_intervention_reason': self.last_intervention_reason,
             'contingencies': [c.to_dict() for table in self.contingencies.values()
                               for c in table.values()],
+            'expectations': [c.to_dict() for table in self.expectations.values()
+                             for c in table.values()],
+            'sense_windows': [c.to_dict() for c in self._sense_windows.values()],
+            'revised': [dict(r) for r in self.revised],
             'all_windows': [c.to_dict() for c in self._all_windows.values()],
             'raw': [c.to_dict() for c in self._raw.values()],
             'history': [e.to_dict() for e in list(self.history)[-120:]],
@@ -942,6 +1186,28 @@ class ActionOutcomeLedger:
         self.rewarded_episodes = int(data.get('rewarded_episodes', 0))
         self.interrupted_episodes = int(data.get('interrupted_episodes', 0))
         self.last_intervention_reason = str(data.get('last_intervention_reason', ''))
+        self.expectations = defaultdict(dict)
+        for raw in data.get('expectations') or []:
+            try:
+                entry = Contingency.from_dict(raw)
+            except Exception:
+                continue
+            if entry.action and entry.stat:
+                self.expectations[entry.action][entry.stat] = entry
+        self._sense_windows = {}
+        for raw in data.get('sense_windows') or []:
+            try:
+                entry = Contingency.from_dict(raw)
+            except Exception:
+                continue
+            if entry.stat:
+                self._sense_windows[entry.stat] = entry
+        # Beliefs it already held are not news when the squid is loaded.
+        self._held = {(b['action'], b['sense']): b['statement']
+                      for b in self.beliefs()}
+        self.revised = deque((dict(r) for r in data.get('revised') or []
+                              if isinstance(r, dict) and r.get('statement')),
+                             maxlen=40)
         self.contingencies = defaultdict(dict)
         for raw in data.get('contingencies') or []:
             try:
@@ -991,6 +1257,10 @@ class ActionOutcomeLedger:
         self.interrupted_episodes = 0
         self.last_intervention_reason = ""
         self.contingencies = defaultdict(dict)
+        self.expectations = defaultdict(dict)
+        self._sense_windows = {}
+        self._held = {}
+        self.revised = deque(maxlen=40)
         self._all_windows = {}
         self._raw = {}
         self._idle_probe = None

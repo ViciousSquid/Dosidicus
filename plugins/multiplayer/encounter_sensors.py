@@ -96,6 +96,8 @@ class ConspecificView:
     def __init__(self, clock=time.time):
         self.clock = clock
         self.presences: Dict[str, ConspecificPresence] = {}
+        #: peer uuid -> the last thing that squid took from the resident.
+        self.provocations: Dict[str, Dict[str, Any]] = {}
         self._contest_log: List[Dict[str, Any]] = []
         #: Told the rival's uuid the moment a contest happens, on the thread
         #: that resolved it. Used to draw the scuffle; it decides nothing.
@@ -198,7 +200,7 @@ class ConspecificView:
     # -- consequences ---------------------------------------------------
     def note_contest(self, rival, item=None, taken: bool = False,
                      squid=None, now: Optional[float] = None,
-                     by: str = 'local') -> None:
+                     by: str = 'local', what: str = 'object') -> None:
         """A contest happened with this squid. Called by the actuator.
 
         Recorded rather than scored: what it did to either squid is measured
@@ -215,8 +217,13 @@ class ConspecificView:
             presence.contest_until = stamp + CONTEST_LINGER
             presence.contest_by = 'peer' if by == 'peer' else 'local'
             presence.contested_item = item
+        if taken and by == 'peer':
+            # What it was that the other squid took, and when - so that if a
+            # fight follows, the fight can say what set it off.
+            self.provocations[getattr(rival, 'uuid', '')] = {'what': what, 'at': stamp}
         self._contest_log.append({
             'peer_uuid': getattr(rival, 'uuid', ''),
+            'what': what,
             'taken': bool(taken),
             'by': 'peer' if by == 'peer' else 'local',
             'at': stamp,
@@ -230,6 +237,16 @@ class ConspecificView:
                 listener(getattr(rival, 'uuid', ''))
             except Exception:
                 pass
+
+    def provocation(self, peer_uuid: str, now: Optional[float] = None,
+                    within: float = 30.0) -> Optional[Dict[str, Any]]:
+        """What this squid took from the resident in the last `within`
+        seconds, if anything."""
+        stamp = now if now is not None else self.clock()
+        taken = self.provocations.get(peer_uuid)
+        if taken is None or stamp - taken['at'] > within:
+            return None
+        return dict(taken)
 
     def drain_contests(self) -> List[Dict[str, Any]]:
         """Contests since the last call, for the encounter session to file."""

@@ -399,6 +399,21 @@ def is_registered_input_sensor(name: str) -> bool:
     return name in _REGISTERED_SENSORS
 
 
+#: Sensors that report the squid's OWN body rather than the world around it.
+#: "Sleeping makes me asleep" is not something learned about the world, so
+#: these are left out of what the squid comes to expect its actions to change
+#: (causal_learning: beliefs).
+BODY_STATE_SENSORS = frozenset({
+    'is_eating', 'is_sleeping', 'is_sick', 'is_fleeing', 'is_startled',
+    'pursuing_food', 'threat_level',
+})
+
+
+def is_world_sense(name: str) -> bool:
+    """A sense organ that reports something outside the squid."""
+    return name in PURE_INPUT_NEURONS and name not in BODY_STATE_SENSORS
+
+
 def is_motor_synapse(edge) -> bool:
     """True for a synapse INTO an action neuron: one that decides what the
     squid does.

@@ -177,6 +177,15 @@ def apply_consequences(squid, won: bool) -> Dict[str, float]:
     return applied
 
 
+def provocation_in_words(what) -> str:
+    """'after its food was eaten', for a fight that followed a theft."""
+    if not what:
+        return ''
+    if what == 'food':
+        return 'after its food was eaten'
+    return f"after its {str(what).replace('_', ' ')} was taken"
+
+
 def describe(record: Dict[str, Any], me: str = 'first') -> str:
     """One readable line: who started it, why, and why it ended as it did."""
     mine = record.get(me) or {}
@@ -184,7 +193,9 @@ def describe(record: Dict[str, Any], me: str = 'first') -> str:
     won = record.get('first_won') == (me == 'first')
     why = record.get('why') or {}
     if mine.get('role') == 'attacker':
-        how = f"a fight it started (aggression {why.get('aggression', 0):.0f})"
+        over = provocation_in_words(why.get('provoked_by'))
+        how = (f"a fight it started{' ' + over if over else ''} "
+               f"(aggression {why.get('aggression', 0):.0f})")
     else:
         how = "a fight when it was attacked"
     return (f"{'Won' if won else 'Lost'} {how}: ability "

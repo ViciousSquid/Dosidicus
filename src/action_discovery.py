@@ -73,6 +73,21 @@ _EXPLORE_ACTIONS = tuple(x for x in LEARNED_ACTIONS if x in (
 ))
 _BY_BEHAVIOUR = {ACTION_BEHAVIOURS[x]: x for x in _EXPLORE_ACTIONS}
 
+#: Actions whose outcomes the squid files as evidence about WHEN to do them:
+#: the ones it explores, and its ink. Inking is a reflex it does not choose,
+#: but what seems to come of it is the squid's own experience like anything
+#: else - a squid that inked and saw another squid leave may well come to ink
+#: at squid. Eating and fleeing are left as born: letting outcomes rewrite
+#: those was tried and measured, and squid took three times the startle damage.
+_TEACHABLE = dict(_BY_BEHAVIOUR)
+_TEACHABLE[ACTION_BEHAVIOURS['act_ink']] = 'act_ink'
+
+#: How many ordinary trials one striking outcome is worth, at most. A mild
+#: result has to be repeated before the squid makes anything of it; a dramatic
+#: one teaches at once, as a single bad meal teaches an animal for life. This
+#: is also what lets one coincidence become a belief.
+STRIKING_TRIAL_WORTH = 3.0
+
 #: The drives whose distress sends a squid looking for something to do about
 #: it: the ones VALENCE_WEIGHTS counts as bad when they rise.
 _NEEDS = tuple(stat for stat, weight in VALENCE_WEIGHTS.items() if weight < 0)
@@ -134,17 +149,17 @@ class _Evidence:
     def contrast(self):
         return self.mean - self.absent_mean
 
-    def add(self, present: bool, benefit: float) -> None:
+    def add(self, present: bool, benefit: float, worth: float = 1.0) -> None:
         # What is already known about THIS side fades a little, then the
         # trial is added whole. Each side keeps its own clock: a cue that is
         # rarely present must not have what little is known about it worn away
         # by every trial made without it.
         if present:
-            self.count = self.count * EVIDENCE_RETENTION + 1.0
-            self.total_benefit = self.total_benefit * EVIDENCE_RETENTION + benefit
+            self.count = self.count * EVIDENCE_RETENTION + worth
+            self.total_benefit = self.total_benefit * EVIDENCE_RETENTION + benefit * worth
         else:
-            self.absent_count = self.absent_count * EVIDENCE_RETENTION + 1.0
-            self.absent_benefit = self.absent_benefit * EVIDENCE_RETENTION + benefit
+            self.absent_count = self.absent_count * EVIDENCE_RETENTION + worth
+            self.absent_benefit = self.absent_benefit * EVIDENCE_RETENTION + benefit * worth
 
     def to_list(self) -> list:
         return [round(self.count, 4), round(self.total_benefit, 6),
@@ -216,6 +231,13 @@ class ActionDiscovery:
         #: were when it arose, until the action it led to is under way.
         self.urge: Optional[str] = None
         self.urge_context: Optional[dict] = None
+        #: Synapses that exist because of something the squid believes an
+        #: action does to the world (follow_beliefs), and go when the belief does.
+        self.belief_driven: set = set()
+        #: Learned synapses strong enough to be habits, and the ones it
+        #: took up and then gave up when they stopped paying.
+        self.habits: set = set()
+        self.given_up: List[dict] = []
         #: motor -> how many spontaneous tries in a row came to nothing.
         self.fruitless: Dict[str, int] = {}
         self.probes = 0
@@ -370,7 +392,7 @@ class ActionDiscovery:
         action the squid chose through its own synapses is evidence too - that
         is how a skill it has goes on being checked against what it gets.
         """
-        motor = _BY_BEHAVIOUR.get(behaviour)
+        motor = _TEACHABLE.get(behaviour)
         if not episode_id or motor is None:
             return
         if neuron is not None:
@@ -409,7 +431,7 @@ class ActionDiscovery:
         """The squid is now really doing `behaviour` (a learned action): open
         its outcome window and file it as a trial. Safe to call every tick the
         behaviour continues - one bout is one trial."""
-        motor = _BY_BEHAVIOUR.get(behaviour)
+        motor = _TEACHABLE.get(behaviour)
         ledger = getattr(self.brain, 'causal_learning', None)
         if motor is None or ledger is None:
             return None
@@ -437,9 +459,22 @@ class ActionDiscovery:
             importance = VALENCE_WEIGHTS.get(stat)
             if not importance:
                 continue
-            # Measured against how the drive moves anyway, without this action.
+            # Measured against how the drive moves anyway, without this
+            # action - but only ever in the direction it really moved. A drive
+            # that fell counts for as much as it fell beyond its usual fall; a
+            # drive that rose counts for as much as it rose beyond its usual
+            # rise. What must NOT count is a drive that simply stayed put:
+            # anxiety climbs on average, because frights happen, so a window in
+            # which nothing happened used to score as relief - and, weighted by
+            # need, as more relief the more frightened the squid was. Every
+            # action looked like a cure for fear. (A squid came to sleep
+            # through its frights on exactly that arithmetic.)
             background = ledger.baseline_drift(stat, episode.action)
-            contribution = importance * (delta - background) / 100.0
+            if delta < 0:
+                moved = min(0.0, delta - min(0.0, background))
+            else:
+                moved = max(0.0, delta - max(0.0, background))
+            contribution = importance * moved / 100.0
             if importance < 0.0:
                 # A drive that is already low has no further beneficial
                 # "need reduction" to discover. Rewarding sleepiness
@@ -484,6 +519,8 @@ class ActionDiscovery:
             if episode_id not in still_open:
                 self.pending.pop(episode_id)
                 self.aborted_trials += 1
+        if freshly_closed:
+            changes += self.follow_beliefs()
         return changes
 
     def _file(self, motor: str, context: dict, benefit: float, episode) -> int:
@@ -522,6 +559,10 @@ class ActionDiscovery:
                        if on and cue not in spoken_for
                        and best - standing.get(cue, 0.0) > self.minimum_benefit}
 
+        # A striking outcome counts for more than a mild one.
+        worth = min(STRIKING_TRIAL_WORTH,
+                    max(1.0, abs(benefit) / (2.0 * self.minimum_benefit)))
+
         changes = 0
         present = [c for c, on in cues.items() if on and c not in spoken_for]
         for cue, on in cues.items():
@@ -529,7 +570,7 @@ class ActionDiscovery:
                 continue
             key = (cue, motor)
             record = self.evidence.setdefault(key, _Evidence())
-            record.add(on, benefit)
+            record.add(on, benefit, worth)
             if on:
                 changes += self._teach(key, record, episode)
         # A blocked cue's own synapse still follows what is known about it,
@@ -541,7 +582,8 @@ class ActionDiscovery:
         for cue in present:
             for other, on in cues.items():
                 if other != cue and other not in spoken_for:
-                    self.joint.setdefault((cue, other, motor), _Evidence()).add(on, benefit)
+                    self.joint.setdefault((cue, other, motor), _Evidence()).add(
+                        on, benefit, worth)
         return changes
 
     def _qualified(self, record: _Evidence, factor: float = 1.0) -> bool:
@@ -579,6 +621,7 @@ class ActionDiscovery:
             note = "turned out worse with this cue present than without it"
         else:
             note = "stopped making a difference whether this cue was present"
+        before = old
         if self.brain.apply_weight_change(
             key, delta=delta, mechanism="causal_motor_discovery",
             detail={
@@ -595,8 +638,129 @@ class ActionDiscovery:
         ):
             self.taught.add(key)
             self.connections_taught += 1
+            self._notice_change(key, before, float(weights.get(key, 0.0)), record)
             return 1
         return 0
+
+    # ------------------------------------------------------------------
+    # Acting on what it believes about the world
+    # ------------------------------------------------------------------
+    def _unwelcome(self, sense: str) -> float:
+        """How much the squid wants this thing GONE, 0-1, read off its own
+        wiring: what the sight of it does to its fear and flight, less what it
+        does to its interest and approach. Nothing here is about any thing in
+        particular - a squid that has been hurt by other squid minds the sight
+        of one, and a squid that plays with them does not."""
+        weights = self.brain.weights
+        against = sum(max(0.0, float(weights.get((sense, target), 0.0)))
+                      for target in ('anxiety', 'act_flee'))
+        towards = sum(max(0.0, float(weights.get((sense, target), 0.0)))
+                      for target in ('curiosity', 'happiness', 'act_play',
+                                     'act_eat', 'satisfaction'))
+        return max(0.0, min(1.0, against - towards))
+
+    def follow_beliefs(self) -> int:
+        """Turn what the squid believes its actions do into what it does.
+
+        If it believes an action makes something go away, and that something
+        is unwelcome to it, then the sight of the thing comes to drive the
+        action: a synapse from the sense to the action neuron, as strong as
+        the belief is sure and the thing is unwelcome. A squid that thinks ink
+        drives other squid off inks when one appears.
+
+        And when its own experience stops bearing the belief out - it inks,
+        and the other squid stays - the belief goes, and this synapse follows
+        it down. Nothing corrects the squid but what happens to it.
+        """
+        ledger = getattr(self.brain, 'causal_learning', None)
+        if ledger is None or not self.teaching or not hasattr(ledger, 'beliefs'):
+            return 0
+        motors = {behaviour: motor for motor, behaviour in ACTION_BEHAVIOURS.items()}
+        wanted: Dict[Tuple[str, str], Tuple[float, dict]] = {}
+        for belief in ledger.beliefs():
+            motor = motors.get(belief['action'])
+            sense = belief['sense']
+            if motor is None or belief['effect'] >= 0 or sense not in self._positions:
+                continue
+            unwelcome = self._unwelcome(sense)
+            if unwelcome <= 0.0:
+                continue
+            target = min(1.0, 2.0 * belief['confidence']) * unwelcome
+            wanted[(sense, motor)] = (target, belief)
+
+        changes = 0
+        for key in set(wanted) | set(self.belief_driven):
+            target, belief = wanted.get(key, (0.0, None))
+            old = float(self.brain.weights.get(key, 0.0))
+            if key not in self.brain.weights and target <= 0.0:
+                self.belief_driven.discard(key)
+                continue
+            delta = self.learning_step * (target - old)
+            if abs(delta) < 1e-3:
+                continue
+            doing = ACTION_BEHAVIOURS.get(key[1], key[1]).replace('_', ' ')
+            what = key[0].replace('can_see_', '').replace('_', ' ')
+            if belief is not None:
+                note = (f"it believes {belief['statement']}, and {what} is "
+                        f"something it wants gone")
+                detail = {'note': note, 'belief': belief['statement'],
+                          'occasions': belief['occasions'],
+                          'confidence': belief['confidence']}
+            else:
+                note = (f"it no longer believes {doing} makes {what} go away, "
+                        f"so the sight of {what} stops driving it")
+                detail = {'note': note}
+            if self.brain.apply_weight_change(
+                    key, delta=delta, mechanism='belief', detail=detail,
+                    create=True, directed=True):
+                self.belief_driven.add(key)
+                changes += 1
+        return changes
+
+    #: A learned synapse at or above this is a habit; below the lower one it
+    #: has been given up.
+    HABIT, GIVEN_UP = 0.5, 0.15
+
+    def _notice_change(self, key: Tuple[str, str], before: float, after: float,
+                       record: _Evidence) -> None:
+        """The squid notices when it takes something up, and when it finds it
+        was wrong to. Both are thought, and both are remembered."""
+        cue, motor = key
+        doing = ACTION_BEHAVIOURS.get(motor, motor).replace('_', ' ')
+        when = cue.replace('_', ' ')
+        tries = record.count + record.absent_count
+        if before < self.HABIT <= after:
+            self.habits.add(key)
+            self._think_and_remember(
+                f"learned:{cue}:{motor}",
+                f"I have found that {doing} helps when {when}. I will do it then.",
+                {'summary': f"Came to {doing} when {when}",
+                 'action': doing, 'when': cue, 'tries': round(tries, 1)})
+        elif key in self.habits and abs(after) < self.GIVEN_UP:
+            self.habits.discard(key)
+            self.given_up.append({'cue': cue, 'motor': motor, 'tries': round(tries, 1)})
+            self._think_and_remember(
+                f"unlearned:{cue}:{motor}:{len(self.given_up)}",
+                f"I used to think {doing} helped when {when}. It has stopped "
+                f"helping, and I have stopped doing it.",
+                {'summary': f"Stopped {doing} when {when}: it had stopped helping",
+                 'action': doing, 'when': cue, 'tries': round(tries, 1),
+                 'changed_mind': True})
+
+    def _think_and_remember(self, key: str, thought: str, value: dict) -> None:
+        brain = self.brain
+        try:
+            from .social_knowledge import think
+            think(brain, thought)
+        except Exception:
+            pass
+        squid = getattr(getattr(brain, 'tamagotchi_logic', None), 'squid', None)
+        memory = getattr(squid, 'memory_manager', None)
+        if memory is not None and hasattr(memory, 'add_long_term_memory'):
+            try:
+                memory.add_long_term_memory('belief', key, dict(value, valence=0.0))
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Combinations the brain has no neuron for
@@ -769,6 +933,9 @@ class ActionDiscovery:
                       for (cue, other, motor), record in self.joint.items()],
             'taught': [list(edge) for edge in sorted(self.taught)],
             'fruitless': dict(self.fruitless),
+            'habits': [list(edge) for edge in sorted(self.habits)],
+            'belief_driven': [list(edge) for edge in sorted(self.belief_driven)],
+            'given_up': [dict(row) for row in self.given_up][-40:],
             'probes': self.probes,
             'executed_probes': self.executed_probes,
             'trials_closed': self.trials_closed,
@@ -797,6 +964,12 @@ class ActionDiscovery:
                        if isinstance(edge, (list, tuple)) and len(edge) == 2}
         self.fruitless = {str(k): int(v) for k, v in (data.get('fruitless') or {}).items()
                           if isinstance(v, (int, float))}
+        self.habits = {tuple(edge) for edge in data.get('habits') or []
+                       if isinstance(edge, (list, tuple)) and len(edge) == 2}
+        self.given_up = [dict(row) for row in data.get('given_up') or []
+                         if isinstance(row, dict)]
+        self.belief_driven = {tuple(edge) for edge in data.get('belief_driven') or []
+                              if isinstance(edge, (list, tuple)) and len(edge) == 2}
         for name in ('probes', 'executed_probes', 'trials_closed',
                      'connections_taught', 'aborted_trials'):
             try:
@@ -811,6 +984,7 @@ class ActionDiscovery:
     def reset(self) -> None:
         self.evidence, self.joint, self.taught, self.pending = {}, {}, set(), {}
         self.fruitless = {}
+        self.habits, self.given_up, self.belief_driven = set(), [], set()
         self._bout = None
         self.probes = self.executed_probes = self.trials_closed = 0
         self.connections_taught = self.aborted_trials = 0

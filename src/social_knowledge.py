@@ -459,7 +459,10 @@ def fight_thoughts(record: Dict[str, Any], me: str = 'first') -> List[str]:
                    else 1.0 - float(record.get('first_chance', .5)))
     if mine.get('role') == 'attacker':
         why = (record.get('why') or {}).get('aggression', mine.get('commitment', 0))
-        lines = [f"I went for {opponent}: my aggression was {float(why or 0):.0f}, "
+        taken = (record.get('why') or {}).get('provoked_by')
+        over = (f"It had just eaten my food. " if taken == 'food' else
+                f"It had just taken my {str(taken).replace('_', ' ')}. " if taken else "")
+        lines = [f"{over}I went for {opponent}: my aggression was {float(why or 0):.0f}, "
                  f"past the {AGGRESSION_THRESHOLD:.0f} it takes to start a fight."]
     else:
         lines = [f"{opponent} came at me. I fought back with my "

@@ -87,7 +87,7 @@ class VisitorActor:
                  'items_taken', 'pending_consequences', 'seq_seen',
                  'has_seen_resident', 'contact_since', 'mating_rolled',
                  'mated_id', 'mating_announcements', 'body_busy_until', 'held_item',
-                 'clock_offset')
+                 'clock_offset', 'food_taken')
 
     def __init__(self, identity: SquidIdentity, visit_id: str,
                  x: float, y: float, now: float):
@@ -103,6 +103,8 @@ class VisitorActor:
         self.last_intent_at = now
         self.action = ''                          # what it is visibly doing
         self.items_taken = 0
+        #: Meals it has eaten of the resident's food, this visit.
+        self.food_taken = 0
         self.pending_consequences: List[Consequence] = []
         self.seq_seen = -1
         #: Whether this visitor has yet been in a position to see the
@@ -489,8 +491,61 @@ class HostBody:
             return
         if self._consume(item):
             self._report(actor, CONSEQUENCE_ATE, {'ok': True})
+            self._resident_lost_food(actor, item)
         else:
             self._report(actor, CONSEQUENCE_BLOCKED, {'what': 'eat'})
+
+    #: What having its food eaten in front of it does to the resident, at no
+    #: hunger and at its hungriest. A fed squid hardly minds; a starving one
+    #: minds a great deal.
+    THEFT_ANXIETY = (2.0, 14.0)
+    THEFT_HAPPINESS = (-1.0, -8.0)
+
+    def _resident_lost_food(self, actor: VisitorActor, item) -> None:
+        """A visitor has eaten food in the resident's tank.
+
+        Nothing here decides what the resident does about it. It is something
+        that has happened TO it: it is felt, in proportion to how hungry the
+        resident is; it is remembered, against the squid that did it; and it
+        is a confrontation like any other (note_contest), which the resident's
+        own network may or may not turn into a fight. If it does, the fight's
+        record says what set it off.
+        """
+        resident = self._resident()
+        if resident is None or getattr(resident, 'is_transitioning', False):
+            return
+        hunger = _clamp(float(getattr(resident, 'hunger', 0.0) or 0.0), 0.0, 100.0)
+        need = hunger / 100.0
+        felt = {}
+        for stat, (least, most) in (('anxiety', self.THEFT_ANXIETY),
+                                    ('happiness', self.THEFT_HAPPINESS)):
+            before = getattr(resident, stat, None)
+            if not isinstance(before, (int, float)):
+                continue
+            after = _clamp(float(before) + least + (most - least) * need, 0.0, 100.0)
+            setattr(resident, stat, after)
+            felt[stat] = round(after - float(before), 2)
+
+        name = getattr(actor.identity, 'name', 'another squid')
+        actor.food_taken += 1
+        memory = getattr(resident, 'memory_manager', None)
+        if memory is not None and hasattr(memory, 'add_short_term_memory'):
+            how = (" while I was starving" if hunger >= 80 else
+                   " while I was hungry" if hunger >= 55 else "")
+            try:
+                memory.add_short_term_memory(
+                    category='social',
+                    key=f"theft:{actor.visit_id}:{actor.food_taken}",
+                    value={'summary': f"{name} ate food in my tank{how}.",
+                           'valence': -2.0 - 6.0 * need,
+                           'opponent': name, 'opponent_uuid': actor.uuid,
+                           'outcome': 'robbed', 'detail': {'hunger': round(hunger, 1),
+                                                           'felt': felt}},
+                    importance=3.0 + 4.0 * need,
+                    related_neurons=['can_see_squid', 'anxiety', 'hunger'])
+            except Exception as exc:
+                self._log(f"could not remember a theft: {exc}")
+        self._note_contest(actor, item, taken=True, what='food')
 
     def _do_flee(self, actor: VisitorActor, intent: ActionIntent) -> None:
         """Away from the resident - or, with nobody there, away from the middle.
@@ -754,7 +809,8 @@ class HostBody:
             self._log(f"could not consume food for a visitor: {exc}")
             return False
 
-    def _note_contest(self, actor: VisitorActor, item, taken: bool) -> None:
+    def _note_contest(self, actor: VisitorActor, item, taken: bool,
+                      what: str = 'object') -> None:
         """Make the contest perceptible to the RESIDENT, through its senses.
 
         The resident learns about this the same way it learns about anything:
@@ -769,7 +825,7 @@ class HostBody:
         try:
             # From the RESIDENT's point of view, which is whose view this is:
             # a visitor taking an object is the resident losing one.
-            view.note_contest(rival, item, taken=taken, by='peer')
+            view.note_contest(rival, item, taken=taken, by='peer', what=what)
         except Exception as exc:
             self._log(f"could not record a contest: {exc}")
 

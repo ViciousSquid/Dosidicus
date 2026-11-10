@@ -422,7 +422,15 @@ class WhatTheEvidenceRuleConcludes(unittest.TestCase):
             self._shelter(plant=True, anxious=False, helps=False)
         learned = self.b.weights[('anxiety', 'act_shelter')]
         self.assertGreater(learned, 0.5)
-        for _ in range(60):
+        # It does not let go at once. What it learned from striking experiences
+        # outweighs a run of uneventful ones for a good while - a belief is
+        # sticky - but enough of them and it goes.
+        for _ in range(20):
+            self._shelter(plant=True, anxious=True, helps=False)
+            self._shelter(plant=True, anxious=False, helps=False)
+        self.assertGreater(self.b.weights[('anxiety', 'act_shelter')], 0.5,
+                           "one disappointing spell undid it")
+        for _ in range(160):
             self._shelter(plant=True, anxious=True, helps=False)
             self._shelter(plant=True, anxious=False, helps=False)
         self.assertLess(abs(self.b.weights[('anxiety', 'act_shelter')]), 0.15)
@@ -712,6 +720,249 @@ class TheControls(unittest.TestCase):
         tank = raise_squid(ticks=4000, action_discovery_rate=0.0)
         self.assertEqual(tank.stats['actions_selected'].get('approaching_plant', 0), 0)
         self.assertNotIn(SHELTER_NEURON, tank.brain.positions)
+
+
+
+# ===========================================================================
+# Its own model of the world - which nothing checks
+# ===========================================================================
+def see_squid(b, seen=True):
+    quiet(b.perceive, 'squid_in_view', 100.0 if seen else 0.0)
+    quiet(b.propagate)
+
+
+class TheSquidBelievesWhatItsOwnExperienceSuggests(unittest.TestCase):
+    """There is no truth anywhere in the squid for a belief to be checked
+    against. These tests supply a coincidence and check that the squid makes
+    of it exactly what an animal with only its own experience would."""
+
+    def setUp(self):
+        self.b = brain(neurogenesis_enabled=True)
+        self.ledger = self.b.causal_learning
+        self.memories = []
+        memory = type('M', (), {'add_long_term_memory':
+                                lambda _s, category, key, value:
+                                self.memories.append((category, key, value))})()
+        self.b.tamagotchi_logic = type('G', (), {})()
+        self.b.tamagotchi_logic.squid = type('S', (), {'memory_manager': memory})()
+        see_squid(self.b)                       # it grows can_see_squid
+        self.clock = 100.0
+
+    def _act(self, action, squid_before, squid_after, **after):
+        self.clock += 20.0
+        state = dict(self.b.state, can_see_squid=100.0 if squid_before else 0.0)
+        self.ledger.on_action(action, state, now=self.clock)
+        later = dict(state, can_see_squid=100.0 if squid_after else 0.0, **after)
+        self.ledger.on_tick(later, now=self.clock + 7.0)
+
+    def test_one_coincidence_is_a_belief(self):
+        """It inked; the other squid, which was going home anyway, left."""
+        for _ in range(6):                                  # an ordinary life:
+            self._act('exploring', True, True)              # squid stay in view
+        self.assertEqual(self.ledger.beliefs(), [])
+        self._act('inking', True, False)                    # ...and then this
+        beliefs = self.ledger.beliefs()
+        self.assertEqual(len(beliefs), 1)
+        belief = beliefs[0]
+        self.assertEqual(belief['statement'], 'inking makes squid go out of sight')
+        self.assertEqual(belief['occasions'], 1)
+        self.assertGreater(belief['confidence'], 0.0)
+
+    def test_it_thinks_it_and_remembers_it_as_its_own_belief(self):
+        for _ in range(6):
+            self._act('exploring', True, True)
+        self._act('inking', True, False)
+        thought = self.b.social_thoughts[-1][1]
+        self.assertIn('I think inking makes squid go out of sight', thought)
+        self.assertIn('once', thought)
+        category, key, value = [m for m in self.memories if m[0] == 'belief'][-1]
+        self.assertEqual((category, key), ('belief', 'belief:inking:can_see_squid'))
+        self.assertIn('Came to believe', value['summary'])
+        # Thought and remembered once, not every time it is confirmed.
+        self._act('inking', True, False)
+        self.assertEqual([m[1] for m in self.memories if m[0] == 'belief'],
+                         ['belief:inking:can_see_squid'])
+
+    def test_nothing_marks_it_true_or_false_only_how_it_came_to_think_so(self):
+        for _ in range(6):
+            self._act('exploring', True, True)
+        self._act('inking', True, False)
+        item = [i for i in self.ledger.knowledge_items() if i.kind == 'belief'][0]
+        self.assertTrue(item.statement.startswith('It believes that'))
+        self.assertIn('one occasion', item.experience)
+        self.assertIn('cannot know', item.reason)
+        for word in ('true', 'false', 'correct', 'wrong', 'actually'):
+            self.assertNotIn(word, item.describe().lower())
+
+    def test_it_is_only_as_lasting_as_its_own_later_experience(self):
+        for _ in range(6):
+            self._act('exploring', True, True)
+        self._act('inking', True, False)
+        for _ in range(8):                      # it inks, and they stay
+            self._act('inking', True, True)
+        self.assertEqual(self.ledger.beliefs(), [])
+
+    def test_a_squid_that_never_tests_it_again_goes_on_believing_it(self):
+        for _ in range(6):
+            self._act('exploring', True, True)
+        self._act('inking', True, False)
+        for _ in range(40):
+            self._act('exploring', True, True)
+        self.assertEqual([b['statement'] for b in self.ledger.beliefs()],
+                         ['inking makes squid go out of sight'])
+
+    def test_what_its_own_body_does_is_not_a_belief_about_the_world(self):
+        self.clock += 20.0
+        state = dict(self.b.state, is_sleeping=0.0)
+        self.ledger.on_action('sleeping', state, now=self.clock)
+        self.ledger.on_tick(dict(state, is_sleeping=100.0), now=self.clock + 7.0)
+        self.assertEqual(self.ledger.beliefs(), [])
+
+    def test_its_beliefs_are_saved_with_it_and_are_not_news_when_it_is_loaded(self):
+        for _ in range(6):
+            self._act('exploring', True, True)
+        self._act('inking', True, False)
+        restored = brain()
+        restored.causal_learning.from_dict(self.ledger.to_dict())
+        self.assertEqual(restored.causal_learning.beliefs(), self.ledger.beliefs())
+        self.assertIn(('inking', 'can_see_squid'), restored.causal_learning._held)
+
+    def test_and_it_acts_on_it(self):
+        """Relief that followed inking at a squid makes it ink at squid - the
+        behavioural half of the same belief, through an ordinary synapse."""
+        learner = ActionDiscovery(self.b, rate=0.0)
+        self.b.action_discovery = learner
+        clock = 500.0
+        for _ in range(3):                       # inked with nobody about: nothing
+            clock += 20.0
+            trial(self.b, learner, action='inking', moment=clock,
+                  before={'can_see_squid': 0.0, 'anxiety': 80.0},
+                  after={'anxiety': 80.0})
+        clock += 20.0                            # inked at a squid, ONCE, and
+        trial(self.b, learner, action='inking', moment=clock,      # felt much better
+              before={'can_see_squid': 100.0, 'anxiety': 90.0},
+              after={'anxiety': 40.0})
+        self.assertGreater(self.b.weights.get(('can_see_squid', 'act_ink'), 0.0), 0.3)
+        self.assertIn('Inking works better with can see squid',
+                      learner.describe('can_see_squid', 'act_ink'))
+
+    # -- the whole story: believe it, act on it, find out, remember ----------
+    def _wary(self):
+        """A squid that minds the sight of other squid (as a timid one is born,
+        and as any squid becomes after bad encounters)."""
+        self.b.apply_weight_change(('can_see_squid', 'anxiety'), value=0.5,
+                                   mechanism='test', create=True)
+        self.b.apply_weight_change(('can_see_squid', 'act_flee'), value=0.6,
+                                   mechanism='test', create=True)
+        for edge in (('can_see_squid', 'act_play'), ('can_see_squid', 'curiosity')):
+            self.b.remove_weight(edge)
+        self.learner = ActionDiscovery(self.b, rate=0.0)
+        self.b.action_discovery = self.learner
+
+    def _inks_on_sight(self):
+        state = settle(self.b, {'can_see_squid': 100.0, 'anxiety': 40.0,
+                                'is_startled': 0.0, 'threat_level': 0.0}, ticks=12)
+        from src.brain_constants import ACTION_THRESHOLDS
+        return state['act_ink'] >= ACTION_THRESHOLDS['act_ink']
+
+    def test_believing_ink_drives_squid_off_it_inks_the_moment_one_appears(self):
+        self._wary()
+        self.assertFalse(self._inks_on_sight())            # not before
+        for _ in range(6):
+            self._act('exploring', True, True)
+        self._act('inking', True, False)                   # the coincidence
+        self._act('inking', True, False)                   # ...and again
+        for _ in range(4):
+            self.learner.follow_beliefs()
+        self.assertGreater(self.b.weights[('can_see_squid', 'act_ink')], 0.8)
+        self.assertTrue(self._inks_on_sight())
+        said = self.b.explain_weight(('can_see_squid', 'act_ink'))
+        self.assertIn('believes', said)
+
+    def test_a_squid_that_likes_other_squid_does_not_ink_at_them_for_believing_it(self):
+        learner = ActionDiscovery(self.b, rate=0.0)        # adventurous: drawn to squid
+        self.b.action_discovery = learner
+        for _ in range(6):
+            self._act('exploring', True, True)
+        self._act('inking', True, False)
+        self._act('inking', True, False)
+        learner.follow_beliefs()
+        self.assertNotIn(('can_see_squid', 'act_ink'), self.b.weights)
+
+    def test_and_when_the_squid_does_not_leave_it_finds_out_it_was_wrong(self):
+        """It inks as soon as another squid appears - and the squid stays."""
+        self._wary()
+        for _ in range(6):
+            self._act('exploring', True, True)
+        self._act('inking', True, False)
+        self._act('inking', True, False)
+        for _ in range(4):
+            self.learner.follow_beliefs()
+        self.assertTrue(self._inks_on_sight())
+
+        for _ in range(8):                                 # it inks; they stay
+            self._act('inking', True, True)
+            self.learner.follow_beliefs()
+        self.assertEqual(self.ledger.beliefs(), [])
+        for _ in range(8):
+            self.learner.follow_beliefs()
+        self.assertLess(self.b.weights.get(('can_see_squid', 'act_ink'), 0.0), 0.1)
+        self.assertFalse(self._inks_on_sight())
+
+        # It knows it was wrong, says so, and remembers it.
+        self.assertIn('I used to think inking makes squid go out of sight',
+                      ' '.join(text for _at, text in self.b.social_thoughts))
+        revised = [m for m in self.memories if m[1].startswith('revised:')]
+        self.assertEqual(len(revised), 1)
+        self.assertTrue(revised[0][2]['changed_mind'])
+        self.assertIn('Stopped believing', revised[0][2]['summary'])
+        item = [i for i in self.ledger.knowledge_items() if i.kind == 'revised'][0]
+        self.assertIn('It used to believe that inking makes squid go out of sight',
+                      item.statement)
+        self.assertIn('found out', item.reason)
+        notes = [e.detail.get('note', '') for e in
+                 self.b.ledger.weight_history(('can_see_squid', 'act_ink'), limit=100)]
+        self.assertTrue(any('no longer believes' in n for n in notes))
+
+    def test_giving_up_a_habit_that_stopped_paying_is_remembered_too(self):
+        learner = ActionDiscovery(self.b, rate=0.0)
+        self.b.action_discovery = learner
+        clock = 2000.0
+
+        def shelter(anxious, helps):
+            nonlocal clock
+            clock += 20.0
+            start = 90.0 if anxious else 30.0
+            trial(self.b, learner, moment=clock, before={'anxiety': start},
+                  after={'anxiety': start - (40.0 if helps else 0.0)})
+
+        for _ in range(8):
+            shelter(True, True)
+            shelter(False, False)
+        self.assertIn(('anxiety', 'act_shelter'), learner.habits)
+        for _ in range(200):
+            shelter(True, False)
+            shelter(False, False)
+        self.assertNotIn(('anxiety', 'act_shelter'), learner.habits)
+        thoughts = ' '.join(text for _at, text in self.b.social_thoughts)
+        self.assertIn('I have found that approaching plant helps when anxiety', thoughts)
+        self.assertIn('I used to think approaching plant helped when anxiety', thoughts)
+        keys = [m[1] for m in self.memories]
+        self.assertTrue(any(k.startswith('learned:anxiety:act_shelter') for k in keys))
+        self.assertTrue(any(k.startswith('unlearned:anxiety:act_shelter') for k in keys))
+
+    def test_a_mild_outcome_has_to_be_repeated_a_striking_one_does_not(self):
+        learner = ActionDiscovery(self.b, rate=0.0)
+        self.b.action_discovery = learner
+        clock = 900.0
+        for _ in range(3):
+            clock += 20.0
+            trial(self.b, learner, action='inking', moment=clock,
+                  before={'can_see_squid': 0.0, 'anxiety': 80.0}, after={'anxiety': 80.0})
+        clock += 20.0
+        trial(self.b, learner, action='inking', moment=clock,
+              before={'can_see_squid': 100.0, 'anxiety': 80.0}, after={'anxiety': 76.0})
+        self.assertNotIn(('can_see_squid', 'act_ink'), self.b.weights)
 
 
 if __name__ == '__main__':

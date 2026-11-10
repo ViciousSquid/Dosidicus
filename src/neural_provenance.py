@@ -51,6 +51,7 @@ MECHANISMS: Dict[str, str] = {
     'stdp':          "one reliably fired just before the other",
     'causal_reward': "an action it took led to a result worth repeating",
     'causal_motor_discovery': "it tried the action with this cue and without it, and it turned out differently",
+    'belief':        "it believes the action makes this go away",
     'consolidation': "it was replayed during sleep",
     'neurogenesis':  "a new neuron was wired in",
     'designer':      "you wired it by hand",

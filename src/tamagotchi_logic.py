@@ -37,6 +37,31 @@ try:
 except ImportError:
     _PERF_TRACKING_AVAILABLE = False
 
+#: Health regained per tick of sleep by a squid that is fed and well, and the
+#: hunger above which a sleeping squid is too hungry to mend.
+HEAL_PER_TICK = 0.05
+HEAL_BELOW_HUNGER = 70.0
+
+
+
+def heal_in_sleep(squid, speed: float = 1.0) -> float:
+    """Mend a sleeping squid a little, if it is fed and well. Returns how much.
+
+    A parent, which no longer eats, does not mend: that is what it is to be
+    one.
+    """
+    if not getattr(squid, 'is_sleeping', False) or getattr(squid, 'is_sick', False):
+        return 0.0
+    if not getattr(getattr(squid, 'lifecycle', None), 'can_eat', True):
+        return 0.0
+    health = float(getattr(squid, 'health', 100.0) or 0.0)
+    if health >= 100.0 or float(getattr(squid, 'hunger', 0.0) or 0.0) >= HEAL_BELOW_HUNGER:
+        return 0.0
+    mended = min(100.0, health + HEAL_PER_TICK * float(speed)) - health
+    squid.health = health + mended
+    return mended
+
+
 #: How much calmer a squid gets, each tick, while it is hiding in a plant.
 PLANT_CALM_PER_TICK = 2.5
 
@@ -1333,6 +1358,17 @@ class TamagotchiLogic:
 
     def create_ink_cloud(self, position=None, *, record=True):
         """Create an ink cloud with guaranteed fade-out after 10 seconds"""
+        # Inking is something the squid did, and whatever follows is what it
+        # will come to expect of inking - whether or not the ink had anything
+        # to do with it (src/causal_learning: beliefs).
+        if position is None:
+            brain = getattr(getattr(self, 'brain_window', None), 'brain_widget', None)
+            discovery = getattr(brain, 'action_discovery', None)
+            if discovery is not None:
+                try:
+                    discovery.acted('inking', brain.state)
+                except Exception as e:
+                    print(f"[ActionDiscovery] ink not noted: {type(e).__name__}: {e}")
         from .display_scaling import DisplayScaling
         ink_cloud_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "inkcloud.png")))
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
@@ -2637,6 +2673,16 @@ class TamagotchiLogic:
                     if random.random() < 0.8:
                         self._set_sickness_state(True)
                 # Sickness persists until medicine or an explicit game reset.
+
+                # Wounds heal in sleep, in a squid that is fed and not ill.
+                # Health used only ever to go down, so every fight and every
+                # thrown rock was permanent damage: thirteen lost fights killed
+                # a squid whatever happened in between, which makes a squid
+                # that meets others often a squid that dies soon. What a fight
+                # leaves for good is what it should leave - the memory of it,
+                # the experience, and the mark on its aggression - not a body
+                # that can never recover.
+                heal_in_sleep(self.squid, self.simulation_speed)
 
                 # New logic for health decrease based on happiness and cleanliness
                 if self.squid.happiness < 20 and self.squid.cleanliness < 20:
