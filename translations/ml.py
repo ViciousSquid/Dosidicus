@@ -7,6 +7,7 @@ translations = {
     "sleepiness": "Nap Cravings",
     "satisfaction": "Dopamine",
     "anxiety": "Existential Dread",
+    "aggression": "ആക്രമണോത്സുകത",
     "curiosity": "FOMO",
 
     # Binary/sensor neurons

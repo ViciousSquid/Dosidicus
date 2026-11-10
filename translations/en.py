@@ -7,6 +7,7 @@ translations = {
     "sleepiness": "Sleepiness",
     "satisfaction": "Satisfaction",
     "anxiety": "Anxiety",
+    "aggression": "Aggression",
     "curiosity": "Curiosity",
 
     # Binary/sensor neurons

@@ -147,6 +147,17 @@ class StatisticsWindow(QtWidgets.QWidget):
         grid_layout.addWidget(self.stat_boxes["cleanliness"],  1, 0)
         grid_layout.addWidget(self.stat_boxes["sleepiness"],   1, 1)
 
+        # Aggression is not something a squid is born with. It is a neuron it
+        # grows - the first time it goes at another squid while its anxiety
+        # is high - and it is what starts fights. So this box does not exist
+        # for a squid that has never grown one: it appears the moment the
+        # neuron does, and from then on shows that neuron's own activation.
+        # Kept out of stat_boxes because it is read from the brain, not from
+        # the squid's body, and cannot be typed into.
+        self.aggression_box = StatBox("aggression")
+        self.aggression_box.hide()
+        grid_layout.addWidget(self.aggression_box, 1, 2)
+
         separator = QtWidgets.QFrame()
         separator.setFrameShape(QtWidgets.QFrame.HLine)
         separator.setFrameShadow(QtWidgets.QFrame.Sunken)
@@ -289,7 +300,32 @@ class StatisticsWindow(QtWidgets.QWidget):
                 if hasattr(self.squid, key):
                     box.set_value(getattr(self.squid, key))
             self.status_label.setText(f"{self.loc.get('status')}: {self.squid.status}")
+            self._update_aggression()
             self._update_state_pill()
+
+    def _aggression_level(self):
+        """The activation of the squid's aggression neuron, or None if it has
+        never grown one."""
+        logic = getattr(self.squid, 'tamagotchi_logic', None)
+        brain = getattr(getattr(logic, 'brain_window', None), 'brain_widget', None)
+        if brain is None:
+            return None
+        if 'aggression' not in (getattr(brain, 'neuron_positions', None) or {}):
+            return None
+        try:
+            return max(0.0, min(100.0, float(brain.state.get('aggression', 0.0) or 0.0)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _update_aggression(self):
+        level = self._aggression_level()
+        if level is None:
+            if not self.aggression_box.isHidden():
+                self.aggression_box.hide()
+            return
+        if self.aggression_box.isHidden():
+            self.aggression_box.show()
+        self.aggression_box.set_value(level)
 
     def _update_state_pill(self):
         """Update the state indicator pills to match the brain network view states (up to 3)"""

@@ -128,5 +128,52 @@ class WoundsHealInSleep(unittest.TestCase):
         self.assertLess(lost / HEAL_PER_TICK, 300)
 
 
+class AggressionIsAStatisticOnceItExists(unittest.TestCase):
+    """Not something a squid is born with: the box appears when the neuron does."""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5 import QtWidgets
+        cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def _window(self, positions, state):
+        from src.statistics_window import StatisticsWindow
+        brain = SimpleNamespace(neuron_positions=positions, state=state)
+        logic = SimpleNamespace(brain_window=SimpleNamespace(brain_widget=brain))
+        squid = SimpleNamespace(tamagotchi_logic=logic, status='roaming',
+                                hunger=10, happiness=50, cleanliness=50,
+                                sleepiness=10, health=100, satisfaction=50,
+                                curiosity=50, anxiety=20, is_sleeping=False)
+        window = StatisticsWindow(squid)
+        self.addCleanup(window.deleteLater)
+        window.roll_timer.stop()
+        return window, brain
+
+    def test_a_squid_with_no_aggression_neuron_has_no_such_statistic(self):
+        window, _brain = self._window({'hunger': (0, 0)}, {'hunger': 10})
+        window._update_aggression()
+        self.assertTrue(window.aggression_box.isHidden())
+        self.assertNotIn('aggression', window.stat_boxes)
+
+    def test_it_appears_when_the_neuron_is_grown_and_shows_its_activation(self):
+        window, brain = self._window({'hunger': (0, 0)}, {'hunger': 10})
+        window._update_aggression()
+        self.assertTrue(window.aggression_box.isHidden())
+        brain.neuron_positions['aggression'] = (5, 5)
+        brain.state['aggression'] = 63.4
+        window._update_aggression()
+        self.assertFalse(window.aggression_box.isHidden())
+        self.assertEqual(window.aggression_box.value_label.text(), '63')
+        self.assertEqual(window.aggression_box.name_label.text(), 'Aggression')
+
+    def test_it_is_read_from_the_brain_and_cannot_be_typed_into(self):
+        window, brain = self._window({'aggression': (5, 5)}, {'aggression': 40.0})
+        window.update_statistics()
+        window.set_debug_mode(True)
+        self.assertTrue(window.aggression_box.value_edit.isHidden())
+        window.apply_changes()
+        self.assertFalse(hasattr(window.squid, 'aggression'))
+
+
 if __name__ == '__main__':
     unittest.main()

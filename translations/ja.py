@@ -7,6 +7,7 @@ translations = {
     "sleepiness": "眠気",
     "satisfaction": "満足度",
     "anxiety": "不安",
+    "aggression": "攻撃性",
     "curiosity": "好奇心",
 
     # Binary/sensor neurons

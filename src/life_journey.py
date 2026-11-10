@@ -361,7 +361,7 @@ def build_journey(facts: Dict[str, Any]) -> List[Chapter]:
             Milestone('fought', "It has been in a fight",
                       "A fight starts when two squid are face to face and one "
                       "of them is more aggressive than not - which a squid "
-                      "becomes by going at another while alarmed, and more so "
+                      "becomes by going at another while its anxiety is high, and more so "
                       "with every fight after.",
                       f"It has fought {fought} time(s): won {won}, lost {lost}.",
                       lambda f: f.get('fights_won', 0) + f.get('fights_lost', 0) >= 1),
