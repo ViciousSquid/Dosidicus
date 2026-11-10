@@ -2463,33 +2463,12 @@ class Squid:
         else:
             base_image = self.images["left1"]
 
-        # 2. If no tint, return immediately
+        # 2. Washed with its colour, if the player gave it one - drawn the
+        #    same way in every tank it is ever seen in (src/tint.py).
         if not self.tint_color:
             return base_image
-
-        # 3. Apply robust tinting using QPainter
-        # Create a blank canvas the size of the image
-        result = QtGui.QPixmap(base_image.size())
-        result.fill(QtCore.Qt.transparent)
-        
-        painter = QtGui.QPainter(result)
-        
-        # Draw the base squid
-        painter.drawPixmap(0, 0, base_image)
-        
-        # Draw the tint color over it, keeping the squid's alpha channel
-        # CompositionMode_SourceAtop keeps destination alpha (squid shape) 
-        # but paints source (color) over it.
-        painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceAtop)
-        
-        # Use a semi-transparent version of the tint so texture shows through
-        tint = QtGui.QColor(self.tint_color)
-        tint.setAlpha(120)  # Adjust 0-255 for tint strength (120 is usually good)
-        painter.fillRect(result.rect(), tint)
-        
-        painter.end()
-        
-        return result
+        from .tint import tinted
+        return tinted(base_image, self.tint_color)
 
     def move_randomly(self):
         if random.random() < 0.20:

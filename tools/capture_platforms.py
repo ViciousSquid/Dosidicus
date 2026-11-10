@@ -200,8 +200,8 @@ def capture(output, label, brain_size=None):
         elif number == 4:                           # a message box, as the game shows them
             box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Question, 'Dosidicus',
                                         'Let the squid go out to other tanks?',
-                                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
-                                        | QtWidgets.QMessageBox.Cancel, window)
+                                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                                        window)
             box.setInformativeText('What happens to it out there cannot be undone.')
             box.show()
             state['box'] = box

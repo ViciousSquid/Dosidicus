@@ -2985,8 +2985,7 @@ class MultiplayerPlugin:
             # regenerated every setup; squid.uuid is written into the save file
             # and restored from it, so it is what makes "the same squid again"
             # a question with an answer.
-            'identity': (self.local_identity.to_payload()
-                         if self.local_identity else None),
+            'identity': self._identity_now(squid),
         }
 
 
@@ -3004,6 +3003,14 @@ class MultiplayerPlugin:
         }
         return direction_to_radians_map.get(getattr(squid_instance, 'squid_direction', 'right'), 0.0)
 
+
+    def _identity_now(self, squid):
+        """Who this squid is, as of now - read afresh, so a colour the
+        player gives it after going online is the colour others see."""
+        identity = SquidIdentity.from_squid(squid) or self.local_identity
+        if identity is not None:
+            self.local_identity = identity
+        return identity.to_payload() if identity else None
 
     def get_squid_color(self) -> tuple:
         """Generates a persistent color (R,G,B) for the local squid based on its node ID."""

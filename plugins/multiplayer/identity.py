@@ -14,7 +14,12 @@ already persisted and gives it a shape that can cross the network.
 import re
 import uuid as _uuid
 from dataclasses import dataclass, asdict
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+
+try:
+    from src.tint import rgb_of
+except ImportError:                         # run from inside src/
+    from tint import rgb_of
 
 #: Bumped when the meaning of a field changes, so two instances running
 #: different versions can decline to interpret each other's payloads.
@@ -47,6 +52,9 @@ class SquidIdentity:
     name: str = "Squid"
     personality: str = "unknown"
     protocol: int = ENCOUNTER_PROTOCOL_VERSION
+    #: The colour its player gave it (About tab), as (r, g, b) - what it
+    #: looks like, so other tanks draw it as its own tank does. None: none.
+    tint: Optional[Tuple[int, int, int]] = None
 
     # -- construction ---------------------------------------------------
     @classmethod
@@ -62,6 +70,7 @@ class SquidIdentity:
             uuid=str(raw),
             name=_clean_name(getattr(squid, 'name', None)),
             personality=str(getattr(personality, 'value', personality) or "unknown"),
+            tint=rgb_of(getattr(squid, 'tint_color', None)),
         )
 
     @classmethod
@@ -91,11 +100,14 @@ class SquidIdentity:
             name=_clean_name(payload.get('name')),
             personality=_clean_name(payload.get('personality')).lower() or "unknown",
             protocol=protocol,
+            tint=rgb_of(payload.get('tint')),       # three 0-255 numbers, or none
         )
 
     # -- use ------------------------------------------------------------
     def to_payload(self) -> Dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload['tint'] = list(self.tint) if self.tint else None
+        return payload
 
     @property
     def memory_key(self) -> str:

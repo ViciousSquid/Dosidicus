@@ -162,7 +162,26 @@ class RemoteEntityManager:
             
         return image_file_name, facing_direction
 
-    def _get_scaled_pixmap(self, image_file_name: str) -> tuple[QtGui.QPixmap, tuple[int, int]]:
+    @staticmethod
+    def _tint_of(payload, known=None):
+        """The colour a visiting squid's player gave it, from what its tank
+        says of it (its identity) - or what was known of it already."""
+        identity = (payload or {}).get('identity') if isinstance(payload, dict) else None
+        if isinstance(identity, dict) and 'tint' in identity:
+            from src.tint import rgb_of
+            return rgb_of(identity.get('tint'))
+        return known
+
+    def _get_scaled_pixmap(self, image_file_name: str, tint=None) -> tuple[QtGui.QPixmap, tuple[int, int]]:
+        """A squid image at this tank's scale - in the squid's own colour,
+        if its player gave it one, as its own tank draws it."""
+        pixmap, size = self._scaled_pixmap(image_file_name)
+        if tint:
+            from src.tint import tinted
+            pixmap = tinted(pixmap, tint)
+        return pixmap, size
+
+    def _scaled_pixmap(self, image_file_name: str) -> tuple[QtGui.QPixmap, tuple[int, int]]:
         target_width, target_height = self.IMAGE_DIMENSIONS.get(image_file_name, self.DEFAULT_IMAGE_DIMENSION)
         # Drawn at the resident's scale, so a visitor is not bigger than its host
         # on a 1080p screen, nor twice its size on a Retina Mac.
@@ -213,7 +232,7 @@ class RemoteEntityManager:
         new_name = f"{stem}{frame}.png"
         if new_name == name or info.get('visual') is None:
             return
-        pixmap, size = self._get_scaled_pixmap(new_name)
+        pixmap, size = self._get_scaled_pixmap(new_name, info.get('tint'))
         info['visual'].setPixmap(pixmap)
         info['current_image_name'] = new_name
         info['current_display_dimensions'] = size
@@ -255,7 +274,7 @@ class RemoteEntityManager:
         if facing in ('left', 'right'):
             name = f"{facing}{self._shown_frame(info)}.png"
             if name != info.get('current_image_name'):
-                pixmap, size = self._get_scaled_pixmap(name)
+                pixmap, size = self._get_scaled_pixmap(name, info.get('tint'))
                 info['visual'].setPixmap(pixmap)
                 info['current_image_name'] = name
                 info['current_display_dimensions'] = size
@@ -319,7 +338,9 @@ class RemoteEntityManager:
             entry_direction_on_this_screen=entry_direction_on_this_screen 
         )
         
-        scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(squid_image_name)
+        # In its own colour: a friend's pink squid is pink here too.
+        tint = self._tint_of(squid_data_payload)
+        scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(squid_image_name, tint)
         
         if self.debug_mode:
             self.logger.debug(f"_handle_new_squid_arrival '{node_id}': Image selected='{squid_image_name}', Determined Facing='{determined_facing_direction}', Size=({current_w}x{current_h})")
@@ -365,6 +386,7 @@ class RemoteEntityManager:
             'data': squid_data_payload.copy(), 
             'current_display_dimensions': (current_w, current_h),
             'current_image_name': squid_image_name,
+            'tint': tint,
             'was_arrival_text': True, 
             'network_target_x': entry_x, 
             'network_target_y': entry_y
@@ -393,7 +415,9 @@ class RemoteEntityManager:
             entry_direction_on_this_screen=entry_direction_on_this_screen,
             current_image_name_for_fallback_dir=current_img_name_fallback
         )
-        scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(new_squid_image_name)
+        remote_squid_info['tint'] = self._tint_of(squid_data_payload, remote_squid_info.get('tint'))
+        scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(
+            new_squid_image_name, remote_squid_info['tint'])
         visual_item.setPixmap(scaled_pixmap)
         
         if self.debug_mode:
@@ -486,8 +510,13 @@ class RemoteEntityManager:
             current_image_name_for_fallback_dir=current_img_name_fallback
         )
         
-        if potential_new_image_name != remote_squid_info.get('current_image_name'):
-            scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(potential_new_image_name)
+        # Its player may have given it a new colour since it was last drawn.
+        tint_before = remote_squid_info.get('tint')
+        remote_squid_info['tint'] = self._tint_of(squid_data_payload, tint_before)
+        if (potential_new_image_name != remote_squid_info.get('current_image_name')
+                or remote_squid_info['tint'] != tint_before):
+            scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(
+                potential_new_image_name, remote_squid_info['tint'])
             visual_item.setPixmap(scaled_pixmap) 
             
             remote_squid_info['current_display_dimensions'] = (current_w, current_h)
