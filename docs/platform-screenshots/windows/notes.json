@@ -11,7 +11,7 @@
     "font_used": "Fio UI",
     "font_point_size": 10,
     "font_pixel_size": 13,
-    "line_height": 17,
+    "line_height": 18,
     "sample_width": 218,
     "logical_dpi": 96.0,
     "device_pixel_ratio": 1.0,
@@ -44,55 +44,59 @@
       640
     ],
     "brain-1": [
-      1300,
-      980
+      1000,
+      620
     ],
     "brain-2": [
-      1300,
-      980
+      1000,
+      620
     ],
     "brain-3": [
-      1300,
-      980
+      1000,
+      620
     ],
     "brain-4": [
-      1300,
-      980
+      1000,
+      620
     ],
     "brain-5": [
-      1300,
-      980
+      1000,
+      620
     ],
     "brain-6": [
-      1300,
-      980
+      1000,
+      620
     ],
     "brain-7": [
-      1300,
-      980
+      1000,
+      620
     ],
     "brain-8": [
-      1300,
-      980
+      1000,
+      620
     ],
     "message": [
       279,
-      128
+      127
     ],
     "menu": [
       284,
-      177
+      184
     ]
   },
   "problems": [],
+  "brain_resized_to": [
+    1000,
+    620
+  ],
   "window_sizes": {
     "main": [
       688,
       458
     ],
     "brain": [
-      1300,
-      980
+      1000,
+      620
     ],
     "statistics": [
       320,
@@ -115,8 +119,8 @@
     "About"
   ],
   "squid": {
-    "hunger": 30,
-    "anxiety": 12,
+    "hunger": 31,
+    "anxiety": 16,
     "happiness": 100,
     "neurons": 19
   },
