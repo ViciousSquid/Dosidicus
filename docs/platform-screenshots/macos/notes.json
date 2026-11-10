@@ -192,5 +192,18 @@
     "happiness": 100,
     "neurons": 19
   },
+  "scale": {
+    "tank_scale": 0.5123,
+    "squid": [
+      129,
+      75
+    ],
+    "tank_window": [
+      688,
+      458
+    ],
+    "squid_share_of_width": 0.1875,
+    "food": 33
+  },
   "seconds": 58.9
 }
