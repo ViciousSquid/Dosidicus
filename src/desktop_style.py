@@ -408,13 +408,14 @@ class MacGameStyle(GameStyle):
             return option
         try:
             font = widget.font()
-            key = font.key()
+            dpi = widget.logicalDpiY() or FONT_DPI      # what its text is really at
+            key = (font.key(), dpi)
             metrics = self._metrics.get(key)
             if metrics is None:
                 same = QtGui.QFont(font)
                 if same.pixelSize() <= 0 and same.pointSizeF() > 0:
-                    # As many pixels at 72 DPI as it has at 96.
-                    same.setPointSizeF(same.pointSizeF() * FONT_DPI / 72.0)
+                    # As many pixels at 72 DPI as it has at the DPI it is drawn at.
+                    same.setPointSizeF(same.pointSizeF() * dpi / 72.0)
                 metrics = QtGui.QFontMetrics(same, self._device)
                 if len(self._metrics) > 256:
                     self._metrics.clear()
