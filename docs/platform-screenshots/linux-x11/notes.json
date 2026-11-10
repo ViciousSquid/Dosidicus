@@ -24,7 +24,8 @@
       1080
     ],
     "window_colour": "#efefef",
-    "platform": "xcb"
+    "platform": "xcb",
+    "font_problems": []
   },
   "shots": {
     "splash": [
@@ -188,8 +189,8 @@
   "squid": {
     "hunger": 31,
     "anxiety": 16,
-    "happiness": 99,
+    "happiness": 100,
     "neurons": 19
   },
-  "seconds": 59.4
+  "seconds": 59.2
 }

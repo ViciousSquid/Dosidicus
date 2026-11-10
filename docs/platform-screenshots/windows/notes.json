@@ -24,7 +24,8 @@
       1080
     ],
     "window_colour": "#efefef",
-    "platform": "windows"
+    "platform": "windows",
+    "font_problems": []
   },
   "shots": {
     "splash": [
@@ -187,7 +188,7 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 16,
+    "anxiety": 14,
     "happiness": 100,
     "neurons": 19
   },
