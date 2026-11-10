@@ -989,6 +989,21 @@ class EnhancedNeurogenesis:
                       and not self._matters(name)]
         return min(candidates)[1] if candidates else None
 
+    def _show_grown(self, neuron_name: str) -> None:
+        """Make a newly grown neuron visible - growing into place where the
+        brain can be seen (BrainWidget.grow_into_place), simply present where
+        it cannot (the headless brain)."""
+        bw = self.brain_widget
+        grow = getattr(bw, 'grow_into_place', None)
+        if callable(grow):
+            try:
+                grow(neuron_name)
+                return
+            except Exception as e:
+                print(f"[Neurogenesis] could not animate {neuron_name}: {e}")
+        if hasattr(bw, 'visible_neurons'):
+            bw.visible_neurons.add(neuron_name)
+
     def _make_reciprocal_connections(self, new_neuron: str,
                                      deficit: Optional[Deficit] = None
                                      ) -> List[Tuple[str, str, float, str]]:
@@ -1423,7 +1438,7 @@ class EnhancedNeurogenesis:
             # post-condition here, where it can still be met.
             wiring.extend(self._ensure_viable(neuron_name, func_neuron, deficit))
 
-        if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
+        self._show_grown(neuron_name)
         self.brain_widget.neurogenesis_highlight = {
             'neuron': neuron_name, 'start_time': time.time(),
             'duration': 8.0 if trigger_type == 'connector' else 4.0,
@@ -1899,7 +1914,7 @@ class EnhancedNeurogenesis:
         if monitor is not None:
             monitor.clear(deficit.key, f"grew {neuron_name}")
         self._set_neuron_appearance(neuron_name, func_neuron)
-        if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
+        self._show_grown(neuron_name)
         self.brain_widget.neurogenesis_highlight = {'neuron': neuron_name, 'start_time': time.time(), 'duration': 8.0, 'pulse_phase': 0}
         self.brain_widget.log_neurogenesis_event(neuron_name, "created", details={'trigger_type': 'connector', 'trigger_value': 1.0, 'specialization': 'orphan_rescue', 'display_name': func_neuron.display_name})
         self._record_neurogenesis_memory(neuron_name)

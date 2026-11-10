@@ -261,3 +261,43 @@ def test_the_resident_grows_can_see_squid_when_a_visitor_swims_into_its_view():
     brain.propagate()
     assert 'can_see_squid' in brain.positions
     assert set(GROWN_SENSES) >= {'can_see_squid', PLANT_SENSOR}
+
+
+# ---------------------------------------------------------------------------
+# A grown neuron grows into place, as the hatching ones do
+# ---------------------------------------------------------------------------
+def test_a_grown_sense_swells_into_place_like_a_hatching_neuron():
+    import time
+    from PyQt5 import QtWidgets
+    from src.brain_constants import NEURON_REVEAL_DURATION, reveal_scale
+    from src.brain_widget import BrainWidget
+    from src.config_manager import ConfigManager
+
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    brain = BrainWidget(config=ConfigManager())
+    for name in ('neurogenesis_timer', 'animation_timer', '_render_timer',
+                 '_brain_export_timer', '_link_fade_timer'):
+        timer = getattr(brain, name, None)
+        if timer is not None:
+            timer.stop()
+    brain._cleanup_render_worker()
+    try:
+        assert PLANT_SENSOR not in brain.neuron_reveal_animations
+        brain.perceive(PLANT_PERCEPT, 100.0)
+        brain.propagate_activations()
+
+        assert PLANT_SENSOR in brain.neuron_positions
+        assert PLANT_SENSOR in brain.visible_neurons
+        growing = brain.neuron_reveal_animations[PLANT_SENSOR]
+        assert abs(growing['start_time'] - time.time()) < 2.0
+        # It starts from nothing and is drawn at the hatch animation's size.
+        assert reveal_scale(0.0) < 0.2
+        assert reveal_scale(NEURON_REVEAL_DURATION) == 1.0
+
+        # ...and the animation finishes and clears itself like any reveal.
+        growing['start_time'] -= NEURON_REVEAL_DURATION + 0.1
+        brain.update_animations()
+        assert PLANT_SENSOR not in brain.neuron_reveal_animations
+        assert PLANT_SENSOR in brain.visible_neurons
+    finally:
+        brain.deleteLater()

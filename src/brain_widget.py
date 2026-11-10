@@ -1778,6 +1778,30 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self._set_render_fps(self.REVEAL_RENDER_FPS)
         self.mark_render_dirty()
 
+    def grow_into_place(self, neuron_name):
+        """A neuron the squid has just grown swells into place.
+
+        The same expand the hatching neurons make (the renderer draws any
+        neuron listed in neuron_reveal_animations at reveal_scale of its full
+        size), started now. A grown neuron used simply to be there on the
+        next frame; growth is the most important thing that happens in this
+        window, and it should look like something happening.
+
+        Unlike reveal_neuron this never touches the links: the rest of the
+        brain is already drawn, and stays drawn.
+        """
+        import time
+
+        if neuron_name not in self.neuron_positions:
+            return
+        self.visible_neurons.add(neuron_name)
+        self.neuron_reveal_animations[neuron_name] = {
+            'start_time': time.time(),
+            'progress': 0.0,
+        }
+        self._set_render_fps(self.REVEAL_RENDER_FPS)
+        self.mark_render_dirty()
+
     def play_birth_sequence(self, duration: float = 5.0):
         """Reveal every neuron the squid is born with, spread over `duration`.
 
