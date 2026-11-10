@@ -120,9 +120,9 @@
   ],
   "squid": {
     "hunger": 31,
-    "anxiety": 16,
-    "happiness": 99,
+    "anxiety": 14,
+    "happiness": 100,
     "neurons": 19
   },
-  "seconds": 59.6
+  "seconds": 58.7
 }

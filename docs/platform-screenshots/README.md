@@ -11,9 +11,9 @@ Compared with **windows**:
 
 | System | Text measurements | Window sizes | Widgets in the same place (fixed windows) | Pixels that differ |
 |---|---|---|---|---|
-| macos | identical | DIFFERENT | 64 of 71 | brain-1 2.4%, brain-2 6.0%, brain-3 1.4%, brain-4 1.1%, brain-5 0.8%, brain-6 0.8%, brain-7 0.7%, brain-8 1.0%, journey 5.0%, main 1.0%, menu: sizes differ, message 2.8%, splash 0.4%, statistics 1.3% |
-| linux-x11 | identical | identical | 65 of 71 | brain-1 2.4%, brain-2 6.1%, brain-3 1.7%, brain-4 1.1%, brain-5 0.8%, brain-6 0.9%, brain-7 0.8%, brain-8 1.1%, journey 5.2%, main 1.1%, menu 2.5%, message 3.2%, splash 0.4%, statistics 1.6% |
-| linux-wayland | identical | identical | 65 of 71 | brain-1 2.4%, brain-2 6.4%, brain-3 1.8%, brain-4 0.9%, brain-5 0.9%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.2%, main 1.0%, menu 2.5%, message 3.8%, splash 0.4%, statistics 1.5% |
+| macos | identical | DIFFERENT | 63 of 70 | brain-1 2.4%, brain-2 7.6%, brain-3 2.1%, brain-4 1.1%, brain-5 1.1%, brain-6 0.8%, brain-7 0.7%, brain-8 1.0%, journey 5.0%, main 1.0%, menu: sizes differ, message 2.7%, splash 0.4%, statistics 1.7% |
+| linux-x11 | identical | identical | 64 of 70 | brain-1 2.4%, brain-2 7.1%, brain-3 1.8%, brain-4 1.1%, brain-5 0.9%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.2%, main 1.1%, menu 2.5%, message 3.1%, splash 0.4%, statistics 1.6% |
+| linux-wayland | identical | identical | 64 of 70 | brain-1 2.4%, brain-2 7.9%, brain-3 2.3%, brain-4 0.9%, brain-5 0.9%, brain-6 0.9%, brain-7 0.9%, brain-8 1.1%, journey 5.2%, main 1.2%, menu 2.5%, message 3.6%, splash 0.4%, statistics 1.6% |
 
 Not the same:
 
