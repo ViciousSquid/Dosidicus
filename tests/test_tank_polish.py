@@ -143,10 +143,22 @@ def test_load_brain_is_a_floppy_disk_in_a_group_of_three_buttons():
     assert load.toolTip() == 'Load a custom brain architecture'      # tooltips kept
     assert reset.toolTip() == 'Reset to default brain'
     assert load.size() == reset.size() == tab._brain_buttons_size    # one size
-    assert bar.spacing() == 6                                        # close together
+    assert bar.spacing() == tab._brain_buttons_gap == 6              # close together
     # Side by side, Load then Reset, at the right-hand end as before.
     assert bar.indexOf(reset) == bar.indexOf(load) + 1 == bar.count() - 1
     # The Brain Designer button above them is that size too, with its tooltip.
     text = (ROOT / 'src' / 'brain_network_tab.py').read_text(encoding='utf-8')
     assert text.count('DisplayScaling.scale(100), DisplayScaling.scale(80)') == 2
     assert 'setToolTip(loc.get("tooltip_brain_designer"))' in text
+
+
+def test_the_brain_button_is_as_far_above_reset_as_reset_is_from_load():
+    """One gap, both ways: the Brain Designer button sits at the bottom of
+    its row, so the space down to Reset is the tab's row spacing - which is
+    also the spacing set between Reset and Load."""
+    text = (ROOT / 'src' / 'brain_network_tab.py').read_text(encoding='utf-8')
+    assert ('self.stats_and_button_layout.addWidget(self.new_button_container, 0,\n'
+            '                                               QtCore.Qt.AlignBottom)') in text
+    loader = (ROOT / 'src' / 'custom_brain_loader.py').read_text(encoding='utf-8')
+    assert 'checkbox_layout.setSpacing(network_tab._brain_buttons_gap)' in loader
+    assert 'gap = tab_layout.spacing()' in loader

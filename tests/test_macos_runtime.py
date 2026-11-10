@@ -27,7 +27,10 @@ class MacOSRuntimeTests(unittest.TestCase):
             try:
                 result = prepare_macos_runtime(executable=binary, data_dir=data)
                 self.assertEqual(result, data)
-                self.assertEqual(Path.cwd(), data)
+                # Resolved: on a Mac the temporary folder is /var/..., a link
+                # to /private/var/..., and the working directory is reported
+                # by where it really is.
+                self.assertEqual(Path.cwd().resolve(), data.resolve())
                 self.assertTrue((data / "images").is_symlink())
                 self.assertTrue((data / "images" / "icon.png").exists())
                 self.assertTrue((data / "plugins").is_symlink())

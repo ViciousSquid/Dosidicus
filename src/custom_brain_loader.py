@@ -36,7 +36,13 @@ def add_load_brain_button(network_tab, checkbox_layout):
         from display_scaling import DisplayScaling
     button_size = QtCore.QSize(DisplayScaling.scale(100), DisplayScaling.scale(80))
     network_tab._brain_buttons_size = button_size
-    checkbox_layout.setSpacing(6)
+    # The gap between Load and Reset is the gap between this row and the one
+    # above it, where the Brain Designer button sits: one gap, both ways.
+    tab_layout = network_tab.layout() if callable(getattr(network_tab, 'layout', None)) \
+        else getattr(network_tab, 'layout', None)
+    gap = tab_layout.spacing() if tab_layout is not None else -1
+    network_tab._brain_buttons_gap = gap if gap > 0 else 6
+    checkbox_layout.setSpacing(network_tab._brain_buttons_gap)
 
     # A floppy disk, drawn from the game's own line-emoji font (src/fonts):
     # the same plain picture on every system. What it does is in its tooltip.

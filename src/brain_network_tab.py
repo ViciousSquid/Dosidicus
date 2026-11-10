@@ -504,7 +504,11 @@ class NetworkTab(BrainBaseTab):
         self.buffer_button.setToolTip(loc.get("tooltip_experience_buffer"))
         #btn_layout.addWidget(self.buffer_button)
 
-        self.stats_and_button_layout.addWidget(self.new_button_container)
+        # At the bottom of its row, so the gap down to the Reset button below
+        # it is the tab's row spacing - the same few pixels as the gap between
+        # Reset and Load beside it (custom_brain_loader.add_load_brain_button).
+        self.stats_and_button_layout.addWidget(self.new_button_container, 0,
+                                               QtCore.Qt.AlignBottom)
 
         # === INSERT THE STATS AREA JUST ABOVE THE BOTTOM BAR ===
         self.layout.insertWidget(self.layout.count() - 1, self.functional_stats_area)

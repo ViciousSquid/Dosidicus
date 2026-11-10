@@ -20,6 +20,8 @@ on:
       - "tools/build_macos_dmg.sh"
       - "tools/merge_macos_universal.py"
       - "tools/macos_smoke_test.sh"
+      - "tests/test_macos_runtime.py"
+      - "src/macos_runtime.py"
 
 jobs:
   build:
