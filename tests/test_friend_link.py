@@ -33,11 +33,44 @@ def node(name, port=None):
 class FriendCodes(unittest.TestCase):
 
     def test_a_code_carries_the_address_the_port_and_the_invitation(self):
-        code = fl.encode_friend_code('86.12.34.56', 10000, 0xDEADBEEF)
-        self.assertRegex(code, r'^[0-9A-Z]{5}(-[0-9A-Z]{5}){3}$')
+        code = fl.encode_friend_code('86.12.34.56', 10000, 0xBEEF1)
+        self.assertRegex(code, r'^[0-9A-Z]{5}(-[0-9A-Z]{5}){2}$')
         where = fl.decode_friend_code(code)
         self.assertEqual((where.ip, where.port, where.invitation),
-                         ('86.12.34.56', 10000, 0xDEADBEEF))
+                         ('86.12.34.56', 10000, 0xBEEF1))
+
+    def test_a_code_is_fifteen_characters_whatever_it_points_at(self):
+        """Any address, any port a router might hand out, any invitation."""
+        for ip, port, invitation in (('0.0.0.1', 1, 1), ('255.255.255.255', 65535, 0xFFFFF),
+                                     ('192.168.1.2', 10000, 0), ('100.64.3.2', 51234, 77)):
+            code = fl.encode_friend_code(ip, port, invitation)
+            self.assertEqual((len(code.replace("-", "")), fl.CODE_LENGTH), (15, 15))
+            self.assertEqual(fl.decode_friend_code(code), fl.Whereabouts(ip, port, invitation))
+
+    def test_any_one_wrong_character_and_any_two_swapped_are_caught(self):
+        """The two mistakes people make copying a code by hand. Every one of
+        them, not most: the check character is built so none can slip by."""
+        code = fl.encode_friend_code('86.12.34.56', 51234, 0xBEEF1).replace('-', '')
+        for index in range(len(code)):
+            for other in fl._ALPHABET:
+                if other != code[index]:
+                    with self.assertRaises(fl.FriendCodeError):
+                        fl.decode_friend_code(code[:index] + other + code[index + 1:])
+        for index in range(len(code) - 2):           # neighbours among the first fourteen
+            if code[index] != code[index + 1]:
+                swapped = code[:index] + code[index + 1] + code[index] + code[index + 2:]
+                with self.assertRaises(fl.FriendCodeError):
+                    fl.decode_friend_code(swapped)
+
+    def test_an_older_longer_code_is_named_for_what_it_is(self):
+        with self.assertRaises(fl.FriendCodeError) as raised:
+            fl.parse_friend('00B48-00G49-RGX7G-YA081')
+        self.assertIn('older', str(raised.exception))
+        self.assertIn('15', str(raised.exception))
+
+    def test_an_invitation_that_does_not_fit_is_refused_not_cut_short(self):
+        with self.assertRaises(fl.FriendCodeError):
+            fl.encode_friend_code('86.12.34.56', 10000, 1 << fl.INVITATION_BITS)
 
     def test_it_forgives_how_people_actually_type(self):
         code = fl.encode_friend_code('86.12.34.56', 10000, 12345)
@@ -66,8 +99,9 @@ class FriendCodes(unittest.TestCase):
 
     def test_every_invitation_is_different_and_never_nothing(self):
         made = {fl.new_invitation() for _ in range(50)}
-        self.assertEqual(len(made), 50)
+        self.assertGreaterEqual(len(made), 49)       # one in a million, each
         self.assertNotIn(0, made)
+        self.assertTrue(all(value < 1 << fl.INVITATION_BITS for value in made))
 
     def test_home_network_addresses_are_told_from_the_internet(self):
         for ip in ('127.0.0.1', '192.168.1.20', '10.0.0.5', '169.254.3.3'):
@@ -174,6 +208,35 @@ class WhoATankListensTo(unittest.TestCase):
         self.tank.new_friend_code()
         self.assertNotEqual(self.tank.invitation, old)
         self.assertFalse(self.tank._admit(STRANGER, {'node_id': 'x', 'invite': old}))
+
+    def test_trying_invitations_one_after_another_shuts_the_door(self):
+        """An invitation is one number in a million. Whoever shows many
+        different wrong ones is trying them all: after a few, nobody new is
+        let in with a code for a minute - the right one included."""
+        from plugins.multiplayer.mp_network_node import WRONG_INVITATIONS_ALLOWED
+        right = self.tank.invitation
+        wrong = [value for value in range(1, 40) if value != right]
+        for value in wrong[:WRONG_INVITATIONS_ALLOWED]:
+            self.assertFalse(self.tank._admit(STRANGER, {'node_id': 'x', 'invite': value}))
+        self.assertFalse(self.tank._admit(STRANGER, {'node_id': 'x', 'invite': right}))
+        self.assertEqual(self.tank.direct_peers, {})
+        # ...and it opens again afterwards.
+        self.tank._invitations_shut_until = time.time() - 1
+        self.assertTrue(self.tank._admit(STRANGER, {'node_id': 'x', 'invite': right}))
+
+    def test_a_friend_with_an_out_of_date_code_does_not_shut_the_door(self):
+        """Their game shows the same wrong invitation with every message.
+        That is one wrong number, however often it is shown."""
+        stale = self.tank.invitation ^ 1
+        for _ in range(50):
+            self.assertFalse(self.tank._admit(FRIEND, {'node_id': 'f', 'invite': stale}))
+        self.assertTrue(self.tank._admit(
+            STRANGER, {'node_id': 'x', 'invite': self.tank.invitation}))
+
+    def test_a_friend_already_linked_is_heard_while_the_door_is_shut(self):
+        self.tank.add_friend(*FRIEND)
+        self.tank._invitations_shut_until = time.time() + 60
+        self.assertTrue(self.tank._admit(FRIEND, {'node_id': 'f'}))
 
     def test_there_is_a_limit_to_how_many_tanks_can_link(self):
         for index in range(MAX_DIRECT_PEERS):

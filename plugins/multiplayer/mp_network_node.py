@@ -20,6 +20,15 @@ from . import friend_link
 #: them and a few friends besides.
 MAX_DIRECT_PEERS = 8
 
+#: A friend code's invitation is one number in about a million. Someone
+#: trying numbers shows a different wrong one each time, which a friend with
+#: an out-of-date code never does (theirs is the same wrong one every time).
+#: After this many DIFFERENT wrong invitations inside the window, nobody new
+#: is let in with a code for the length of the window - so trying them all
+#: would take months, not minutes. Friends already linked are not affected.
+WRONG_INVITATIONS_ALLOWED = 8
+WRONG_INVITATION_WINDOW = 60.0
+
 
 class NetworkNode:
     def __init__(self, node_id=None, logger=None, port=None):
@@ -56,6 +65,9 @@ class NetworkNode:
         #: What a stranger has to show before this tank will listen to it.
         #: Carried in this tank's friend code; a new one makes the old code useless.
         self.invitation = friend_link.new_invitation()
+        #: wrong invitation shown -> when; and until when the door is shut.
+        self._wrong_invitations = {}
+        self._invitations_shut_until = 0.0
         #: (ip, port) this tank is seen at from outside, once it has asked.
         self.public_endpoint = None
         self._public_endpoint_found = threading.Event()
@@ -706,9 +718,15 @@ class NetworkNode:
             known['last_heard'] = now
             return True
         shown = message_dict.get('invite')
-        if (isinstance(shown, int) and not isinstance(shown, bool)
-                and shown == self.invitation
-                and len(self.direct_peers) < MAX_DIRECT_PEERS):
+        if not (isinstance(shown, int) and not isinstance(shown, bool)):
+            return friend_link.is_local_address(ip)
+        if shown != self.invitation:
+            if not friend_link.is_local_address(ip):
+                self._note_wrong_invitation(shown, now)
+            return friend_link.is_local_address(ip)
+        if now < self._invitations_shut_until and not friend_link.is_local_address(ip):
+            return False          # someone is trying numbers: nobody new for now
+        if len(self.direct_peers) < MAX_DIRECT_PEERS:
             # Linked back, wherever they are: a friend on the same network or
             # the same VPN is answered directly too, since plenty of networks
             # carry no multicast at all.
@@ -717,6 +735,21 @@ class NetworkNode:
             self.logger.info(f"[FRIEND] {ip}:{port} joined with this tank's friend code.")
             return True
         return friend_link.is_local_address(ip)
+
+    def _note_wrong_invitation(self, shown: int, now: float) -> None:
+        """A stranger showed an invitation that is not this tank's."""
+        wrong = self._wrong_invitations
+        for value in [v for v, at in wrong.items() if now - at > WRONG_INVITATION_WINDOW]:
+            del wrong[value]
+        if shown in wrong or len(wrong) < WRONG_INVITATIONS_ALLOWED:
+            wrong[shown] = now
+        if len(wrong) >= WRONG_INVITATIONS_ALLOWED and now >= self._invitations_shut_until:
+            self._invitations_shut_until = now + WRONG_INVITATION_WINDOW
+            wrong.clear()
+            self.logger.warning(
+                f"[FRIEND] {WRONG_INVITATIONS_ALLOWED} different wrong friend-code "
+                f"invitations in {WRONG_INVITATION_WINDOW:.0f}s: letting nobody new "
+                f"in with a code for {WRONG_INVITATION_WINDOW:.0f}s.")
 
     def find_public_endpoint(self, server: str = 'stun.l.google.com',
                              server_port: int = 19302, timeout: float = 2.5):

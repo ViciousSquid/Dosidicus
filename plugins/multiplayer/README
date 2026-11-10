@@ -381,7 +381,7 @@ else has to be told where your tank is:
   1. Both of you enable Multiplayer (Plugins > Plugin Manager) and accept its
      warning.
   2. Plugins > Multiplayer > Friends (internet play)...
-  3. Press "Get my code" and send the 20-character code to your friend - by
+  3. Press "Get my code" and send the 15-character code to your friend - by
      chat, by voice, however you like. They do the same.
   4. Each of you types the other's code into "Add a friend" and presses
      Connect. "Linked tanks" shows "connected" when the two can hear each
@@ -395,10 +395,13 @@ squid and up to three visitors - four squid at once.
 You can also type an IP address (1.2.3.4 or 1.2.3.4:10000) instead of a code.
 An address carries no invitation, so the other player has to add yours too.
 
-What a friend code is. It contains the internet address your tank is seen at,
-its port, and an invitation - a number only someone holding the code knows.
-Your tank ignores anyone on the internet who does not show that invitation
-(or whose address you did not add yourself). "New code" replaces the
+What a friend code is. Fifteen letters and digits in three groups, like
+4KQ7M-2D0HX-9T1VB (no I, L, O or U, and one mistyped or two swapped
+characters are always caught). It contains the internet address your tank is
+seen at, its port, and an invitation - a number only someone holding the code
+knows. Your tank ignores anyone on the internet who does not show that
+invitation (or whose address you did not add yourself); and if somebody starts
+trying invitations one after another, it lets nobody new in for a minute. "New code" replaces the
 invitation, so the old code stops working; friends already linked stay linked.
 Because it contains your address, give it only to people you would give your
 address to. "Get my code" finds that address by asking a public STUN server
