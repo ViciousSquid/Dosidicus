@@ -77,3 +77,14 @@ def test_the_phones_chooser_is_the_desktops():
     assert "'New game'" in SCREEN and "'Choose a slot'" in SCREEN and "'Delete which?'" in SCREEN
     menu = (ROOT / 'android' / 'dosidicus_mobile' / 'ui' / 'menu.py').read_text(encoding='utf-8')
     assert '"Save slots"' in menu
+
+
+def test_renaming_the_squid_on_the_phone_renames_its_slot():
+    """The slot reads its name from the save, so a rename saves at once, and
+    the slots are shown from a save made that moment. The file keeps the
+    squid's uuid as its name (save_path)."""
+    menu = (ROOT / 'android' / 'dosidicus_mobile' / 'ui' / 'menu.py').read_text(encoding='utf-8')
+    rename = menu[menu.index("squid.name = name.text.strip()"):]
+    assert rename.index('app.save_now()') < rename.index('popup.dismiss()')
+    opened = SCREEN[SCREEN.index('def open_slots(app):'):]
+    assert opened.index('app.save_now()') < opened.index('SlotsView(')

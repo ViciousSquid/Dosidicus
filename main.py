@@ -558,6 +558,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """File > Save slots: choose another tank, or delete one."""
         from src.slot_chooser import choose_slot
         slots = self.save_manager.slots
+        # Saved first, so the slot being played shows this squid as it is
+        # now: its name, its age, its stage of life.
+        self.save_game()
         picked = choose_slot(slots, self, playing=slots.active)
         if picked is not None:
             self.open_slot(picked)

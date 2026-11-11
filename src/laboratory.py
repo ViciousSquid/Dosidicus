@@ -139,7 +139,7 @@ class NeuronLaboratory(QDialog):
         extras/ reads saves instead: a whole life in order, a family, several
         squid side by side. Neither does the other's work, so each names the
         other. The name is a link to the page, which every build ships
-        (src/extras_path.py); View > Laboratory opens it too.
+        (src/extras_path.py); View > Life History opens it too.
         """
         from .extras_path import laboratory_page
         page = laboratory_page()

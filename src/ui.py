@@ -587,7 +587,7 @@ class Ui:
         self._neurogenesis_debug_dialog.raise_()
 
     def open_laboratory_page(self):
-        """View > Laboratory: the save-file laboratory, in the web browser."""
+        """View > Life History: the save-file tools, in the web browser."""
         from .extras_path import laboratory_page
         page = laboratory_page()
         if page is None:
@@ -1769,14 +1769,20 @@ class Ui:
         self.neurogenesis_debug_action.triggered.connect(self.show_neuron_laboratory)
         view_menu.addAction(self.neurogenesis_debug_action)
 
-        # The laboratory tools shipped beside the game (extras/): a squid's
-        # whole life, its family, several squid compared - from their saves,
-        # in a web browser. Not the Neuron Laboratory above, which studies
-        # one living neuron.
+        # The tools shipped beside the game (extras/): a squid's whole life,
+        # its family, several squid compared - from their saves, in a web
+        # browser. It is not the Neuron Laboratory above, which studies one
+        # living neuron, so it is not called a laboratory here: two entries
+        # of that name, one under the other, were one too many. It is named
+        # for what it shows, and set apart from the windows above it.
+        view_menu.addSeparator()
         self.laboratory_page_action = QtWidgets.QAction(
-            loc.get("lab_page", default="Laboratory (opens in your browser)"), self.window)
+            loc.get("lab_page", default="Life History (opens in your browser)"), self.window)
+        self.laboratory_page_action.setStatusTip(
+            "A squid's whole life from its save, its family, and squid compared")
         self.laboratory_page_action.triggered.connect(self.open_laboratory_page)
         view_menu.addAction(self.laboratory_page_action)
+        view_menu.addSeparator()
 
         self.preferences_action = QtWidgets.QAction(loc.get("preferences"), self.window)
         self.preferences_action.triggered.connect(self.show_preferences)

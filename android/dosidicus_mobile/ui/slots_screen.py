@@ -171,6 +171,7 @@ class SlotsView(BoxLayout):
 
 def open_slots(app):
     """Menu > Save slots."""
+    app.save_now()          # so the slot being played shows this squid as it is now
     popup = Popup(title='Save slots', size_hint=(0.92, None), height=dp(470), title_size=sp(18))
 
     def chosen(number):

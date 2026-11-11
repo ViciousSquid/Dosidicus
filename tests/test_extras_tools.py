@@ -212,3 +212,19 @@ def test_there_is_one_trainer():
     assert not (ROOT / 'headless' / 'headless_launcher.html').exists()
     page = (ROOT / 'headless' / 'trainer.html').read_text(encoding='utf-8')
     assert not re.findall(r'<script[^>]+src=', page) and 'https://' not in page
+
+
+def test_the_menu_does_not_offer_two_laboratories():
+    """View has the Neuron Laboratory. The entry that opens the save-file
+    tools in a browser is named for what it shows, in every language, so the
+    two are never one under the other with the same name."""
+    import importlib
+    for code in ('en', 'de', 'es', 'fr', 'ja', 'zh', 'ml'):
+        table = importlib.import_module(f'translations.{code}').translations
+        page, neuron = table['lab_page'], table['neuron_lab']
+        assert page != neuron, code
+        assert not any(word and word.lower() in page.lower()
+                       for word in (neuron, neuron.split()[-1], neuron.split('-')[-1])), (code, page)
+    assert 'Laboratory' not in importlib.import_module('translations.en').translations['lab_page']
+    ui = (ROOT / 'src' / 'ui.py').read_text(encoding='utf-8')
+    assert 'default="Life History (opens in your browser)"' in ui

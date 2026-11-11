@@ -402,7 +402,7 @@ jobs:
                 test -f "$DOSIDICUS_DATA_DIR/config.ini"
                 test -L "$DOSIDICUS_DATA_DIR/images"
                 # The laboratory tools ship in the app and are reachable
-                # from where it works (View > Laboratory opens this file).
+                # from where it works (View > Life History opens this file).
                 test -f "$DOSIDICUS_DATA_DIR/extras/Laboratory.html"
                 test -f "$DOSIDICUS_DATA_DIR/extras/vendor/lab.js"
                 # Running it must not have changed it: the DMG is made from

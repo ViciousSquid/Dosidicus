@@ -182,3 +182,25 @@ def test_ids_are_spelled_one_way():
     assert normal(A.upper().replace('-', '_')) == A
     assert squid_of(A.replace('-', '_') + '_autosave.zip') == A
     assert squid_of('autosave.zip') is None
+
+
+def test_renaming_the_squid_renames_its_slot_and_never_its_file(tmp_path):
+    """A slot is named after its squid; the archive is named after the
+    squid's uuid, always."""
+    from src.save_manager import SaveManager
+    manager = SaveManager(str(tmp_path))
+    data = {'game_state': {'squid': {'uuid': A, 'name': 'Squid'}}, 'brain_state': None}
+    first = manager.save_game(data)
+    assert manager.slots.describe()[0]['name'] == 'Squid'
+    data = {'game_state': {'squid': {'uuid': A, 'name': 'Captain Nemo'}}, 'brain_state': None}
+    second = manager.save_game(data)
+    assert second == first and os.path.basename(second) == A.replace('-', '_') + '.zip'
+    assert manager.slots.describe()[0]['name'] == 'Captain Nemo'
+    assert [p.name for p in tmp_path.glob('*.zip')] == [A.replace('-', '_') + '.zip']
+    # the game saves as the squid is renamed, and before the slots are shown
+    import main
+    from src.brain_about_tab import AboutTab
+    renamed = inspect.getsource(AboutTab.edit_name)
+    assert renamed.index('squid.name = new_name') < renamed.index('self.tamagotchi_logic.save_game()')
+    shown = inspect.getsource(main.MainWindow.open_save_slots)
+    assert shown.index('self.save_game()') < shown.index('choose_slot(')

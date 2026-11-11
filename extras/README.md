@@ -1,8 +1,8 @@
 # The laboratory: tools for studying squid
 
 These tools come with the game: every download has this `extras` folder
-beside the program, and **View > Laboratory** in the game opens the Laboratory
-in your web browser. (On a Mac the folder is inside the app; use the menu.)
+beside the program, and **View > Life History** in the game opens the Laboratory
+page in your web browser. (On a Mac the folder is inside the app; use the menu.)
 
 Everything here opens in a web browser by double-clicking it. Nothing is
 installed, nothing is uploaded, and no internet connection is needed: the

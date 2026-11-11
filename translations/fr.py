@@ -42,7 +42,7 @@ translations = {
     "statistics": "Statistiques",
     "brain_tool": "Outil Cerebral",
     "neuron_lab": "Laboratoire de Neurones",
-    "lab_page": "Laboratoire (s'ouvre dans le navigateur)",
+    "lab_page": "Histoire de vie (s'ouvre dans le navigateur)",
     "task_manager": "Gestionnaire de Taches",
 
     # ===== MENU VITESSE =====

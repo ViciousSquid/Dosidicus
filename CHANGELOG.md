@@ -59,6 +59,8 @@ whether to go. The steps are in `plugins/multiplayer/README`.
   it is.
 - **Death, eggs and New Game stay in their slot.** An heir hatches in its
   parent's slot; *New game* replaces only the squid in the slot being played.
+- **A slot is named after its squid.** Rename the squid and its slot is
+  renamed with it; the save file keeps the squid's uuid as its name.
 - **Delete** removes one slot's squid, after asking twice. The squid being
   played cannot be deleted from the chooser.
 - **On the phone too:** *Menu > Save slots* is the same chooser. A phone's
@@ -97,7 +99,9 @@ whether to go. The steps are in `plugins/multiplayer/README`.
   it studies one living neuron and can change it. The two name each other.
 
 - **The tools come with the game.** Every build ships the `extras` folder,
-  and *View > Laboratory* opens the Laboratory in your web browser.
+  and *View > Life History* opens the Laboratory page in your web browser.
+  (The menu entry is not called a laboratory, so it is not mistaken for the
+  Neuron Laboratory beside it.)
 
 `extras/README.md` says what each tool is for.
 

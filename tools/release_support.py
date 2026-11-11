@@ -10,7 +10,7 @@ import shutil
 
 VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?')
 #: extras: the laboratory tools (Laboratory, Save Viewer, Squid Breeder),
-#: which the game opens in a browser from View > Laboratory.
+#: which the game opens in a browser from View > Life History.
 RUNTIME = ('images', 'plugins', 'src', 'translations', 'custom_brains',
            'example_squids', 'extras', 'config.ini', 'version', 'LICENSE', 'README.md',
            'release-info.json')
