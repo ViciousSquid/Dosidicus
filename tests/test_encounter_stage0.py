@@ -296,6 +296,41 @@ class EncounterMemoryTests(unittest.TestCase):
         self.ledger.record(record)
         return record
 
+    def test_a_later_encounter_with_the_same_squid_is_kept_with_its_fights(self):
+        """A visitor that stays is met again every few minutes. The memory
+        store keeps the first value under a key, so the later encounters -
+        and the fights in them - used to be dropped: a host that beat its
+        visitor twice remembered no fight with it at all."""
+        peer = SquidIdentity('22f8244c-906d-4df9-8ab9-9b318dad4246', 'Ziggy', 'adventurous')
+        calm = {'happiness': 50.0, 'anxiety': 50.0, 'satisfaction': 50.0}
+
+        def encounter(started, fights_won=0, first=False):
+            session = EncounterSession(peer, dict(calm), first_meeting=first, now=started)
+            session.observe(action="fleeing!", proximity=80.0, now=started + 1)
+            for _ in range(fights_won):
+                session.note_fight(True)
+            session.note_item_lost()            # memorable either way
+            record = session.close(drives=dict(calm), now=started + 180.0)
+            self.assertTrue(self.ledger.record(record))
+            return record
+
+        encounter(1000.0, first=True)
+        encounter(1180.0, fights_won=2)
+        encounter(1360.0)
+
+        keys = [m['key'] for m in self.memory.get_memories_by_key_prefix('social', 'peer:')]
+        self.assertEqual(len(keys), 3)
+        self.assertEqual(len(set(keys)), 3)
+        self.assertEqual(sum(key == f'peer:{peer.uuid}' for key in keys), 1)
+
+        # What the squid knows of Ziggy, read back from memory alone - as
+        # after a save, or by anything that asks afresh.
+        reborn = PeerLedger(self.memory).summary(peer.uuid)
+        self.assertEqual((reborn.encounters, reborn.fights_won), (3, 2))
+        firsts = [m['value']['detail']['first_meeting']
+                  for m in self.memory.get_memories_by_key_prefix('social', 'peer:')]
+        self.assertEqual(sorted(firsts), [False, False, True])
+
     def test_two_different_squid_produce_two_memories(self):
         """The collision this replaces: every encounter shared one key.
 

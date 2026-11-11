@@ -561,7 +561,12 @@ for ev in revised:
     md.append(f"- {clock(ev)} {ev['who']} {ev['text']}")
 if not beliefs:
     md.append('Nothing, in this session.')
-md += ['', '## Fights', '']
+# A fight written up by hand from a session's records (source/fight.md), if
+# there is one: it goes in ahead of this session's own list.
+_written_up = HERE / 'fight.md'
+if _written_up.exists():
+    md += ['', _written_up.read_text().rstrip()]
+md += ['', '## Fights in the four-tank session' if _written_up.exists() else '## Fights', '']
 if fights:
     fight_pictures = [key for key, info in sorted(shots.items(), key=lambda item: item[1]['at'])
                       if info.get('fight_id')]

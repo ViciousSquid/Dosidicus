@@ -126,15 +126,19 @@ and which it later gave up when experience did not bear them out.
 Inky twice came to believe that fleeing gets rid of the other squid, and
 twice found it did not: Ziggy kept coming.
 
-## Two things the records do not agree on
+## A fault this fight exposed, since fixed
 
-- Ziggy's record of Inky counts "fights lost 2". Inky's record of Ziggy counts
-  no fights won, although Inky's own fight memories record both wins.
-- Inky filed the same "bad encounter with Ziggy" three times (3:10, 6:11,
-  9:11), each marked as their first meeting.
+Inky's record of Ziggy counted no fights won, although Inky's own fight
+memories record both wins; and the same "bad encounter with Ziggy" appeared
+three times (3:10, 6:11, 9:11), each marked as their first meeting.
 
-Both look like faults in how a host's encounter with a long-staying visitor
-is filed, not in the fights themselves. They have not been investigated.
+Both had one cause. A host's encounter with a visitor that stays is closed
+and begun again every three minutes, and each was filed under the same
+memory key. The memory store keeps the first value written under a key, so
+everything after the first three minutes was dropped - the fights included -
+and the first memory, its time refreshed, looked as if it had been filed
+again. A later encounter with a squid already remembered is now its own
+memory, and counts.
 
 ---
 
