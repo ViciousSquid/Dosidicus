@@ -296,6 +296,54 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
 
 
 class DecorationWindow(QtWidgets.QWidget):
+    #: How far from the corner of the screen area it sits.
+    CORNER_GAP = 20
+
+    def bottom_right(self):
+        """(x, y) that puts this window in the bottom right of the area the
+        game lays its windows out in - on the screen the aquarium is on, and
+        measured from the size the window really has."""
+        from .desktop_style import layout_area
+        parent = self.parentWidget()
+        screen = None
+        if parent is not None and parent.windowHandle() is not None:
+            screen = parent.windowHandle().screen()
+        screen = screen or QtWidgets.QApplication.primaryScreen()
+        area = layout_area(screen)
+        frame = self.frameGeometry()
+        width = max(frame.width(), self.width())
+        height = max(frame.height(), self.height())
+        return (area.right() - width - self.CORNER_GAP,
+                area.bottom() - height - self.CORNER_GAP)
+
+    def place_bottom_right(self):
+        from .desktop_style import place_exactly
+        self._placed_at = self.bottom_right()
+        place_exactly(self, *self._placed_at)
+
+    def showEvent(self, event):
+        """However it is opened - as the game starts, from the View menu or
+        with D - it opens in the bottom right. It used to be put there only
+        as the game started, and from a size it did not yet have; opened any
+        other way it appeared wherever the system chose. Once the player has
+        dragged it somewhere else, it is left where they put it."""
+        super().showEvent(event)
+        if getattr(self, '_moved_by_player', False):
+            return
+        self.place_bottom_right()
+        # And once more when it has been laid out and given its frame: only
+        # then is its real size known.
+        QtCore.QTimer.singleShot(0, lambda: (
+            self.isVisible() and not getattr(self, '_moved_by_player', False)
+            and self.place_bottom_right()))
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        placed = getattr(self, '_placed_at', None)
+        if placed is not None and self.isVisible() and (
+                abs(self.pos().x() - placed[0]) > 64 or abs(self.pos().y() - placed[1]) > 64):
+            self._moved_by_player = True
+
     def __init__(self, parent=None):
         super().__init__(parent, QtCore.Qt.Window)
         loc = Localization.instance()
