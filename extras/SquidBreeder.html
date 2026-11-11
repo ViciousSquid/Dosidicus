@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <title>Squid Breeder</title>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/dosidicus_data.js"></script>
 
 <style>
 body {
@@ -91,6 +92,7 @@ label { margin-right: 10px; }
 <label><input type="checkbox" id="fA" checked>Parent A</label>
 <label><input type="checkbox" id="fB" checked>Parent B</label>
 <label><input type="checkbox" id="fBoth" checked>Both Parents</label>
+<span style="font-size:13px;opacity:.8">&nbsp; green: A &nbsp; blue: B &nbsp; grey: as every squid hatches</span>
 
 <br><br><b>Neuron Type:</b><br>
 <label><input type="checkbox" id="fCore" checked>Core</label>
@@ -99,9 +101,15 @@ label { margin-right: 10px; }
 <br><br><b>View Mode:</b><br>
 <label><input type="checkbox" id="heatmap">Weight Δ Heatmap</label>
 
-<br><br><b>Mutation:</b><br>
-Rate <input type="range" id="mutRate" min="0" max="1" step="0.01" value="0.1">
-Strength <input type="range" id="mutStrength" min="0" max="2" step="0.1" value="0.3">
+<br><br><b>How to breed:</b><br>
+<label><input type="radio" name="mode" id="modeGame" checked>As the game does</label>
+<label><input type="radio" name="mode" id="modeBlend">Free blend (not what the game does)</label>
+<p id="modeNote" style="font-size:13px;opacity:.85;max-width:780px"></p>
+
+<b>Mutation:</b><br>
+Rate <input type="range" id="mutRate" min="0" max="1" step="0.01" value="0.1"> <span id="mutRateValue"></span>
+Strength <input type="range" id="mutStrength" min="0" max="2" step="0.05" value="0.1"> <span id="mutStrengthValue"></span>
+<button type="button" onclick="gameMutation()" style="margin-left:10px">Game's values</button>
 </div>
 
 <textarea id="output"></textarea>
@@ -121,15 +129,22 @@ async function loadFile(e,t){
     if(!f) return;
 
     if(f.name.endsWith(".zip")){
+        // A save holds several JSON files. The brain is brain_state.json;
+        // taking whichever came first loaded game_state.json, which has no
+        // brain in it at all.
         const zip=await JSZip.loadAsync(f);
-        for(const k of Object.keys(zip.files)){
-            if(k.endsWith(".json")){
-                const txt=await zip.files[k].async("string");
-                input(t).value=txt;
-                renderNetwork(t);
-                return;
-            }
+        const names=Object.keys(zip.files);
+        const pick=["brain_state.json","custom_brain.json"]
+            .map(want=>names.find(k=>k.split("/").pop()===want)).find(Boolean)
+            || names.find(k=>k.endsWith(".json"));
+        if(!pick){ alert("That zip has no brain in it."); return; }
+        let txt=await zip.files[pick].async("string");
+        if(txt.trim()==="null" && pick.endsWith("custom_brain.json")){
+            const other=names.find(k=>k.endsWith("brain_state.json"));
+            if(other) txt=await zip.files[other].async("string");
         }
+        input(t).value=txt;
+        renderNetwork(t);
     } else {
         input(t).value=await f.text();
         renderNetwork(t);
@@ -140,14 +155,78 @@ const input = t => document.getElementById("input"+t);
 
 // ================= BREED =================
 
-function breed(){
-    const A=normaliseBrain(JSON.parse(inputA.value));
-    const B=normaliseBrain(JSON.parse(inputB.value));
+// What the game does (src/inheritance.py), step for step:
+//
+//   * each parent passes on a GAMETE: a random half of its synapses between
+//     the neurons every squid is born with. No neuron a parent grew is
+//     inherited - a hatchling grows its own;
+//   * the hatchling starts as a newborn brain, and both gametes are laid over
+//     its innate wiring. Where both parents passed on the same synapse, one
+//     of them is chosen at random;
+//   * a tenth of the inherited weights mutate, by up to 0.1 either way, and
+//     every weight stays within -1 to 1.
+//
+// The newborn brain and the two numbers come from the game itself
+// (vendor/dosidicus_data.js, written by tools/update_extras_data.py).
+const GAME=window.DOSIDICUS||null;
 
+function gameteOf(parent){
+    const born=new Set(Object.keys(GAME.newborn_neurons));
+    const edges=Object.keys(parent.weights).filter(k=>{
+        const [a,b]=k.split("|");
+        return a!==b && born.has(a) && born.has(b) && Number.isFinite(parent.weights[k]);
+    }).sort();
+    // a random half, without replacement
+    for(let i=edges.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [edges[i],edges[j]]=[edges[j],edges[i]];
+    }
+    const genes={};
+    edges.slice(0,Math.floor(edges.length/2)).slice(0,GAME.max_genes).forEach(k=>{
+        genes[k]=Math.max(-1,Math.min(1,Math.round(parent.weights[k]*1e4)/1e4));
+    });
+    return genes;
+}
+
+function breedAsTheGameDoes(A,B){
+    const rate=+mutRate.value, size=+mutStrength.value;
+    const child={neurons:{},weights:{},state:{},_lineage:{neurons:{},weights:{},mutated:[]}};
+    for(const [name,pos] of Object.entries(GAME.newborn_neurons)){
+        child.neurons[name]={position:pos.slice()};
+        child._lineage.neurons[name]="innate";
+    }
+    for(const [src,dst,w] of GAME.newborn_connections){
+        child.weights[src+"|"+dst]=w;
+        child._lineage.weights[src+"|"+dst]="innate";
+    }
+    const offered={};
+    [["A",gameteOf(A)],["B",gameteOf(B)]].forEach(([who,genes])=>{
+        for(const k in genes) (offered[k]=offered[k]||[]).push([who,genes[k]]);
+    });
+    Object.keys(offered).sort().forEach(k=>{
+        const [who,weight]=offered[k][Math.floor(Math.random()*offered[k].length)];
+        let w=weight;
+        if(Math.random()<rate){
+            w=Math.max(-1,Math.min(1,w+(Math.random()*2-1)*size));
+            child._lineage.mutated.push(k);
+        }
+        child.weights[k]=Math.round(w*1e4)/1e4;
+        child._lineage.weights[k]=who;
+    });
+    child._bred={how:"as the game does",mutation_rate:rate,mutation_size:size,
+                 inherited:Object.keys(offered).length,
+                 left_behind:{A:grownBy(A),B:grownBy(B)}};
+    return child;
+}
+
+function grownBy(parent){
+    const born=new Set(Object.keys(GAME.newborn_neurons));
+    return Object.keys(parent.neurons||{}).filter(n=>!born.has(n)).sort();
+}
+
+function breedByBlending(A,B){
     const child=structuredClone(A);
-    child._lineage={neurons:{},weights:{}};
-
-    // neurons
+    child._lineage={neurons:{},weights:{},mutated:[]};
     for(let n in B.neurons){
         if(!child.neurons[n]){
             child.neurons[n]=B.neurons[n];
@@ -157,33 +236,86 @@ function breed(){
     for(let n in A.neurons){
         if(!child._lineage.neurons[n]) child._lineage.neurons[n]="A";
     }
-
-    // weights
     child.weights={};
     const keys=new Set([...Object.keys(A.weights),...Object.keys(B.weights)]);
     keys.forEach(k=>{
         const inA=k in A.weights;
         const inB=k in B.weights;
-
         const wa=A.weights[k]??rand();
         const wb=B.weights[k]??rand();
-
         child.weights[k]=(wa+wb)/2;
-
         child._lineage.weights[k]=inA&&inB?"both":(inA?"A":"B");
     });
-
     mutate(child);
+    child._bred={how:"free blend - not how the game breeds"};
+    return child;
+}
 
-    output.value=JSON.stringify(child,null,2);
+// What is written out is a brain the game can load (Network tab > Load
+// brain): neurons with positions and a list of connections. It used to be
+// this tool's own "source|target" map, which nothing in the game reads.
+function brainFile(child){
+    const connections=Object.keys(child.weights).sort().map(k=>{
+        const [source,target]=k.split("|");
+        return {source,target,weight:child.weights[k]};
+    }).filter(c=>child.neurons[c.source]&&child.neurons[c.target]);
+    const neurons={};
+    for(const [name,n] of Object.entries(child.neurons)) neurons[name]={position:n.position};
+    return {neurons,connections,bred:child._bred,lineage:child._lineage.weights,
+            mutated:child._lineage.mutated};
+}
+
+function breed(){
+    let A,B;
+    try{
+        A=normaliseBrain(JSON.parse(inputA.value));
+        B=normaliseBrain(JSON.parse(inputB.value));
+    }catch(e){ alert("Load a brain for both squid first."); return; }
+    if(!A||!A.neurons||!B||!B.neurons){ alert("One of those is not a brain."); return; }
+
+    const asGame=modeGame.checked && GAME;
+    const child=asGame?breedAsTheGameDoes(A,B):breedByBlending(A,B);
+
+    output.value=JSON.stringify(brainFile(child),null,2);
     renderOffspring(child);
 
     window._offspring=child;
     window._parentA=A;
     window._parentB=B;
 
-    // Reveal save button
+    describeMode(child);
     document.getElementById("saveBtn").style.display = "block";
+}
+
+function describeMode(child){
+    const note=document.getElementById("modeNote");
+    if(modeGame.checked && GAME){
+        let text="A random half of each parent's newborn wiring, laid over a newborn brain; "+
+                 "where both passed on the same synapse one is chosen at random; "+
+                 "then mutation. No grown neuron is inherited.";
+        if(child && child._bred){
+            const left=child._bred.left_behind;
+            text+=` This child inherited ${child._bred.inherited} synapses, `+
+                  `${child._lineage.mutated.length} of them mutated.`;
+            if(left.A.length||left.B.length)
+                text+=` Not inherited: ${[...new Set([...left.A,...left.B])].join(", ")}.`;
+        }
+        note.textContent=text;
+    } else {
+        note.textContent="Every weight is the average of the two parents', missing ones are "+
+                         "random, and every neuron either parent has is kept. The game never does this.";
+    }
+}
+
+function gameMutation(){
+    if(!GAME) return;
+    mutRate.value=GAME.mutation_rate;
+    mutStrength.value=GAME.mutation_size;
+    showMutation();
+}
+function showMutation(){
+    mutRateValue.textContent=(+mutRate.value).toFixed(2)+(GAME&&+mutRate.value===GAME.mutation_rate?" (game)":"");
+    mutStrengthValue.textContent=(+mutStrength.value).toFixed(2)+(GAME&&+mutStrength.value===GAME.mutation_size?" (game)":"");
 }
 
 // ================= SAVE =================
@@ -342,13 +474,15 @@ function render(data,id,isOffspring=false){
 // ================= HELPERS =================
 
 function pass(o){
-    return (o==="A"&&fA.checked)||(o==="B"&&fB.checked)||(o==="both"&&fBoth.checked)||(o==="novel");
+    return (o==="A"&&fA.checked)||(o==="B"&&fB.checked)||(o==="both"&&fBoth.checked)
+        ||(o==="novel")||(o==="innate");
 }
 
 function color(o){
     if(o==="A") return "#00ff88";
     if(o==="B") return "#3399ff";
     if(o==="novel") return "#ffcc00";
+    if(o==="innate") return "#777777";     // as it hatched: from neither parent
     return "#ffffff";
 }
 
@@ -411,6 +545,11 @@ function forward(net,target){
 }
 
 // ================= UI =================
+
+["mutRate","mutStrength"].forEach(id=>document.getElementById(id).oninput=showMutation);
+["modeGame","modeBlend"].forEach(id=>document.getElementById(id).onchange=()=>describeMode(null));
+gameMutation();
+describeMode(null);
 
 ["fA","fB","fBoth","fCore","fCustom","heatmap"].forEach(id=>{
     document.getElementById(id).onchange=()=>{

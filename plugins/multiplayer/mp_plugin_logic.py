@@ -1355,6 +1355,7 @@ class MultiplayerPlugin:
                                related_neurons=list(self._active_encounter_neurons()))
         if self.peer_ledger.record(record):
             self.logger.info(f"Encounter remembered: {record.describe()}")
+            self.peer_ledger.count_first_meeting(getattr(squid, 'statistics', None))
             # How it went moves how the squid meets ANY squid, strangers too
             # (src/social_learning.py), recorded on each synapse it moves.
             from src.social_learning import learn_from_encounter

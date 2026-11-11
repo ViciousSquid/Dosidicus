@@ -12,6 +12,7 @@ from .squid import Personality, Squid
 from .ui import ResizablePixmapItem
 from .brain_tool import SquidBrainWindow
 from .learning import HebbianLearning
+from .tint import rgb_of
 from .interactions import RockInteractionManager
 from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
@@ -3654,6 +3655,10 @@ class TamagotchiLogic:
             'personality': self.squid.personality.value,
             'uuid': str(self.squid.uuid),  # Convert UUID to string
             'name': getattr(self.squid, 'name', 'Squid'),  # Save squid name if it exists
+            # Its colour, as its player chose it. Loading has always read
+            # this; saving never wrote it, so a coloured squid came back
+            # from every save as plain as it hatched.
+            'tint_color': rgb_of(getattr(self.squid, 'tint_color', None)),
         }
 
         # Statistics are owned by the model. The tab is a read-only projection.

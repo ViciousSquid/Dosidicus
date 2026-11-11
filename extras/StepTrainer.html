@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Step Trainer</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="vendor/chart.umd.min.js"></script>
+    <script src="vendor/dosidicus_data.js"></script>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -634,8 +635,12 @@
         positions = {};
         const neuronsObj = data.neurons || {};
         for (let [name, info] of Object.entries(neuronsObj)) {
-            let ntype = info.type || info.neuron_type || 'hidden';
-            let isBinary = info.is_binary === true;
+            // A game brain does not label its neurons: what is a sense and
+            // what is on/off comes from the game (vendor/dosidicus_data.js).
+            const G = window.DOSIDICUS || {};
+            let ntype = info.type || info.neuron_type
+                || ((G.input_sensors || []).includes(name) ? 'sensor' : 'hidden');
+            let isBinary = info.is_binary === true || (G.binary_neurons || []).includes(name);
             let pos = info.position;
             if (pos && Array.isArray(pos) && pos.length >= 2) positions[name] = {x: pos[0], y: pos[1]};
             else if (data.neuron_positions && data.neuron_positions[name]) {
@@ -644,9 +649,15 @@
             } else positions[name] = {x: Math.random()*600+100, y: Math.random()*400+50};
             neurons[name] = { type: ntype, is_binary: isBinary, position: positions[name] };
         }
-        let conns = data.connections || data.weights || {};
+        // The Designer and the game write `connections` (a list of
+        // {source, target, weight}); a save's brain also has `weights_list`
+        // (a list of [source, target, weight]).
+        let conns = data.connections || data.weights_list || data.weights || {};
         if (Array.isArray(conns)) {
-            for (let c of conns) if(c.source && c.target) weights[`${c.source}|${c.target}`] = c.weight ?? 0.5;
+            for (let c of conns) {
+                if (Array.isArray(c) && c.length === 3) weights[`${c[0]}|${c[1]}`] = Number(c[2]) || 0;
+                else if (c && c.source && c.target) weights[`${c.source}|${c.target}`] = c.weight ?? 0.5;
+            }
         } else {
             for (let [key, w] of Object.entries(conns)) {
                 let parts = key.includes('->') ? key.split('->') : key.split('|');

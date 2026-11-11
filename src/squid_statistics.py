@@ -88,6 +88,7 @@ class SquidStatistics:
         'times_colour_changed': 'times_colour_changed',
         'rocks_thrown': 'total_rocks_thrown',
         'plants_interacted': 'plants_interacted',
+        'other_squids_encountered': 'other_squids_encountered',
     }
 
     _NEURON_BIRTH_KEYS = {
