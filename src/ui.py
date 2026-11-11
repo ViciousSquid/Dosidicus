@@ -586,6 +586,18 @@ class Ui:
         self._neurogenesis_debug_dialog.show()
         self._neurogenesis_debug_dialog.raise_()
 
+    def open_laboratory_page(self):
+        """View > Laboratory: the save-file laboratory, in the web browser."""
+        from .extras_path import laboratory_page
+        page = laboratory_page()
+        if page is None:
+            self.show_message("The laboratory tools (the extras folder) are not with this copy of the game")
+            return False
+        opened = QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(page)))
+        if not opened:
+            self.show_message(f"Open this file in a web browser: {page}")
+        return opened
+
     def show_neuron_laboratory(self):
         if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
             self.show_message("Brain Tool not initialized")
@@ -1756,6 +1768,15 @@ class Ui:
         self.neurogenesis_debug_action = QtWidgets.QAction(loc.get("neuron_lab"), self.window)
         self.neurogenesis_debug_action.triggered.connect(self.show_neuron_laboratory)
         view_menu.addAction(self.neurogenesis_debug_action)
+
+        # The laboratory tools shipped beside the game (extras/): a squid's
+        # whole life, its family, several squid compared - from their saves,
+        # in a web browser. Not the Neuron Laboratory above, which studies
+        # one living neuron.
+        self.laboratory_page_action = QtWidgets.QAction(
+            loc.get("lab_page", default="Laboratory (opens in your browser)"), self.window)
+        self.laboratory_page_action.triggered.connect(self.open_laboratory_page)
+        view_menu.addAction(self.laboratory_page_action)
 
         self.preferences_action = QtWidgets.QAction(loc.get("preferences"), self.window)
         self.preferences_action.triggered.connect(self.show_preferences)

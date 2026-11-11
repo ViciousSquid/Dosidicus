@@ -21,6 +21,7 @@ on:
       - config.ini
       - custom_brains/**
       - example_squids/**
+      - extras/**
       - translations/**
       - version
 
@@ -285,7 +286,8 @@ jobs:
             "images",
             "plugins",
             "src",
-            "custom_brains"
+            "custom_brains",
+            "extras"
           )
           foreach ($item in $required) {
             if (-not (Test-Path -LiteralPath (Join-Path $release $item))) {

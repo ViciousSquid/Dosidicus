@@ -138,14 +138,14 @@ class NeuronLaboratory(QDialog):
         This window is for a living brain, one neuron at a time. The page in
         extras/ reads saves instead: a whole life in order, a family, several
         squid side by side. Neither does the other's work, so each names the
-        other. The name is a link where the page is on this machine.
+        other. The name is a link to the page, which every build ships
+        (src/extras_path.py); View > Laboratory opens it too.
         """
-        import os
-        page = os.path.join(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))), 'extras', 'Laboratory.html')
+        from .extras_path import laboratory_page
+        page = laboratory_page()
         name = "extras/Laboratory.html"
-        if os.path.exists(page):
-            name = f"<a href='{QtCore.QUrl.fromLocalFile(page).toString()}'>{name}</a>"
+        if page is not None:
+            name = f"<a href='{QtCore.QUrl.fromLocalFile(str(page)).toString()}'>{name}</a>"
         label = QLabel(loc(
             "lab_whole_life_pointer",
             "This window studies one living brain. For a squid's whole life "

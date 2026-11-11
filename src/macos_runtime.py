@@ -12,7 +12,9 @@ import shutil
 import sys
 
 
-_READ_ONLY_DIRECTORIES = ("images", "plugins", "src", "translations", "example_squids")
+_READ_ONLY_DIRECTORIES = ("images", "plugins", "src", "translations", "example_squids",
+                          # the laboratory tools, opened in a browser
+                          "extras")
 _READ_ONLY_FILES = ("version", "README.md", "LICENSE")
 
 

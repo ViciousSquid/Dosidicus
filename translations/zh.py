@@ -42,6 +42,7 @@ translations = {
     "statistics": "统计数据",
     "brain_tool": "大脑工具",
     "neuron_lab": "神经元实验室",
+    "lab_page": "实验室（在浏览器中打开）",
     "task_manager": "任务管理器",
 
     # ===== SPEED MENU =====

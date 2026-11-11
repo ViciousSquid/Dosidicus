@@ -42,6 +42,7 @@ translations = {
     "statistics": "Statistiken",
     "brain_tool": "Gehirn-Werkzeug",
     "neuron_lab": "Neuronen-Labor",
+    "lab_page": "Labor (öffnet im Browser)",
     "task_manager": "Task-Manager",
 
     # ===== GESCHWINDIGKEIT-MENÜ =====

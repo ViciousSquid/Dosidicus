@@ -1,5 +1,9 @@
 # The laboratory: tools for studying squid
 
+These tools come with the game: every download has this `extras` folder
+beside the program, and **View > Laboratory** in the game opens the Laboratory
+in your web browser. (On a Mac the folder is inside the app; use the menu.)
+
 Everything here opens in a web browser by double-clicking it. Nothing is
 installed, nothing is uploaded, and no internet connection is needed: the
 tools read the files you give them and the page forgets them when it closes.
@@ -13,7 +17,7 @@ these tools show.
 | Follow one squid's life, or compare several | `Laboratory.html` |
 | See everything inside one save, file by file | `SaveViewer.html` |
 | Breed two squid and hatch the child in the game | `SquidBreeder.html` |
-| Watch a brain being trained, tick by tick | `python headless/headless_trainer.py --serve` |
+| Watch a brain being trained, tick by tick | `python headless/headless_trainer.py --serve` (from the source code) |
 | Study one neuron in a living squid, and change it | the Neuron Laboratory, inside the game |
 
 ## Laboratory.html
@@ -79,7 +83,8 @@ in the slot chooser.
 python headless/headless_trainer.py --serve
 ```
 
-The headless trainer, working, in a browser. See `headless/README.md`.
+The headless trainer, working, in a browser. See `headless/README.md`. It runs
+from the source code with Python, so it is not in the downloaded game.
 
 ## The Neuron Laboratory is something else
 

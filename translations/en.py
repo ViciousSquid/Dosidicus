@@ -44,6 +44,7 @@ translations = {
     "journey_title": "Your squid's journey",
     "brain_tool": "Brain Tool",
     "neuron_lab": "Neuron Laboratory",
+    "lab_page": "Laboratory (opens in your browser)",
     "task_manager": "Task Manager",
 
     # ===== SPEED MENU =====

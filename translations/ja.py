@@ -42,6 +42,7 @@ translations = {
     "statistics": "統計",
     "brain_tool": "脳ツール",
     "neuron_lab": "ニューロン研究所",
+    "lab_page": "ラボ（ブラウザで開く）",
     "task_manager": "タスクマネージャー",
 
     # ===== SPEED MENU =====

@@ -96,6 +96,9 @@ whether to go. The steps are in `plugins/multiplayer/README`.
 - The Neuron Laboratory inside the game (double-click a neuron) is unchanged:
   it studies one living neuron and can change it. The two name each other.
 
+- **The tools come with the game.** Every build ships the `extras` folder,
+  and *View > Laboratory* opens the Laboratory in your web browser.
+
 `extras/README.md` says what each tool is for.
 
 ### The tank

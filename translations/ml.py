@@ -42,6 +42,7 @@ translations = {
     "statistics": "The Receipts",
     "brain_tool": "Brain Cell Inspector",
     "neuron_lab": "The Lab",
+    "lab_page": "The Big Lab (opens in ur browser)",
     "task_manager": "Adulting Manager",
 
     # ===== SPEED MENU =====
