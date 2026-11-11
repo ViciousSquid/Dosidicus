@@ -290,7 +290,11 @@ def test_the_brain_designer_button_is_a_plain_black_and_white_brain():
     font = QtGui.QRawFont(str(desktop_style.font_directory() / 'DosidicusLineEmoji.ttf'), 40)
     image = font.alphaMapForGlyph(font.glyphIndexesForString('\U0001F9E0')[0])
     assert not image.isNull() and image.width() > 20
-    assert image.isGrayscale()
+    # Checked pixel by pixel: QImage.isGrayscale() answers False for an
+    # alpha-only image, which is what some Qt builds return here.
+    colours = {image.pixelColor(x, y).getRgb()[:3] for y in range(image.height())
+               for x in range(image.width())}
+    assert all(red == green == blue for red, green, blue in colours)
 
 
 def test_what_fio_ui_lacks_comes_from_the_games_other_fonts_first():
