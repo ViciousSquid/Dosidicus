@@ -95,3 +95,85 @@ def test_meeting_a_squid_for_the_first_time_is_counted_once():
     assert not ledger.count_first_meeting(stats) and stats.other_squids_encountered == 1
     from src.squid_statistics import SquidStatistics
     assert 'other_squids_encountered' in SquidStatistics._EVENT_KEYS
+
+
+# ---------------------------------------------------------------- Laboratory
+def _old_save(path):
+    """A save as the game wrote it before it kept a timeline."""
+    import json
+    import zipfile
+    from tests.test_life_timeline import _save
+    with zipfile.ZipFile(path, 'w') as archive:
+        for name, section in _save().items():
+            archive.writestr(f'{name}.json', json.dumps(section))
+        archive.writestr('uuid.txt', 'SquidSignature    u-1')
+    return path
+
+
+def test_an_older_save_can_be_given_its_timeline(tmp_path):
+    import json
+    import zipfile
+    spec = importlib.util.spec_from_file_location('add_timeline', ROOT / 'tools' / 'add_timeline.py')
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    old = _old_save(tmp_path / 'inky.zip')
+    made = tool.add_timeline(old)
+    assert made == tmp_path / 'inky.timeline.zip'
+    with zipfile.ZipFile(old) as before, zipfile.ZipFile(made) as after:
+        assert 'timeline.json' not in before.namelist()            # the original is untouched
+        timeline = json.loads(after.read('timeline.json'))
+        for name in before.namelist():                             # and nothing else changed
+            assert after.read(name) == before.read(name)
+    assert timeline['squid']['name'] == 'Inky'
+    assert [e['kind'] for e in timeline['events']][0] == 'hatched'
+    assert tool.add_timeline(made, made) == made                   # in place, and again, is harmless
+
+
+def test_every_save_written_carries_the_timeline(tmp_path):
+    """The phone writes its saves through write_save_archive, not the
+    desktop's save_game: the timeline is added there for whoever lacks it."""
+    import json
+    import zipfile
+    from src.save_archive import write_save_archive
+    from tests.test_life_timeline import _save
+    write_save_archive(tmp_path / 'phone.zip', _save(), 'u-1')
+    with zipfile.ZipFile(tmp_path / 'phone.zip') as archive:
+        timeline = json.loads(archive.read('timeline.json'))
+    assert timeline['events'] and timeline['neurons']
+    # one the game already built is kept as it is
+    write_save_archive(tmp_path / 'desktop.zip', dict(_save(), timeline={'events': ['kept']}), 'u-1')
+    with zipfile.ZipFile(tmp_path / 'desktop.zip') as archive:
+        assert json.loads(archive.read('timeline.json')) == {'events': ['kept']}
+    # and the phone build ships the module that writes it
+    assert "'life_timeline'" in (ROOT / 'android' / 'prepare_apk.py').read_text(encoding='utf-8')
+
+
+def test_the_laboratory_shows_the_life_the_game_recorded():
+    """It reads timeline.json and works nothing out for itself, so it cannot
+    disagree with the game about a squid's life."""
+    from src import life_timeline
+    page = (EXTRAS / 'Laboratory.html').read_text(encoding='utf-8')
+    shared = (EXTRAS / 'vendor' / 'lab.js').read_text(encoding='utf-8')
+    for view in ('viewSpecimens', 'viewHistory', 'viewStrata', 'viewWhy', 'viewFamily',
+                 'viewCompare', 'viewSession'):
+        assert f'function {view}(' in page, view
+    assert 'type: \'range\'' in page and 'Lab.drawBrain' in page    # the slider, and the brain then
+    assert 'save.timeline' in shared and 'tools/add_timeline.py' in page
+    # every stage of life and kind of event the game can write has a colour or a mark
+    for era, _title, _about in life_timeline.ERAS:
+        assert f'{era}:' in shared, era
+    for kind in ('hatched', 'neuron', 'pruned', 'association', 'belief', 'belief_dropped',
+                 'encounter', 'mating', 'fight', 'egg', 'death', 'memory'):
+        assert re.search(rf'\b{kind}:\s+\{{icon', shared), kind
+
+
+def test_the_two_laboratories_name_each_other_and_do_different_work():
+    """The Neuron Laboratory (in the game, one living neuron, editable) and
+    the Laboratory page (saves, whole lives) are not the same thing."""
+    page = (EXTRAS / 'Laboratory.html').read_text(encoding='utf-8')
+    assert page.count('Neuron Laboratory') >= 2
+    assert 'double-click' in page
+    game = (ROOT / 'src' / 'laboratory.py').read_text(encoding='utf-8')
+    assert 'extras/Laboratory.html' in game and 'lab_whole_life_pointer' in game
+    # the page changes nothing and edits no neuron: that is the game's window
+    assert 'Unlock editing' not in page and 'Edit Sandbox' not in page

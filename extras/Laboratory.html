@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dosidicus Laboratory</title>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/dosidicus_data.js"></script>
+<script src="vendor/lab.js"></script>
+<style>
+:root { --bg:#0e1420; --panel:#161e2e; --line:#28344a; --ink:#e6ebf5; --dim:#93a0b8; --accent:#5fd0c5; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display:flex; align-items:center; gap:16px; padding:10px 18px; background:#0a0f18; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+header h1 { font-size:18px; margin:0; letter-spacing:.3px; }
+header .sub { color:var(--dim); font-size:12px; }
+button, .filebtn { background:#22304a; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
+button:hover, .filebtn:hover { background:#2b3d5e; }
+button.on { background:var(--accent); color:#06231f; border-color:var(--accent); font-weight:600; }
+nav { display:flex; gap:6px; padding:8px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+main { padding:14px 18px 60px; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
+h2 { font-size:15px; margin:0 0 8px; }
+h3 { font-size:13px; margin:12px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:.6px; }
+table { border-collapse:collapse; width:100%; font-size:13px; }
+th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--dim); font-weight:600; cursor:default; white-space:nowrap; }
+tr.pick { cursor:pointer; } tr.pick:hover td { background:#1c2740; } tr.active td { background:#1f3350; }
+.dim { color:var(--dim); } .note { color:var(--dim); font-size:12px; }
+.chip { display:inline-block; padding:1px 7px; border-radius:10px; background:#243352; margin:1px 3px 1px 0; font-size:12px; white-space:nowrap; }
+.good { color:#7ddc7d; } .bad { color:#ff8585; }
+.empty { padding:40px; text-align:center; color:var(--dim); }
+
+/* ---- History: the ribbon ---- */
+.cards { display:flex; gap:8px; align-items:stretch; flex-wrap:wrap; }
+.card { flex:1 1 150px; min-width:150px; border-radius:8px; padding:8px 10px; border:1px solid rgba(255,255,255,.14); cursor:pointer; }
+.card b { display:block; font-size:13px; } .card span { font-size:12px; opacity:.9; }
+.card.now { outline:2px solid #fff; }
+.clock { margin-left:auto; text-align:right; min-width:150px; }
+.clock .big { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+#ribbonWrap { overflow-x:auto; overflow-y:hidden; background:linear-gradient(#cfc4b3,#bdb09c); border-radius:8px; border:1px solid var(--line); }
+#ribbon { display:block; }
+.erabar { display:flex; height:22px; border-radius:11px; overflow:hidden; margin-top:10px; border:1px solid var(--line); }
+.erabar div { display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:#0b0f16; white-space:nowrap; overflow:hidden; cursor:pointer; }
+#slider { width:100%; margin:6px 0 0; accent-color:var(--accent); }
+.controls { display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap; }
+.split { display:grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap:14px; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+canvas.brain { width:100%; height:380px; background:#0b101a; border-radius:8px; border:1px solid var(--line); display:block; }
+.event h2 { font-size:17px; } .event .when { color:var(--dim); font-size:12px; }
+.legend span { margin-right:12px; font-size:12px; color:var(--dim); white-space:nowrap; }
+.dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+
+/* ---- Strata ---- */
+table.column { border-collapse:separate; border-spacing:0; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+table.column th { background:#0b101a; }
+table.column td { border-bottom:1px solid rgba(0,0,0,.35); color:#0b0f16; padding:8px 12px; }
+td.eon { width:64px; text-align:center; font-weight:700; padding:6px; }
+td.eon span { writing-mode:vertical-rl; transform:rotate(180deg); white-space:nowrap; }
+td.stage { width:190px; border-left:1px solid rgba(0,0,0,.35); } td.stage b { font-size:15px; } td.stage div { font-size:12px; opacity:.85; }
+table.column td.when { width:84px; background:#0b101a; color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; vertical-align:bottom; text-align:right; border-bottom:1px solid var(--line); }
+td.period { position:relative; } td.period .tint { position:absolute; inset:0; background:rgba(255,255,255,.34); }
+td.period .long { font-size:12px; opacity:.75; }
+.marker { float:right; background:#101622; color:#ff8f8f; border-radius:10px; padding:1px 9px; font-size:11px; font-weight:600; }
+.fossils { margin-top:5px; display:flex; flex-wrap:wrap; gap:4px; }
+.fossil { width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.6); display:inline-flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; border:1px solid rgba(0,0,0,.25); }
+.fossil:hover { background:#fff; } .fossil.lost { background:#2a1014; border:2px solid #ff5a5a; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧪 Dosidicus Laboratory</h1>
+  <span class="sub">Whole lives and populations, read from save files. Nothing leaves this page.</span>
+  <label class="filebtn" style="margin-left:auto">📂 Add saves (.zip)
+    <input id="files" type="file" accept=".zip" multiple style="display:none"></label>
+  <label class="filebtn">📜 Add a session (.json)
+    <input id="sessionFile" type="file" accept=".json" style="display:none"></label>
+  <a class="filebtn" href="SaveViewer.html" style="text-decoration:none">Save Viewer</a>
+  <a class="filebtn" href="SquidBreeder.html" style="text-decoration:none">Breeder</a>
+</header>
+<nav id="nav"></nav>
+<main id="main"></main>
+
+<script>
+const {el, age, KINDS, ERA_COLOURS, NEURON_COLOURS, GAME} = Lab;
+const specimens = [];
+let active = null;            // the specimen being examined
+let chosen = new Set();       // specimens ticked for comparing
+let session = null;
+let view = 'specimens';
+let at = 0;                   // index of the life event the slider is on
+let playing = null;
+
+const VIEWS = [
+  ['specimens', '🦑 Specimens'], ['history', '📜 History'], ['strata', '🪨 Strata'],
+  ['why', '❓ Why'], ['family', '🌳 Family'], ['compare', '⚖️ Compare'], ['session', '📡 Session'],
+];
+
+function words(name) { return String(name).replace(/_/g, ' '); }
+function signed(n) { n = Math.round(n * 100) / 100; return (n > 0 ? '+' : '') + n; }
+
+function show(which) {
+  view = which || view;
+  if (playing) { clearInterval(playing); playing = null; }
+  const nav = document.getElementById('nav');
+  nav.replaceChildren(...VIEWS.map(([key, label]) =>
+    el('button', {class: key === view ? 'on' : '', onclick: () => show(key)}, label)));
+  if (active) nav.appendChild(el('span', {class: 'dim', style: 'margin-left:auto;align-self:center'},
+    `Examining: ${active.name}${active.personality ? ' (' + active.personality + ')' : ''}`));
+  const main = document.getElementById('main');
+  main.replaceChildren();
+  ({specimens: viewSpecimens, history: viewHistory, strata: viewStrata, why: viewWhy,
+    family: viewFamily, compare: viewCompare, session: viewSession})[view](main);
+}
+
+function needsSpecimen(main) {
+  if (!active) { main.appendChild(el('div', {class: 'empty'}, 'Add a save and pick a squid on the Specimens tab.')); return true; }
+  return false;
+}
+function needsTimeline(main) {
+  if (needsSpecimen(main)) return true;
+  if (!active.timeline) {
+    main.appendChild(el('div', {class: 'panel'},
+      el('h2', {}, `${active.name}'s save has no life timeline`),
+      el('p', {}, 'The game writes a squid\'s life in order into its save from 3.5 on. ' +
+                  'Open this squid in the game and save it again, or run:'),
+      el('pre', {}, 'python tools/add_timeline.py ' + active.file)));
+    return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------- Specimens
+function viewSpecimens(main) {
+  if (!specimens.length) {
+    main.appendChild(el('div', {class: 'empty'},
+      el('p', {style: 'font-size:16px;color:var(--ink)'}, 'Add one or more squid saves to begin.'),
+      el('p', {}, 'Saves are the .zip files in the game\'s saves folder. Add several to compare a population.'),
+      el('p', {}, 'This is the laboratory for whole lives, outside the game. For a single neuron in a living squid, ' +
+                  'double-click it in the game\'s Brain window to open the Neuron Laboratory.')));
+    return;
+  }
+  const cols = [
+    ['', s => el('input', {type: 'checkbox', ...(chosen.has(s) ? {checked: ''} : {}),
+        onclick: e => { e.stopPropagation(); chosen.has(s) ? chosen.delete(s) : chosen.add(s); }})],
+    ['Squid', s => s.name], ['Save', s => el('span', {class: 'dim'}, s.file)], ['Personality', s => s.personality],
+    ['Stage of life', s => ({living: 'living', parent: 'parent', dead: 'dead'})[s.life.stage] || '—'],
+    ['Age', s => age(s.stats.total_age_seconds || (s.timeline && s.timeline.age_seconds) || 0)],
+    ['Neurons', s => s.timeline ? `${s.timeline.counts.neurons_at_birth} + ${s.timeline.counts.neurons_grown} grown` : '—'],
+    ['Links learned', s => s.timeline ? s.timeline.counts.connections_learned : '—'],
+    ['Fights', s => `${s.stats.fights_won || 0} won, ${s.stats.fights_lost || 0} lost`],
+    ['Squid met', s => s.timeline ? new Set(s.timeline.events.filter(e => e.who).map(e => e.who)).size : '—'],
+    ['Beliefs', s => s.timeline ? `${s.timeline.counts.belief || 0} formed, ${s.timeline.counts.belief_dropped || 0} dropped` : '—'],
+    ['Parents', s => s.timeline && s.timeline.lineage.parents.length ? s.timeline.lineage.parents.join(' × ') : 'fresh egg'],
+    ['Life events', s => s.timeline ? s.timeline.events.length : 'no timeline'],
+  ];
+  const table = el('table', {},
+    el('thead', {}, el('tr', {}, cols.map(c => el('th', {}, c[0])))),
+    el('tbody', {}, specimens.map(s => el('tr', {class: 'pick' + (s === active ? ' active' : ''),
+      onclick: () => { active = s; at = 0; show('history'); }}, cols.map(c => el('td', {}, c[1](s)))))));
+  main.appendChild(el('div', {class: 'panel'}, el('h2', {}, `${specimens.length} specimen${specimens.length > 1 ? 's' : ''}`),
+    table, el('p', {class: 'note'}, 'Click a squid to examine it. Tick two or more and open Compare.')));
+}
+
+// ------------------------------------------------------------------ History
+// After Spore's History: a ribbon through time with every life event on it,
+// the turning points as big nodes, what was gained hanging beneath them, the
+// stages of the life along the bottom with a handle to slide through it.
+function fortune(event) {
+  if (event.kind === 'fight') return /^Won/.test(event.title) ? 1.2 : -1.6;
+  if (event.kind === 'encounter' || event.kind === 'mating') return Math.max(-1.5, Math.min(1.5, ((event.detail || {}).valence || 0) / 12));
+  if (event.kind === 'neuron') return 0.5;
+  if (event.kind === 'death') return -2;
+  if (event.kind === 'egg') return 0.8;
+  return 0;
+}
+
+function viewHistory(main) {
+  if (needsTimeline(main)) return;
+  const T = active.timeline, events = T.events;
+  at = Math.max(0, Math.min(at, events.length - 1));
+  const eraOf = key => T.eras.find(e => e.key === key) || T.eras[0];
+
+  // ---- stage cards and the clock ----
+  const cards = el('div', {class: 'cards'});
+  const clockBig = el('div', {class: 'big'});
+  const clockSmall = el('div', {class: 'dim'});
+  main.appendChild(el('div', {class: 'panel'}, cards));
+
+  // ---- the ribbon ----
+  const STEP = 54, LEFT = 60, MID = 210, HEIGHT = 470;
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('id', 'ribbon'); svg.setAttribute('height', HEIGHT);
+  const S = (tag, attrs, text) => { const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v);
+    if (text !== undefined) n.textContent = text; return n; };
+  const room = e => e.kind === 'neuron' ? 104 : ['hatched', 'egg', 'death', 'mating'].includes(e.kind) ? 76 : STEP;
+  const xs = []; let reach = LEFT;
+  events.forEach((e, i) => { reach += i ? (room(events[i - 1]) + room(e)) / 2 : 0; xs.push(reach); });
+  const width = Math.max(900, xs[xs.length - 1] + LEFT);
+  svg.setAttribute('width', width);
+  let level = 0;
+  const ys = events.map(e => { level = Math.max(-3.2, Math.min(3.2, level * 0.9 + fortune(e))); return MID - level * 26; });
+
+  // stage columns, like strata seen from the side
+  T.eras.forEach(era => {
+    const first = events.findIndex(e => e.era === era.key); if (first < 0) return;
+    let last = first; while (last + 1 < events.length && events[last + 1].era === era.key) last++;
+    const x0 = first ? (xs[first - 1] + xs[first]) / 2 : 0;
+    const x1 = last + 1 < events.length ? (xs[last] + xs[last + 1]) / 2 : width;
+    svg.appendChild(S('rect', {x: x0, y: 0, width: x1 - x0, height: HEIGHT, fill: ERA_COLOURS[era.key] || '#888', opacity: 0.16}));
+    svg.appendChild(S('line', {x1: x0, y1: 0, x2: x0, y2: HEIGHT, stroke: 'rgba(0,0,0,.25)'}));
+    if (x1 - x0 > era.title.length * 7.5 + 10)
+      svg.appendChild(S('text', {x: x0 + 6, y: HEIGHT - 8, 'font-size': 12, 'font-weight': 700, fill: 'rgba(0,0,0,.55)'}, era.title));
+  });
+  // the ruler: how old it was
+  events.forEach((e, i) => { if (i % 6 === 0) svg.appendChild(S('text', {x: xs[i], y: 14, 'font-size': 10, fill: 'rgba(0,0,0,.6)', 'text-anchor': 'middle'}, '+' + age(e.age))); });
+  // the ribbon itself
+  let d = `M ${xs[0] - 30} ${ys[0]}`;
+  events.forEach((e, i) => { if (i === 0) { d += ` L ${xs[0]} ${ys[0]}`; return; }
+    const mx = (xs[i - 1] + xs[i]) / 2; d += ` C ${mx} ${ys[i - 1]}, ${mx} ${ys[i]}, ${xs[i]} ${ys[i]}`; });
+  d += ` L ${xs[xs.length - 1] + 30} ${ys[ys.length - 1]}`;
+  svg.appendChild(S('path', {d, fill: 'none', stroke: '#8fd3dc', 'stroke-width': 22, 'stroke-linecap': 'round', opacity: 0.95}));
+  svg.appendChild(S('path', {d, fill: 'none', stroke: '#d9f3f6', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: 0.8}));
+
+  const markers = [];
+  events.forEach((e, i) => {
+    const kind = KINDS[e.kind] || KINDS.memory;
+    const g = S('g', {style: 'cursor:pointer'});
+    const x = xs[i], y = ys[i];
+    const major = ['neuron', 'hatched', 'egg', 'death', 'mating'].includes(e.kind);
+    const bad = e.kind === 'fight' || (e.kind === 'encounter' && ((e.detail || {}).valence || 0) < 0) || e.kind === 'death';
+    if (e.kind === 'neuron') {
+      // a turning point: a big node, with what it was wired to hanging beneath
+      g.appendChild(S('rect', {x: x - 22, y: y - 22, width: 44, height: 44, rx: 12, fill: '#ffffff', stroke: '#c9c9d6', 'stroke-width': 2}));
+      g.appendChild(S('text', {x, y: y + 9, 'font-size': 26, 'text-anchor': 'middle'}, '🧠'));
+      g.appendChild(S('text', {x, y: y - 30, 'font-size': 11, 'font-weight': 700, 'text-anchor': 'middle', fill: '#1b2333'}, words(e.neuron)));
+      const wired = T.connections.filter(c => (c.source === e.neuron || c.target === e.neuron) && c.since && Math.abs(c.since - e.t) < 2).slice(0, 7);
+      wired.forEach((c, k) => {
+        const other = c.source === e.neuron ? c.target : c.source, yy = y + 34 + k * 24;
+        g.appendChild(S('path', {d: `M ${x - 46} ${yy} h 92 v 14 l -46 8 l -46 -8 z`, fill: '#9aa3ad', stroke: '#6d7680'}));
+        g.appendChild(S('text', {x, y: yy + 11, 'font-size': 9.5, 'text-anchor': 'middle', fill: '#10151d'}, (c.source === e.neuron ? '→ ' : '← ') + words(other).slice(0, 16)));
+      });
+    } else if (major) {
+      g.appendChild(S('circle', {cx: x, cy: y, r: 19, fill: kind.colour, stroke: '#33384a', 'stroke-width': 2}));
+      g.appendChild(S('text', {x, y: y + 8, 'font-size': 22, 'text-anchor': 'middle'}, kind.icon));
+    } else if (bad) {
+      g.appendChild(S('circle', {cx: x, cy: y, r: 13, fill: '#2a1014', stroke: '#ff5a5a', 'stroke-width': 3}));
+      g.appendChild(S('text', {x, y: y + 5, 'font-size': 13, 'text-anchor': 'middle'}, kind.icon));
+      const lost = e.kind === 'fight' && !/^Won/.test(e.title);
+      g.appendChild(S('path', lost ? {d: `M ${x - 8} ${y + 18} l 8 7 l 8 -7 z M ${x - 8} ${y + 26} l 8 7 l 8 -7 z`, fill: '#e03131'}
+                                   : {d: `M ${x - 8} ${y - 18} l 8 -7 l 8 7 z`, fill: e.kind === 'fight' ? '#2fb344' : '#e03131'}));
+    } else if (e.kind === 'encounter' || e.kind === 'belief') {
+      g.appendChild(S('ellipse', {cx: x, cy: y, rx: 15, ry: 11, fill: '#2fd35a', stroke: '#167a31', 'stroke-width': 2}));
+      g.appendChild(S('text', {x, y: y + 5, 'font-size': 12, 'text-anchor': 'middle'}, kind.icon));
+    } else {
+      g.appendChild(S('circle', {cx: x, cy: y, r: e.kind === 'association' ? 6 : 9, fill: kind.colour, stroke: '#3a4254', 'stroke-width': 1.5, opacity: e.kind === 'belief_dropped' ? 0.7 : 1}));
+    }
+    const ring = S('circle', {cx: x, cy: y, r: major ? 30 : 20, fill: 'none', stroke: '#111', 'stroke-width': 3, 'stroke-dasharray': '5 4', visibility: 'hidden'});
+    g.appendChild(ring);
+    g.appendChild(S('title', {}, `+${age(e.age)}  ${e.title}`));
+    g.addEventListener('click', () => go(i));
+    svg.appendChild(g); markers.push(ring);
+  });
+  const wrap = el('div', {id: 'ribbonWrap'}); wrap.appendChild(svg);
+
+  const erabar = el('div', {class: 'erabar'});
+  T.eras.forEach(era => {
+    const n = events.filter(e => e.era === era.key).length; if (!n) return;
+    erabar.appendChild(el('div', {style: `flex:${n};background:${ERA_COLOURS[era.key] || '#888'}`, title: era.about,
+      onclick: () => go(events.findIndex(e => e.era === era.key))}, era.title));
+  });
+  const slider = el('input', {id: 'slider', type: 'range', min: 0, max: events.length - 1, step: 1, value: at});
+  slider.addEventListener('input', () => go(Number(slider.value), true));
+  const playBtn = el('button', {onclick: () => {
+    if (playing) { clearInterval(playing); playing = null; playBtn.textContent = '▶ Play its life'; return; }
+    if (at >= events.length - 1) go(0);
+    playBtn.textContent = '⏸ Pause';
+    playing = setInterval(() => { if (at >= events.length - 1) { clearInterval(playing); playing = null; playBtn.textContent = '▶ Play its life'; } else go(at + 1); }, 650);
+  }}, '▶ Play its life');
+  const legend = el('div', {class: 'legend'}, Object.entries(KINDS).filter(([k]) => T.counts[k]).map(([k, v]) =>
+    el('span', {}, `${v.icon} ${v.label} (${T.counts[k]})`)));
+  main.appendChild(el('div', {class: 'panel'},
+    el('div', {style: 'display:flex;align-items:flex-end;gap:12px;margin-bottom:8px'},
+      el('div', {}, el('h2', {}, `${T.squid.name}'s history`), legend),
+      el('div', {class: 'clock'}, clockBig, clockSmall)),
+    wrap, erabar, slider,
+    el('div', {class: 'controls'},
+      el('button', {onclick: () => go(at - 1)}, '◀ Earlier'), el('button', {onclick: () => go(at + 1)}, 'Later ▶'), playBtn,
+      el('span', {class: 'note'}, 'Slide through every event of its life. The brain below is the brain it had at that moment.'))));
+
+  // ---- the brain at that moment, and the event ----
+  const canvas = el('canvas', {class: 'brain'});
+  const brainNote = el('div', {class: 'note', style: 'margin-top:6px'});
+  const eventBox = el('div', {class: 'panel event'});
+  const brainLegend = el('div', {class: 'legend', style: 'margin-top:6px'}, Object.entries(NEURON_COLOURS).filter(([k]) => k !== 'neuron').map(([k, c]) =>
+    el('span', {}, el('span', {class: 'dot', style: `background:${c}`}), k)));
+  main.appendChild(el('div', {class: 'split'},
+    el('div', {class: 'panel'}, el('h2', {}, 'The brain at this moment'), canvas, brainLegend, brainNote), eventBox));
+
+  function go(index, fromSlider) {
+    at = Math.max(0, Math.min(events.length - 1, index));
+    const e = events[at], kind = KINDS[e.kind] || KINDS.memory, era = eraOf(e.era);
+    if (!fromSlider) slider.value = at;
+    markers.forEach((ring, i) => ring.setAttribute('visibility', i === at ? 'visible' : 'hidden'));
+    wrap.scrollTo({left: Math.max(0, xs[at] - wrap.clientWidth / 2), behavior: playing || fromSlider ? 'auto' : 'smooth'});
+    clockBig.textContent = age(e.age);
+    clockSmall.textContent = `old · event ${at + 1} of ${events.length}`;
+    cards.replaceChildren(...T.eras.map(x => {
+      const mine = events.filter(v => v.era === x.key);
+      return el('div', {class: 'card' + (x.key === e.era ? ' now' : ''), style: `background:${ERA_COLOURS[x.key] || '#888'};color:#0b0f16`,
+        title: x.about, onclick: () => go(events.findIndex(v => v.era === x.key))},
+        el('b', {}, x.title), el('span', {}, `from ${age(x.age)} · ${mine.length} events`));
+    }));
+    const highlight = e.kind === 'neuron' ? [e.neuron] : e.kind === 'association' ? e.edge : [];
+    const drawn = Lab.drawBrain(canvas, T, e.t, {highlight, fresh: 1.5});
+    brainNote.textContent = `${drawn.neurons} neurons, ${drawn.connections} connections. ` +
+      'Connections are drawn at the strength they have now; when each first formed is recorded, its strength at the time is not.';
+    const detail = e.detail || {};
+    eventBox.replaceChildren(...[
+      el('div', {class: 'when'}, `${kind.icon} ${kind.label} · at ${age(e.age)} old · ${era.title}`),
+      el('h2', {}, e.title), el('p', {}, e.text || ''),
+      detail.for ? el('p', {class: 'dim'}, 'What it is for: ' + detail.for) : null,
+      detail.cost && Object.keys(detail.cost).length ? el('p', {}, 'What it cost: ' +
+        Object.entries(detail.cost).filter(([, v]) => v).map(([k, v]) => `${k} ${signed(v)}`).join(', ')) : null,
+      detail.why && detail.why.aggression !== undefined ? el('p', {class: 'dim'},
+        `${detail.started_it ? 'It started it' : 'It was attacked'}; the attacker's aggression was ${Math.round(detail.why.aggression)}.`) : null,
+      detail.by && Object.keys(detail.by).length ? el('p', {class: 'dim'}, 'Changed by: ' +
+        Object.entries(detail.by).map(([k, v]) => `${words(k)} ×${v}`).join(', ')) : null,
+      e.lasting === false ? el('p', {class: 'note'}, 'A short-term memory: it may be forgotten.') : null,
+    ].filter(Boolean));
+  }
+  go(at);
+  window.addEventListener('resize', () => view === 'history' && go(at, true), {once: true});
+}
+
+// ------------------------------------------------------------------- Strata
+// After a geologic column: oldest at the bottom; the life divided into two
+// ages, each into stages, each stage into the periods that a turning point
+// began. What lived in a period is drawn in it; what it lost is marked.
+function periodsOf(T) {
+  const turning = ['neuron', 'mating', 'egg', 'death', 'hatched'];
+  const periods = []; let fought = false;
+  T.events.forEach((e, i) => {
+    const last = periods[periods.length - 1];
+    const firstFight = e.kind === 'fight' && !fought; if (e.kind === 'fight') fought = true;
+    const turns = turning.includes(e.kind) || firstFight;
+    // neurons that grew in the same few seconds grew for the same reason
+    const together = last && e.kind === 'neuron' && last.events.every(v => v.kind === 'neuron') && e.t - last.to < 5 && last.era === e.era;
+    if (together) { last.events.push({e, i}); last.to = e.t; last.names.push(words(e.neuron)); return; }
+    if (!last || last.era !== e.era || turns) {
+      periods.push({era: e.era, from: e.t, to: e.t, events: [{e, i}], start: e,
+        names: e.kind === 'neuron' ? [words(e.neuron)] : [], firstFight});
+    } else { last.events.push({e, i}); last.to = e.t; }
+  });
+  periods.forEach((p, k) => {
+    p.until = k + 1 < periods.length ? periods[k + 1].from : (T.ended_at || p.to);
+    const s = p.start;
+    p.name = p.names.length ? 'Grew ' + p.names.join(', ')
+      : s.kind === 'hatched' ? 'Hatched' : p.firstFight ? 'First fight' : s.kind === 'mating' ? 'Mated'
+      : s.kind === 'egg' ? 'Laid an egg' : s.kind === 'death' ? s.title
+      : s.kind === 'association' ? 'First links of its own' : s.kind === 'encounter' ? 'Met another squid' : s.title;
+  });
+  return periods;
+}
+
+function viewStrata(main) {
+  if (needsTimeline(main)) return;
+  const T = active.timeline;
+  const alone = ['hatchling', 'learning', 'growing'];
+  const eonOf = key => alone.includes(key) ? 'A life alone' : 'Among other squid';
+  const periods = periodsOf(T).reverse();
+  const lost = e => (e.kind === 'fight' && !/^Won/.test(e.title)) || e.kind === 'pruned' || e.kind === 'belief_dropped' || e.kind === 'death';
+  const body = el('tbody');
+  periods.forEach((p, k) => {
+    const era = T.eras.find(x => x.key === p.era) || {title: p.era, about: ''};
+    const tr = el('tr');
+    const span = (same) => { let n = 1; while (k + n < periods.length && same(periods[k + n])) n++; return n; };
+    if (k === 0 || eonOf(periods[k - 1].era) !== eonOf(p.era))
+      tr.appendChild(el('td', {class: 'eon', rowspan: span(q => eonOf(q.era) === eonOf(p.era)),
+        style: `background:${eonOf(p.era) === 'A life alone' ? '#8aa3b8' : '#e2b84a'}`}, el('span', {}, eonOf(p.era))));
+    if (k === 0 || periods[k - 1].era !== p.era)
+      tr.appendChild(el('td', {class: 'stage', rowspan: span(q => q.era === p.era), title: era.about,
+        style: `background:${ERA_COLOURS[p.era] || '#888'}`}, el('b', {}, era.title), el('div', {}, era.about)));
+    tr.appendChild(el('td', {class: 'when'}, age(p.from - T.born_at)));
+    const count = (test, one, many) => { const n = p.events.filter(v => test(v.e)).length; return n ? `${n} ${n > 1 ? many : one}` : null; };
+    const losses = [count(e => e.kind === 'fight' && lost(e), 'fight lost', 'fights lost'),
+      count(e => e.kind === 'belief_dropped', 'belief given up', 'beliefs given up'),
+      count(e => e.kind === 'pruned', 'neuron lost', 'neurons lost'), count(e => e.kind === 'death', 'life', 'lives')].filter(Boolean).join(', ');
+    const icons = el('div', {class: 'fossils'}, p.events.map(v => {
+      const kind = KINDS[v.e.kind] || KINDS.memory;
+      return el('span', {class: 'fossil' + (lost(v.e) ? ' lost' : ''), title: `+${age(v.e.age)}  ${v.e.title}`,
+        onclick: () => { at = v.i; show('history'); }}, kind.icon);
+    }));
+    tr.appendChild(el('td', {class: 'period', style: `background:${ERA_COLOURS[p.era] || '#888'}`},
+      el('div', {class: 'tint'}),
+      el('div', {style: 'position:relative'},
+        el('b', {}, p.name), el('span', {class: 'long'}, `  ${age(p.until - p.from)} long · ${p.events.length} event${p.events.length > 1 ? 's' : ''}`),
+        losses ? el('span', {class: 'marker'}, '✖ ' + losses) : null,
+        icons)));
+    body.appendChild(tr);
+  });
+  main.appendChild(el('div', {class: 'panel'},
+    el('h2', {}, `${T.squid.name}'s life, in layers`),
+    el('p', {class: 'note'}, 'Oldest at the bottom, as rock is laid down. Two ages, their stages, and within each stage the periods that a turning point began: ' +
+      'a neuron grown, a first fight, a mating, a death. Each mark in a layer is one event of that period; red marks are what it lost: a fight, a belief it gave up, a neuron, its life. Click any mark to go to that moment in History.'),
+    el('table', {class: 'column'},
+      el('thead', {}, el('tr', {}, ['Age', 'Stage', 'Began at', 'Period, and what happened in it'].map(h => el('th', {}, h)))), body)));
+}
+
+// ---------------------------------------------------------------------- Why
+function viewWhy(main) {
+  if (needsTimeline(main)) return;
+  const T = active.timeline;
+  const mech = {innate: 'born with it', inheritance: 'inherited from a parent', hebbian: 'two neurons firing together',
+    stdp: 'one neuron firing just before another', reflex: 'an inborn reflex', causal_reward: 'what an action led to',
+    consolidation: 'replayed in sleep', neurogenesis: 'wired when a neuron grew', encounter: 'an encounter with another squid'};
+  const grown = T.neurons.filter(n => n.born).sort((a, b) => a.born - b.born);
+  main.appendChild(el('div', {class: 'panel'}, el('h2', {}, 'Why each neuron it grew exists'),
+    grown.length ? el('table', {}, el('thead', {}, el('tr', {}, ['Neuron', 'Kind', 'Grew at', 'Because', 'What it is for'].map(h => el('th', {}, h)))),
+      el('tbody', {}, grown.map(n => el('tr', {}, el('td', {}, words(n.name)), el('td', {}, n.kind),
+        el('td', {}, age(n.born - T.born_at)), el('td', {}, n.why || '—'), el('td', {class: 'dim'}, n['for'] || '')))))
+      : el('p', {class: 'dim'}, 'It has grown no neuron of its own: it has only those every squid hatches with.')));
+  main.appendChild(el('div', {class: 'panel', style: 'border-color:#3b5a86'},
+    el('b', {}, 'One neuron, live? '),
+    'That is the Neuron Laboratory inside the game: double-click any neuron in the Brain window. It shows the neuron as it is right now, ' +
+    'what it means, what it would do to the others, and lets you change it. This page does not: it reads a finished save, ' +
+    'and shows why the whole brain came to be as it is.'));
+  const filter = el('input', {type: 'search', placeholder: 'filter by neuron name…', style: 'padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:#0b101a;color:var(--ink);width:240px'});
+  const only = el('select', {style: 'padding:5px;border-radius:6px;background:#0b101a;color:var(--ink);border:1px solid var(--line)'},
+    el('option', {value: 'learned'}, 'Links it made itself'), el('option', {value: 'all'}, 'Every connection'), el('option', {value: 'innate'}, 'Born with'));
+  const body = el('tbody');
+  function fill() {
+    const q = filter.value.trim().toLowerCase();
+    const rows = T.connections.filter(c => (only.value === 'all' || (only.value === 'innate') === c.innate)
+      && (!q || (c.source + ' ' + c.target).replace(/_/g, ' ').toLowerCase().includes(q)))
+      .sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
+    body.replaceChildren(...rows.slice(0, 300).map(c => el('tr', {},
+      el('td', {}, `${words(c.source)} → ${words(c.target)}`),
+      el('td', {class: c.weight >= 0 ? 'good' : 'bad'}, signed(c.weight)),
+      el('td', {}, c.since ? age(c.since - T.born_at) : 'hatching'),
+      el('td', {}, Object.entries(c.times).sort((a, b) => b[1] - a[1]).map(([k, n]) =>
+        el('span', {class: 'chip', title: `moved it by ${signed(c.by[k] || 0)} in all`}, `${mech[k] || words(k)} ×${n}`))))));
+    count.textContent = `${rows.length} connection${rows.length === 1 ? '' : 's'}` + (rows.length > 300 ? ' (first 300 shown)' : '');
+  }
+  const count = el('span', {class: 'note'});
+  filter.addEventListener('input', fill); only.addEventListener('change', fill);
+  main.appendChild(el('div', {class: 'panel'}, el('h2', {}, 'Why each connection is as it is'),
+    el('div', {class: 'controls', style: 'margin-bottom:8px'}, filter, only, count),
+    el('table', {}, el('thead', {}, el('tr', {}, ['Connection', 'Strength now', 'First formed', 'What has changed it, and how often'].map(h => el('th', {}, h)))), body),
+    el('p', {class: 'note'}, 'Every change to a connection is recorded by the game with the mechanism that made it. Hover a mechanism for how far it has moved the connection in total.')));
+  fill();
+}
+
+// ------------------------------------------------------------------- Family
+function viewFamily(main) {
+  if (needsSpecimen(main)) return;
+  const T = active.timeline, life = active.life || {};
+  const lineage = T ? T.lineage : {parents: [], inherited: []};
+  const box = el('div', {class: 'panel'}, el('h2', {}, `${active.name}'s family`));
+  if (lineage.parents.length) {
+    const inherited = lineage.inherited;
+    box.append(el('p', {}, `Hatched from the egg of ${lineage.parents.join(' and ')}` +
+      (lineage.bred_by ? ` (bred with the ${lineage.bred_by})` : '') + '.'),
+      el('p', {}, lineage.parents.map(p => el('span', {class: 'chip'},
+        `${p}: ${inherited.filter(g => g.parent === p).length} synapses`)),
+        el('span', {class: 'chip'}, `${inherited.filter(g => g.mutated).length} mutated`)));
+    if (inherited.length) box.append(el('table', {}, el('thead', {}, el('tr', {}, ['Synapse', 'From', 'Weight it was given', 'Mutated', 'Weight now'].map(h => el('th', {}, h)))),
+      el('tbody', {}, inherited.map(g => { const now = T.connections.find(c => c.source === g.synapse[0] && c.target === g.synapse[1]);
+        return el('tr', {}, el('td', {}, `${words(g.synapse[0])} → ${words(g.synapse[1])}`), el('td', {}, g.parent),
+          el('td', {}, signed(g.weight)), el('td', {}, g.mutated ? 'yes' : ''), el('td', {class: 'dim'}, now ? signed(now.weight) : 'gone')); }))));
+  } else {
+    box.append(el('p', {}, 'Hatched from a fresh egg: it has no parents on record, and the wiring every squid is born with.'));
+  }
+  main.appendChild(box);
+  const next = el('div', {class: 'panel'}, el('h2', {}, 'What comes after it'));
+  if (life.reproduction) {
+    const genes = (life.egg && life.egg.genes) || {};
+    next.append(el('p', {}, `It mated with ${life.reproduction.mate_name || 'another squid'} and laid an egg` +
+      (life.egg ? ` (${life.egg.state}).` : '.')),
+      Object.keys(genes).length ? el('p', {}, 'The egg carries: ', Object.entries(genes).map(([p, g]) =>
+        el('span', {class: 'chip'}, `${p}: ${Object.keys(g || {}).length} synapses`))) : el('p', {class: 'dim'}, 'The egg carries no inherited weights yet.'),
+      el('p', {class: 'note'}, 'A parent stops eating; when it dies its egg hatches into a squid with half of each parent\'s inborn wiring. Nothing either parent learned or grew is passed on.'));
+  } else {
+    next.append(el('p', {class: 'dim'}, life.stage === 'dead' ? 'It died without an egg: a fresh egg hatches in its tank.'
+      : 'It has not mated. Mating only ever happens when it shares a tank with another squid, and rarely.'));
+  }
+  main.appendChild(next);
+  const stones = ((active.save.game_state || {}).decorations || []).filter(d => d && (d.deceased || /headstone/i.test(d.filename || '')));
+  if (stones.length) main.appendChild(el('div', {class: 'panel'}, el('h2', {}, 'Who lived in this tank before it'),
+    el('table', {}, el('thead', {}, el('tr', {}, ['Squid', 'Lived', 'Died of', 'Fights'].map(h => el('th', {}, h)))),
+      el('tbody', {}, stones.map(s => el('tr', {}, el('td', {}, '🪦 ' + (s.deceased || 'A squid')), el('td', {}, s.age_seconds ? age(s.age_seconds) : '—'),
+        el('td', {}, s.died_of || '—'), el('td', {}, s.fights_won !== undefined ? `${s.fights_won} won, ${s.fights_lost || 0} lost` : '—')))))));
+}
+
+// ------------------------------------------------------------------ Compare
+function viewCompare(main) {
+  const set = [...chosen].filter(s => specimens.includes(s));
+  if (set.length < 2) { main.appendChild(el('div', {class: 'empty'}, 'Tick two or more squid on the Specimens tab to compare them.')); return; }
+  const squidOf = s => (s.save.game_state || {}).squid || {};
+  const row = (label, fn) => el('tr', {}, el('th', {}, label), set.map(s => el('td', {}, fn(s))));
+  const head = s => el('th', {}, s.name, el('div', {class: 'note', style: 'font-weight:400'}, s.file));
+  const drives = ['hunger', 'happiness', 'cleanliness', 'sleepiness', 'satisfaction', 'anxiety', 'curiosity', 'health'];
+  main.appendChild(el('div', {class: 'panel'}, el('h2', {}, 'Side by side'),
+    el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, ''), set.map(head))),
+      el('tbody', {},
+        row('Personality', s => s.personality), row('Stage of life', s => s.life.stage || '—'),
+        row('Age', s => age(s.stats.total_age_seconds || 0)),
+        row('Parents', s => s.timeline && s.timeline.lineage.parents.length ? s.timeline.lineage.parents.join(' × ') : 'fresh egg'),
+        drives.map(d => row(d[0].toUpperCase() + d.slice(1), s => squidOf(s)[d] === undefined ? '—' : Math.round(squidOf(s)[d]))),
+        row('Fights', s => `${s.stats.fights_won || 0} won, ${s.stats.fights_lost || 0} lost`),
+        row('Links learned', s => s.timeline ? s.timeline.counts.connections_learned : '—'),
+        row('Beliefs', s => s.timeline ? `${s.timeline.counts.belief || 0} formed, ${s.timeline.counts.belief_dropped || 0} dropped` : '—')))));
+
+  const withT = set.filter(s => s.timeline);
+  if (withT.length < 2) { main.appendChild(el('div', {class: 'panel'}, el('p', {class: 'dim'}, 'Brains can be compared once at least two of these saves carry a life timeline.'))); return; }
+  const grown = s => new Set(s.timeline.neurons.filter(n => n.born).map(n => n.name));
+  const allGrown = [...new Set(withT.flatMap(s => [...grown(s)]))].sort();
+  main.appendChild(el('div', {class: 'panel'}, el('h2', {}, 'Neurons each one grew'),
+    allGrown.length ? el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, 'Neuron'), withT.map(head))),
+      el('tbody', {}, allGrown.map(name => el('tr', {}, el('td', {}, words(name)), withT.map(s => {
+        const n = s.timeline.neurons.find(v => v.name === name && v.born);
+        return el('td', {}, n ? `at ${age(n.born - s.timeline.born_at)}` : el('span', {class: 'dim'}, '—')); })))))
+      : el('p', {class: 'dim'}, 'None of them has grown a neuron.')));
+
+  const maps = withT.map(s => { const m = new Map(); s.timeline.connections.forEach(c => m.set(c.source + '|' + c.target, c.weight)); return m; });
+  const keys = [...new Set(maps.flatMap(m => [...m.keys()]))];
+  const spread = keys.map(k => { const v = maps.map(m => m.has(k) ? m.get(k) : null);
+    const have = v.filter(x => x !== null); const gap = have.length > 1 ? Math.max(...have) - Math.min(...have) : Math.abs(have[0] || 0);
+    return {k, v, gap, missing: v.some(x => x === null)}; }).sort((a, b) => b.gap - a.gap);
+  main.appendChild(el('div', {class: 'panel'}, el('h2', {}, 'Where their wiring differs most'),
+    el('p', {class: 'note'}, `${keys.length} connections between them; ${spread.filter(r => r.missing).length} are not in every brain. The 60 that differ most:`),
+    el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, 'Connection'), withT.map(head), el('th', {}, 'Difference'))),
+      el('tbody', {}, spread.slice(0, 60).map(r => el('tr', {}, el('td', {}, r.k.split('|').map(words).join(' → ')),
+        r.v.map(x => el('td', {class: x === null ? 'dim' : x >= 0 ? 'good' : 'bad'}, x === null ? 'absent' : signed(x))),
+        el('td', {}, signed(r.gap).replace('+', ''))))))));
+}
+
+// ------------------------------------------------------------------ Session
+function viewSession(main) {
+  if (!session) { main.appendChild(el('div', {class: 'empty'}, 'Add a session.json written by tools/internet_session.py to read what happened between squid.')); return; }
+  const who = el('select', {style: 'padding:5px;border-radius:6px;background:#0b101a;color:var(--ink);border:1px solid var(--line)'},
+    el('option', {value: ''}, 'Every squid'), (session.players || []).map(p => el('option', {value: p.name}, p.name)));
+  const kinds = [...new Set((session.timeline || []).map(e => e.kind))].sort();
+  const kind = el('select', {style: who.style.cssText}, el('option', {value: ''}, 'Everything'), kinds.map(k => el('option', {value: k}, k)));
+  const body = el('tbody');
+  function fill() { body.replaceChildren(...(session.timeline || []).filter(e => (!who.value || e.who === who.value) && (!kind.value || e.kind === kind.value))
+    .slice(0, 1500).map(e => el('tr', {}, el('td', {class: 'dim'}, e.clock || ''), el('td', {}, e.who || ''), el('td', {}, e.kind || ''), el('td', {}, e.text || '')))); }
+  who.addEventListener('change', fill); kind.addEventListener('change', fill);
+  main.appendChild(el('div', {class: 'panel'}, el('h2', {}, `A session of ${(session.players || []).length} tanks, ${session.minutes || '?'} minutes`),
+    el('table', {}, el('thead', {}, el('tr', {}, ['Squid', 'Personality', 'Plays on', 'Friend code'].map(h => el('th', {}, h)))),
+      el('tbody', {}, (session.players || []).map(p => el('tr', {}, el('td', {}, p.name), el('td', {}, p.personality), el('td', {}, p.platform || 'desktop'), el('td', {}, p.friend_code || ''))))),
+    el('p', {}, Object.entries(session.counts || {}).sort().map(([k, n]) => el('span', {class: 'chip'}, `${k} ${n}`)))));
+  main.appendChild(el('div', {class: 'panel'}, el('div', {class: 'controls', style: 'margin-bottom:8px'}, who, kind),
+    el('table', {}, el('thead', {}, el('tr', {}, ['When', 'Squid', 'What', ''].map(h => el('th', {}, h)))), body)));
+  fill();
+}
+
+// --------------------------------------------------------------------- load
+document.getElementById('files').addEventListener('change', async event => {
+  const problems = [];
+  for (const file of event.target.files) {
+    try { const s = await Lab.readSave(file); specimens.push(s); if (!active) active = s; }
+    catch (e) { problems.push(`${file.name}: ${e.message}`); }
+  }
+  event.target.value = '';
+  if (problems.length) alert('Could not read:\n' + problems.join('\n'));
+  show(specimens.length === 1 && active && active.timeline ? 'history' : 'specimens');
+});
+document.getElementById('sessionFile').addEventListener('change', async event => {
+  try { session = JSON.parse(await event.target.files[0].text()); show('session'); }
+  catch (e) { alert('That is not a session file: ' + e.message); }
+  event.target.value = '';
+});
+show('specimens');
+</script>
+</body>
+</html>

@@ -14,6 +14,8 @@ SHARED_MODULES = (
     'social_knowledge', 'action_discovery',
     # A squid's colour as its identity carries it, and its decision to go out.
     'tint', 'venturing',
+    # The life in order, written into every save for the Laboratory pages.
+    'life_timeline',
 )
 
 #: The Qt-free half of the desktop's multiplayer plugin. The first group is

@@ -19,6 +19,16 @@ class DateTimeEncoder(json.JSONEncoder):
 def write_save_archive(path, sections, squid_uuid):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Every save carries the squid's life in order (life_timeline.py), for
+    # the Laboratory pages in extras/. The desktop game adds it itself, with
+    # its journey; anything else that writes a save - the phone - gets it
+    # here. A save is never held up by it.
+    if 'timeline' not in sections and isinstance(sections.get('brain_state'), dict):
+        try:
+            from .life_timeline import build
+            sections = dict(sections, timeline=build(sections))
+        except Exception as problem:                    # noqa: BLE001
+            print(f"[Warning] Could not write the life timeline: {problem}")
     temporary = path.with_name(path.name + '.tmp')
     try:
         with zipfile.ZipFile(temporary, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
