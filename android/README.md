@@ -134,6 +134,16 @@ android/
         └── nearby.py / nearby_screen.py   # local peer-to-peer visits
 ```
 
+## Save slots
+
+**Menu > Save slots** shows three slots, each a tank with its own squid, as on
+the desktop: an empty slot says *New game*, a slot in use carries its squid's
+name. Opening another slot saves the squid you leave. *Delete* asks twice and
+never deletes the squid being played. Saves are kept as the desktop keeps
+them, `saves/{uuid}.zip` with `saves/slots.json`, in the app's own storage
+(`src/save_slots.py` is shared). A squid from before there were slots becomes
+the squid in slot 1.
+
 ## Sharing squids (export / import)
 
 The hamburger menu (top-left) exports the current squid to a `.zip` in the same

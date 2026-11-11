@@ -61,7 +61,13 @@ class DosidicusApp(App):
 
     def build(self):
         Window.clearcolor = (0.04, 0.05, 0.08, 1)
-        self.save_path = os.path.join(self.user_data_dir, "squid_save.zip")
+        # Three save slots, each a tank with its own squid, kept as the
+        # desktop keeps them: saves/{uuid}.zip and saves/slots.json
+        # (src/save_slots.py). The one save a phone had before is moved in.
+        from src.save_slots import SaveSlots
+        self.slots = SaveSlots(os.path.join(self.user_data_dir, "saves"))
+        self._adopt_single_save()
+        self.slots.choose_startup_slot()
         self.sim = self._load_or_new()
         self._since_save = 0.0
         self._banner_until = 0.0
@@ -165,17 +171,43 @@ class DosidicusApp(App):
         return container
 
     # ---------------------------------------------------------- persistence
+    @property
+    def save_path(self):
+        """Where the squid being played is saved: saves/{its uuid}.zip."""
+        name = str(self.sim.squid.uuid).replace('-', '_') + '.zip'
+        return os.path.join(self.slots.directory, name)
+
+    def _adopt_single_save(self):
+        """Before slots a phone had one save, squid_save.zip. It becomes a
+        slot's squid, named after it like every other save."""
+        old = os.path.join(self.user_data_dir, "squid_save.zip")
+        if not os.path.exists(old):
+            return
+        from src.save_slots import squid_of
+        try:
+            squid = squid_of(old)
+            if squid:
+                os.makedirs(self.slots.directory, exist_ok=True)
+                target = os.path.join(self.slots.directory, squid.replace('-', '_') + '.zip')
+                if not os.path.exists(target):
+                    os.replace(old, target)
+                    self.slots.refresh()
+        except OSError as e:
+            print(f"[Dosidicus] Could not move the old save into a slot ({e}).")
+
     def _load_or_new(self):
         legacy_path = os.path.join(self.user_data_dir, 'squid_save.json')
-        for candidate in (self.save_path, legacy_path):
-            if not os.path.exists(candidate):
+        single = os.path.join(self.user_data_dir, 'squid_save.zip')
+        for candidate in (self.slots.path_for(), single, legacy_path):
+            if not candidate or not os.path.exists(candidate):
                 continue
+            if candidate != self.slots.path_for() and any(
+                    not entry['empty'] for entry in self.slots.describe()):
+                continue            # an older single save never stands in for an empty slot
             try:
                 sim = Simulation.load(candidate)
                 sim.tank_size = TANK_SIZE
                 sim.squid.tank_size = TANK_SIZE
-                if candidate == legacy_path:
-                    sim.save(self.save_path)
                 self._is_first_launch = False
                 return sim
             except Exception as e:
@@ -185,9 +217,43 @@ class DosidicusApp(App):
 
     def _save(self):
         try:
+            from src.save_slots import normal
+            squid = normal(self.sim.squid.uuid)
+            active = self.slots.active
+            held = self.slots.squid_in(active)
+            # The squid in this tank was replaced - it died and an heir
+            # hatched, or New game, or an import: the one before it is gone,
+            # as it always was when a phone had a single save. A squid that
+            # has a slot of its own is never the one replaced.
+            if held and held != squid and self.slots.slot_of(squid) is None:
+                self.slots.delete(active)
+            os.makedirs(self.slots.directory, exist_ok=True)
             self.sim.save(self.save_path)
+            self.slots.record_save(squid)
         except Exception as e:
             print(f"[Dosidicus] Save failed: {e}")
+
+    def open_slot(self, slot):
+        """Leave this tank for another slot's. The squid here is saved
+        first and keeps its save; a slot with a squid in it is loaded, an
+        empty one begins a new game."""
+        slot = int(slot)
+        if slot == self.slots.active:
+            return False
+        self._save()
+        self.slots.set_active(slot)
+        path = self.slots.path_for(slot)
+        if path:
+            try:
+                sim = Simulation.load(path)
+            except Exception as e:
+                print(f"[Dosidicus] Could not open slot {slot} ({e}).")
+                self.slots.record_save(self.sim.squid.uuid)     # stay where we were
+                return False
+            self.set_simulation(sim)
+        else:
+            self.new_game()
+        return True
 
     def save_now(self):
         self._save()

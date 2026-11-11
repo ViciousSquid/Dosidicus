@@ -16,6 +16,8 @@ SHARED_MODULES = (
     'tint', 'venturing',
     # The life in order, written into every save for the Laboratory pages.
     'life_timeline',
+    # Three save slots, kept as the desktop keeps them.
+    'save_slots',
 )
 
 #: The Qt-free half of the desktop's multiplayer plugin. The first group is

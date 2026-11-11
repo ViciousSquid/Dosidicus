@@ -61,6 +61,8 @@ whether to go. The steps are in `plugins/multiplayer/README`.
   parent's slot; *New game* replaces only the squid in the slot being played.
 - **Delete** removes one slot's squid, after asking twice. The squid being
   played cannot be deleted from the chooser.
+- **On the phone too:** *Menu > Save slots* is the same chooser. A phone's
+  existing squid becomes the squid in slot 1.
 - **Saves are the files they always were:** a zip named after the squid's
   uuid in the saves folder. Saves from earlier versions, and hatchlings from
   the Squid Breeder dropped into that folder, take a free slot by themselves.
