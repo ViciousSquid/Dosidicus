@@ -181,6 +181,7 @@ def stun_server(log_path):
 # ---------------------------------------------------------------------------
 def worker(output, number):
     name, personality_name, colour = PLAYERS[number - 1]
+    number_of_home = number
     folder = output / f'home{number}'
     shots = output / 'shots'
     folder.mkdir(parents=True, exist_ok=True)
@@ -229,9 +230,7 @@ def worker(output, number):
     def show_message(message, *a, **k):
         # The tank's own line about a fight in it ("Inky: Lost a fight when
         # it was attacked: ...") is the fight, for the record and the page.
-        text = str(message)
-        fought = ': Won a fight' in text or ': Lost a fight' in text
-        event('fight' if fought else 'message', text)
+        event('message', str(message))
         return report_message(message, *a, **k)
     window.user_interface.show_message = show_message
 
@@ -241,7 +240,14 @@ def worker(output, number):
     def memories():
         manager = getattr(window.squid, 'memory_manager', None)
         try:
-            return list(manager.get_all_short_term_memories(raw=True)) if manager else []
+            if not manager:
+                return []
+            found = list(manager.get_all_short_term_memories(raw=True))
+            try:        # a fight is filed for good, so it is in the long-term store
+                found += list(manager.get_all_long_term_memories())
+            except Exception:                           # noqa: BLE001
+                pass
+            return [m for m in found if isinstance(m, dict)]
         except Exception:
             return []
 
@@ -298,7 +304,10 @@ def worker(output, number):
         # a fight breaking out in this tank: pictured while the cloud is up
         starts = set(getattr(plugin, '_fight_starts', None) or ())
         for fight_id in starts - seen.setdefault('fight_starts', set()):
-            state['pending_fight_shot'] = time.monotonic() + 1.2
+            seen.setdefault('fight_order', []).append(fight_id)
+            state.setdefault('fight_shots', []).extend(
+                (time.monotonic() + wait, fight_id, tag)
+                for wait, tag in ((0.9, 'a'), (1.7, 'b'), (2.5, 'c')))
         seen['fight_starts'] |= starts
         # what it thinks
         thoughts = list(getattr(b, 'social_thoughts', None) or ())
@@ -319,10 +328,15 @@ def worker(output, number):
                 described = None
             text = described if isinstance(described, str) else (
                 ' - '.join(str(part) for part in described if part) if described else key)
-            event('fight' if key.startswith('fight:') else 'memory', text, key=key)
             if key.startswith('fight:'):
-                shot(f'fight-{len(seen["fights"]) + 1}', f"In {name}'s tank: {text}")
-                seen['fights'].add(key)
+                # The squid's own record of the fight: who started it and why,
+                # both sides' ability, the chance, what it cost.
+                value = memory.get('value') if isinstance(memory.get('value'), dict) else {}
+                event('fight', value.get('summary') or text, key=key,
+                      fight_id=key.split(':', 1)[1], record=value,
+                      was_away=bool(plugin.visitor_mind.perception.away))
+            else:
+                event('memory', text, key=key)
         # what it believes about its world, and where it changed its mind
         ledger = getattr(b, 'causal_learning', None)
         if ledger is not None:
@@ -441,10 +455,13 @@ def worker(output, number):
                 shot('friends-4-connected', f"{name}'s linked tanks, a few seconds later", dialog)
                 dialog.hide()
                 state['dialog'] = None
-            if state.get('pending_fight_shot') and time.monotonic() >= state['pending_fight_shot']:
-                state['pending_fight_shot'] = None
-                seen['fights'].add(len(seen['fights']) + 1)
-                shot(f'fight-{len(seen["fights"])}', f"A fight in {name}'s tank")
+            due_shots = [d for d in state.get('fight_shots', []) if time.monotonic() >= d[0]]
+            for due_shot in due_shots:
+                state['fight_shots'].remove(due_shot)
+                _at, fight_id, tag = due_shot
+                nth = seen['fight_order'].index(fight_id) + 1
+                shot(f'fight-{nth}-{tag}', f"A fight in {name}'s tank, as it happened")
+                state['shots'][f'home{number_of_home}-fight-{nth}-{tag}']['fight_id'] = fight_id
             pending = state.get('pending_visitor_shot')
             if pending and time.monotonic() >= pending:
                 state['pending_visitor_shot'] = None

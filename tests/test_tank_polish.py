@@ -215,7 +215,9 @@ def test_the_decoration_window_goes_bottom_right_each_time_it_is_shown(monkeypat
         frame = window.frameGeometry()
         assert x == area.right() - max(frame.width(), window.width()) - window.CORNER_GAP
         assert y == area.bottom() - max(frame.height(), window.height()) - window.CORNER_GAP
-        assert x > area.center().x() and y > area.center().y()      # the bottom-right quarter
+        # Its far corner sits in the corner of the area, whatever size it is.
+        assert x + max(frame.width(), window.width()) == area.right() - window.CORNER_GAP
+        assert y + max(frame.height(), window.height()) == area.bottom() - window.CORNER_GAP
 
         window.hide()
         window.move(100, 100)               # somewhere it was left, hidden: not the player's doing
@@ -232,3 +234,26 @@ def test_the_decoration_window_goes_bottom_right_each_time_it_is_shown(monkeypat
         assert asked == [] and (window.pos().x(), window.pos().y()) == (300, 200)
     finally:
         window.close()
+
+
+# ---- a save never stops the game ---------------------------------------------
+def test_an_autosave_that_fails_is_skipped_and_the_game_goes_on(capsys):
+    from src.tamagotchi_logic import TamagotchiLogic
+
+    class Game:
+        def save_game(self, is_autosave=False):
+            raise ValueError('Connection references an unknown neuron: is_sick -> cleanliness')
+    TamagotchiLogic.autosave(Game())            # must not raise
+    assert 'Autosave failed and was skipped' in capsys.readouterr().out
+
+
+def test_a_connection_to_something_that_is_not_a_neuron_is_left_out_of_the_save():
+    import inspect
+    from src import brain_tool
+    source = inspect.getsource(brain_tool.SquidBrainWindow.get_brain_state)
+    assert 'k[0] in known and k[1] in known' in source
+    from src.brain_io import normalise_brain
+    import pytest
+    with pytest.raises(ValueError):             # what the save format does with one
+        normalise_brain({'neurons': {'cleanliness': {'position': [0, 0]}},
+                         'connections': [['is_sick', 'cleanliness', 0.2]]})

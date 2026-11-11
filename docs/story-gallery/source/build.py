@@ -48,6 +48,12 @@ timeline = session['timeline']
 shots = session['shots']
 began = session['codes_exchanged_at']
 minutes = session['minutes']
+final = session.get('final') or {}
+#: The aggression a squid goes for another at, as the squids' own records give it.
+record_threshold = next((float(k['aggression']['threshold']) for k in
+                         ((v or {}).get('social_knowledge') or {} for v in final.values())
+                         if isinstance(k.get('aggression'), dict) and k['aggression'].get('threshold')),
+                        50.0)
 
 
 def webp(src, name, width=None):
@@ -212,6 +218,103 @@ def belief_section():
     return lead + f'<div class="row minds">{"".join(blocks)}</div>'
 
 
+def _nearby_thoughts(who, at, before, after):
+    return [ev['text'] for ev in timeline
+            if ev['who'] == who and ev['kind'] in ('thought', 'grew', 'revised')
+            and -before <= ev['at'] - at <= after]
+
+
+def _in_words(seconds):
+    return f'{int(seconds) // 60}:{int(seconds) % 60:02d}'
+
+
+def fight_chapter():
+    """Each fight, from the two squids' own records of it: the picture taken
+    while it was happening, why it started, how it was decided, what each
+    remembers and what each took away."""
+    if not fights:
+        return ''
+    by_fight = {}
+    for ev in fights:
+        by_fight.setdefault(ev.get('fight_id') or ev.get('key') or ev['at'], []).append(ev)
+    parts = []
+    for number, (fight_id, sides) in enumerate(
+            sorted(by_fight.items(), key=lambda item: min(ev['at'] for ev in item[1])), 1):
+        at = min(ev['at'] for ev in sides)
+        first = sides[0]
+        record = first.get('record') or {}
+        detail = record.get('detail') or {}
+        me, other = first['who'], record.get('opponent', 'another squid')
+        attacker = me if detail.get('started_it') else other
+        defender = other if attacker == me else me
+        host = next((ev['who'] for ev in sides if not ev.get('was_away')), None)
+        where = f"{host}’s tank" if host else 'a tank'
+        winner = me if detail.get('won') else other
+        mine, theirs = detail.get('mine') or {}, detail.get('theirs') or {}
+        ability = {me: mine.get('ability'), other: theirs.get('ability')}
+        chance = detail.get('chance')
+        chance_of = {me: chance, other: (1 - chance) if isinstance(chance, (int, float)) else None}
+        why = detail.get('why_started') or {}
+
+        figures = [fig(key, f"Fight {number}, in {where}: the cloud over {attacker} and {defender}")
+                   for key, info in sorted(shots.items(), key=lambda item: item[1]['at'])
+                   if info.get('fight_id') == fight_id][:3]
+
+        started = [f"{attacker} started it."]
+        if why.get('aggression') is not None:
+            started.append(f"Its aggression neuron was at {float(why['aggression']):.0f}; a squid "
+                           f"goes for another once that passes {record_threshold:g}.")
+        if why.get('provoked_by'):
+            started.append(f"What it was aggressive about: {why['provoked_by']}.")
+        born = ((final.get(attacker) or {}).get('social_knowledge') or {}).get('aggression', {}).get('born')
+        if born:
+            started.append(f"Where that aggression came from: {born}.")
+        decided = []
+        if ability.get(attacker) is not None and ability.get(defender) is not None:
+            decided.append(f"{attacker}’s ability was {float(ability[attacker]):.0f} and "
+                           f"{defender}’s {float(ability[defender]):.0f} - body, experience and how "
+                           f"hard each one’s network committed.")
+        if chance_of.get(winner) is not None:
+            decided.append(f"That gave {winner} a {100 * chance_of[winner]:.0f}% chance. {winner} won.")
+        for side_name, side in ((me, mine), (other, theirs)):
+            reasons = side.get('fitness_reasons') or side.get('reasons')
+            if isinstance(reasons, dict) and reasons:
+                decided.append(f"{side_name}: " + ', '.join(
+                    f"{key.replace('_', ' ')} {value:g}" if isinstance(value, (int, float))
+                    else f"{key.replace('_', ' ')} {value}" for key, value in reasons.items()))
+        cost = detail.get('consequences') or {}
+        if cost:
+            decided.append("What it cost: " + '; '.join(
+                f"{key.replace('_', ' ')} {value}" for key, value in cost.items()))
+
+        blocks = [f'<h3>Fight {number}: {e(attacker)} goes for {e(defender)}, {_in_words(at - began)} in, '
+                  f'in {e(where)}</h3>',
+                  row(figures) if figures else
+                  '<p class="note">No picture was taken while this fight was happening.</p>',
+                  f'<h4>Why it started</h4><p>{e(" ".join(started))}</p>',
+                  mind(f'{attacker}, in the two minutes before',
+                       _nearby_thoughts(attacker, at, 120, -3)[-6:]),
+                  f'<h4>How it was decided</h4><p>{e(" ".join(decided))}</p>',
+                  '<h4>What each remembers of it</h4>'
+                  + ''.join(mind(ev['who'], [ev['text']]) for ev in sides),
+                  '<h4>What each took from it</h4>'
+                  + ''.join(mind(name, _nearby_thoughts(name, at, 3, 150)[:8])
+                            for name in dict.fromkeys([attacker, defender]))]
+        rises = [(name, rise) for name in (attacker, defender)
+                 for rise in (((final.get(name) or {}).get('social_knowledge') or {})
+                              .get('aggression', {}).get('rises') or [])
+                 if abs(float(rise.get('at', 0)) - at) < 30]
+        if rises:
+            blocks.append('<p>' + e(' '.join(
+                f"{name}’s aggression now rests at {rise['to']:g}, not {rise['from']:g}, for good: "
+                f"it {rise['cause']}." for name, rise in rises)) + '</p>')
+        parts.append(''.join(block for block in blocks if block))
+    return (f'<section id="fight" class="chapter"><h2>The fight{"s" if len(parts) != 1 else ""}</h2>'
+            f'<p>{len(parts)} fight{"s" if len(parts) != 1 else ""} broke out in the session. Nobody '
+            'chose them: a fight starts in one squid’s own grown aggression neuron, and what follows '
+            'is each squid’s own record of it.</p>' + ''.join(parts) + '</section>')
+
+
 def fight_section():
     if not fights:
         return ('<p>Nobody fought. A fight starts in a squid’s own grown aggression neuron, and in '
@@ -220,10 +323,8 @@ def fight_section():
                 + (f'{len(memories)} encounter{"s were" if len(memories) != 1 else " was"} remembered '
                    'instead:</p>' if memories else 'No encounter was remembered either.</p>')
                 + mind('The squid', [f"{ev['who']}: {ev['text']}" for ev in memories][:6]))
-    lines = [f"{ev['who']}: {ev['text']}" for ev in fights]
-    figures = [fig(key, shot_caption(key)) for key in shots_like('fight')][:3]
-    return (f'<p>{len(fights)} fight{"s" if len(fights) != 1 else ""}, each remembered with why it '
-            'started and how it ended:</p>' + mind('The squid', lines) + row(figures))
+    return ('<p>See <a href="#fight">the fight chapter</a> above: '
+            + e('; '.join(f"{clock(ev)} {ev['who']}: {ev['text']}" for ev in fights)) + '</p>')
 
 
 def visit_figures():
@@ -348,6 +449,7 @@ page = f"""<title>Dosidicus Story Gallery</title>
   {brains}
 </section>
 
+{fight_chapter()}
 <section id="believed" class="chapter">
   <h2><span class="num">5</span>What they came to believe, and what they remember</h2>
   {belief_section()}
@@ -461,7 +563,18 @@ if not beliefs:
     md.append('Nothing, in this session.')
 md += ['', '## Fights', '']
 if fights:
-    md += [f"- {clock(ev)} {ev['who']}: {ev['text']}" for ev in fights]
+    fight_pictures = [key for key, info in sorted(shots.items(), key=lambda item: item[1]['at'])
+                      if info.get('fight_id')]
+    if fight_pictures:
+        md += [md_images(fight_pictures[:3]), '']
+    for ev in fights:
+        detail = (ev.get('record') or {}).get('detail') or {}
+        why = detail.get('why_started') or {}
+        md.append(f"- {clock(ev)} **{ev['who']}**: {ev['text']}"
+                  + (f" It started it, with its aggression at {float(why['aggression']):.0f}."
+                     if detail.get('started_it') and why.get('aggression') is not None else ''))
+    md += ['', 'Why each fight started, how it was decided, and what each squid thought, '
+               'remembers and took from it are in the fight chapter of [index.html](index.html).']
 else:
     md.append('Nobody fought in this session.')
 md += ['', md_images([f"home{p['home']}-end" for p in players]),
