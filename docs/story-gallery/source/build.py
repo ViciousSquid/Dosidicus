@@ -395,6 +395,7 @@ page = f"""<title>Dosidicus Story Gallery</title>
   message and number below is from the run.</p>
   <dl class="cast">{cast()}</dl>
   <nav class="toc" aria-label="Chapters">
+    <a href="#onion-and-cuthbert">Player story · Onion and Cuthbert</a>
     <a href="#apart">1 · Apart</a><a href="#codes">2 · Friend codes</a><a href="#visits">3 · Who went where</a>
     <a href="#grew">4 · What they grew</a><a href="#believed">5 · What they came to believe</a>
     <a href="#everywhere">6 · Every system</a><a href="#timeline">Everything, in order</a>
@@ -402,6 +403,17 @@ page = f"""<title>Dosidicus Story Gallery</title>
 </header>
 
 <main>
+<section id="onion-and-cuthbert" class="chapter">
+  <h2>Onion and Cuthbert: a visit between two cities</h2>
+  <p>On 11 November 2026, Onion left his tank to visit Cuthbert over the public internet.
+  His caretaker saw an empty tank; the caretaker in the other city witnessed Cuthbert throwing rocks.
+  Onion returned with a bad memory. Cuthbert recorded two hits, no fights, and enjoyment of rock play,
+  alongside both negative and positive social records.</p>
+  <p>This player story is separate from the private-network demonstration above.
+  <a href="onion-and-cuthbert/README.md">Read the account and its evidence</a>.</p>
+</section>
+
+
 <section id="apart" class="chapter">
   <h2><span class="num">1</span>Apart</h2>
   <p>Every home has the same private address, <code>{e(players[0]['private_address'])}</code>, as real homes do,
@@ -533,6 +545,7 @@ md = [f'# {len(players)} squid, {len(players)} homes, {minutes:g} minutes', '',
       '[index.html](index.html)** (open it in a browser).', '',
       '| Squid | Personality | Colour | Home address | Seen from outside as | Friend code |',
       '|---|---|---|---|---|---|']
+md[2:2] = ['**Player story:** [Onion and Cuthbert: an intercity visit, two rocks, and an empty tank](onion-and-cuthbert/README.md). A real public-internet encounter on 11 November 2026, documented separately from the demonstration below.', '']
 for p in players:
     colour = 'rgb({},{},{})'.format(*p['colour']) if p.get('colour') else 'as it hatched'
     md.append(f"| {p['name']} | {p['personality']} | {colour} | `{p['private_address']}` | "
@@ -592,3 +605,4 @@ md += ['', md_images([f"home{p['home']}-end" for p in players]),
 (OUT / 'README.md').write_text('\n'.join(md))
 total = sum(p.stat().st_size for p in (OUT / 'img').iterdir())
 print('ok', len(SIZES), 'images', round(total / 1024), 'KiB')
+

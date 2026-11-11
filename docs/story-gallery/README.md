@@ -1,5 +1,7 @@
 # 4 squid, 4 homes, 12 minutes
 
+**Player story:** [Onion and Cuthbert: an intercity visit, two rocks, and an empty tank](onion-and-cuthbert/README.md). A real public-internet encounter on 11 November 2026, documented separately from the demonstration below.
+
 3 copies of the desktop game and 1 of the Android game on a phone, each in a home of its own behind its own router, found each other with friend codes and were then left alone for 12 minutes. Nothing told any squid what to do. Every address, code, thought and number here is from the run.
 
 **The full page, with every picture and the whole session line by line, is [index.html](index.html)** (open it in a browser).
@@ -168,3 +170,4 @@ twice found it did not: Ziggy kept coming.
 ---
 
 Made by `tools/internet_session.py` (the session) and `docs/story-gallery/source/build.py` (this page and index.html). Nothing was nudged: only each squid’s name, personality and colour were chosen. The “internet” is a private one made on one machine out of network namespaces - real address translation, not real home routers.
+

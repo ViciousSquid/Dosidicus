@@ -1,0 +1,403 @@
+{
+  "source": {
+    "archive_name": "d8a32980_fe63_460d_9516_260f8bdbf8be.zip",
+    "sha256": "d66b9eb3918250d5e6bdd71ad4cf24b416cbe6994e9928512edd00469c2afae9",
+    "scope": "Selected fields from supplied Cuthbert save; no Onion save supplied."
+  },
+  "game_state.json": {
+    "/squid/name": "Cuthbert",
+    "/squid/personality": "stubborn"
+  },
+  "brain_state.json": {
+    "/state/aggression": 93.1324744936195,
+    "/functional_neurons/aggression/resting_level": null,
+    "/functional_neurons/aggression/resting_history": [],
+    "/provenance/origins/aggression": {
+      "name": "aggression",
+      "created_at": 1794400407.5865288,
+      "deficit_kind": "representation",
+      "deficit_summary": "It went at another squid while its anxiety was high and had no neuron for that",
+      "evidence": {
+        "concept": "aggression",
+        "experienced": "act_play + anxiety",
+        "squid_in_view": 100.0,
+        "act_play": 38.0,
+        "anxiety": 84.2
+      },
+      "remedy": "represent the concept of \"attacking another squid\": on while its senses report a squid, driving what it did then.",
+      "wiring": [
+        [
+          "can_see_squid",
+          "aggression",
+          0.6,
+          "remedy"
+        ],
+        [
+          "squid_nearby",
+          "aggression",
+          0.35710743115525334,
+          "remedy"
+        ],
+        [
+          "recognises_squid",
+          "aggression",
+          0.6,
+          "remedy"
+        ],
+        [
+          "remembers_good_encounter",
+          "aggression",
+          0.1515,
+          "remedy"
+        ],
+        [
+          "hunger",
+          "aggression",
+          -0.10564014916262301,
+          "remedy"
+        ],
+        [
+          "anxiety",
+          "aggression",
+          0.34223641097953916,
+          "remedy"
+        ],
+        [
+          "curiosity",
+          "aggression",
+          0.49900000000000005,
+          "remedy"
+        ],
+        [
+          "cleanliness",
+          "aggression",
+          0.3390594670713581,
+          "remedy"
+        ],
+        [
+          "happiness",
+          "aggression",
+          0.17875581808802452,
+          "remedy"
+        ],
+        [
+          "sleepiness",
+          "aggression",
+          -0.4751450375787955,
+          "remedy"
+        ],
+        [
+          "satisfaction",
+          "aggression",
+          0.5,
+          "remedy"
+        ],
+        [
+          "aggression",
+          "act_move",
+          1.0,
+          "remedy"
+        ],
+        [
+          "aggression",
+          "act_play",
+          1.0,
+          "remedy"
+        ]
+      ],
+      "episode_ids": [
+        "a92371e935b9",
+        "ff57bf681783"
+      ],
+      "neuron_type": "novelty",
+      "specialization": "aggression",
+      "display_name": "Aggression",
+      "pruned_at": null,
+      "prune_reason": ""
+    }
+  },
+  "LongTerm.json": [
+    {
+      "index": 34,
+      "record": {
+        "category": "social",
+        "key": "peer:ee166aa3-0f10-4367-a360-a7c647fdedb0:rocks:65fff65f09894",
+        "value": {
+          "valence": -14.92,
+          "peer_uuid": "ee166aa3-0f10-4367-a360-a7c647fdedb0",
+          "peer_name": "Onion",
+          "peer_personality": "lazy",
+          "outcome": "bad",
+          "detail": {
+            "drive_deltas": {
+              "happiness": -45.8,
+              "curiosity": 3.81,
+              "anxiety": -29.93
+            },
+            "duration": 37.3,
+            "my_actions": [
+              "inking",
+              "extremely anxious",
+              "hiding behind plant",
+              "fleeing!",
+              "hiding behind plant",
+              "approaching_rock",
+              "hiding behind plant",
+              "carrying rock",
+              "hiding behind plant",
+              "roaming",
+              "playfully tossing rock",
+              "seeking toy",
+              "carrying rock",
+              "playfully tossing rock",
+              "seeking toy"
+            ],
+            "their_actions": [
+              "act_move"
+            ],
+            "items_taken": 0,
+            "items_lost": 0,
+            "closest_approach": 94.5,
+            "first_meeting": false,
+            "encounters": 1,
+            "mating_id": "",
+            "fights_won": 0,
+            "fights_lost": 0,
+            "hits_taken": 0,
+            "hits_given": 2,
+            "poop_taken": 0,
+            "poop_given": 0
+          }
+        },
+        "timestamp": 1794400429.1115096
+      }
+    },
+    {
+      "index": 38,
+      "record": {
+        "category": "play",
+        "key": "rock_throwing",
+        "value": {
+          "activity": "rock_throwing",
+          "item": "images/decoration/rock01.png",
+          "effects": {
+            "happiness": 9,
+            "satisfaction": 11,
+            "anxiety": -9
+          },
+          "description": "Had fun throwing a rock!",
+          "is_positive": true,
+          "throw": {
+            "aimed_at": "Onion",
+            "driven_by": "act_play",
+            "drive": 100.0,
+            "angle": -112.5,
+            "speed": 20.0,
+            "throw_id": "4d03aae5f31a482aaa33e828f2b54166"
+          }
+        },
+        "timestamp": 1794400783.5806856
+      }
+    },
+    {
+      "index": 46,
+      "record": {
+        "category": "social",
+        "key": "peer:ee166aa3-0f10-4367-a360-a7c647fdedb0",
+        "value": {
+          "valence": 50.42,
+          "peer_uuid": "ee166aa3-0f10-4367-a360-a7c647fdedb0",
+          "peer_name": "Onion",
+          "peer_personality": "lazy",
+          "outcome": "good",
+          "detail": {
+            "drive_deltas": {
+              "happiness": -17.14,
+              "anxiety": -67.55
+            },
+            "duration": 180.5,
+            "my_actions": [
+              "seeking toy",
+              "carrying rock",
+              "playfully tossing rock",
+              "seeking toy",
+              "carrying rock",
+              "playfully tossing rock",
+              "seeking toy",
+              "exploring",
+              "seeking toy",
+              "sleeping",
+              "carrying rock",
+              "playfully tossing rock",
+              "seeking toy",
+              "sleeping",
+              "resisting sleep",
+              "seeking toy",
+              "carrying rock",
+              "sleeping",
+              "playfully tossing rock",
+              "seeking toy",
+              "carrying rock",
+              "playfully tossing rock",
+              "seeking toy",
+              "sleeping",
+              "roaming",
+              "seeking toy",
+              "carrying rock",
+              "playfully tossing rock",
+              "hiding behind plant",
+              "carrying rock",
+              "sleeping",
+              "hiding behind plant",
+              "roaming",
+              "throwing rock",
+              "roaming",
+              "seeking toy",
+              "carrying rock",
+              "throwing rock",
+              "seeking toy",
+              "hiding behind plant",
+              "seeking toy",
+              "hiding behind plant"
+            ],
+            "their_actions": [
+              "act_move"
+            ],
+            "items_taken": 0,
+            "items_lost": 0,
+            "closest_approach": 69.2,
+            "first_meeting": false,
+            "encounters": 1,
+            "mating_id": "",
+            "fights_won": 0,
+            "fights_lost": 0,
+            "hits_taken": 0,
+            "hits_given": 0,
+            "poop_taken": 0,
+            "poop_given": 0
+          }
+        },
+        "timestamp": 1794400611.8307219
+      }
+    }
+  ],
+  "statistics.json": {
+    "other_squids_encountered": 1,
+    "fights_won": 0,
+    "fights_lost": 0,
+    "rocks_thrown": 24
+  },
+  "timeline.json": {
+    "/events": [
+      {
+        "index": 52,
+        "record": {
+          "t": 1794400392.5811753,
+          "kind": "neuron",
+          "neuron": "recognises_squid",
+          "title": "Grew a neuron: recognises squid",
+          "text": "It recognised a squid it had met before",
+          "detail": {
+            "for": "represent the binary concept of \"I have met this squid before\".",
+            "kind": "social sense",
+            "connections": 9
+          },
+          "age": 325.1,
+          "n": 52,
+          "era": "social"
+        }
+      },
+      {
+        "index": 53,
+        "record": {
+          "t": 1794400393.586569,
+          "kind": "neuron",
+          "neuron": "remembers_good_encounter",
+          "title": "Grew a neuron: remembers good encounter",
+          "text": "It met a squid it remembered fondly",
+          "detail": {
+            "for": "represent the concept of \"my encounters with this squid went well\".",
+            "kind": "social sense",
+            "connections": 9
+          },
+          "age": 326.1,
+          "n": 53,
+          "era": "social"
+        }
+      },
+      {
+        "index": 59,
+        "record": {
+          "t": 1794400407.5865288,
+          "kind": "neuron",
+          "neuron": "aggression",
+          "title": "Grew a neuron: aggression",
+          "text": "It went at another squid while its anxiety was high and had no neuron for that",
+          "detail": {
+            "for": "represent the concept of \"attacking another squid\": on while its senses report a squid, driving what it did then.",
+            "kind": "social",
+            "connections": 20
+          },
+          "age": 340.1,
+          "n": 59,
+          "era": "social"
+        }
+      },
+      {
+        "index": 60,
+        "record": {
+          "t": 1794400408.5822167,
+          "kind": "neuron",
+          "neuron": "social_play",
+          "title": "Grew a neuron: social play",
+          "text": "It played with another squid and had no neuron for that",
+          "detail": {
+            "for": "represent the concept of \"playing with another squid\": on while its senses report a squid, driving what it did then.",
+            "kind": "social",
+            "connections": 14
+          },
+          "age": 341.1,
+          "n": 60,
+          "era": "social"
+        }
+      },
+      {
+        "index": 72,
+        "record": {
+          "t": 1794400432.5807161,
+          "kind": "neuron",
+          "neuron": "remembers_bad_encounter",
+          "title": "Grew a neuron: remembers bad encounter",
+          "text": "It met a squid it remembered badly",
+          "detail": {
+            "for": "represent the concept of \"my encounters with this squid went badly\".",
+            "kind": "social sense",
+            "connections": 7
+          },
+          "age": 365.1,
+          "n": 72,
+          "era": "social"
+        }
+      }
+    ]
+  },
+  "external_sources": {
+    "onion_screenshot": {
+      "source": "Caretaker-provided screenshot, 11 November 2026; manually transcribed, not from Cuthbert save",
+      "peer": "Cuthbert",
+      "outcome": "bad",
+      "displayed_valence": -45.2,
+      "duration_seconds": 69,
+      "hits_taken": 2,
+      "encounters": 1
+    },
+    "caretaker_report": {
+      "different_cities": true,
+      "public_internet": true,
+      "onion_fled": true,
+      "no_revisit_at_time_of_report": true,
+      "reported_permanent_aggression": 60,
+      "permanent_aggression_status": "Not confirmed by supplied save; activation and resting level differ."
+    }
+  }
+}
