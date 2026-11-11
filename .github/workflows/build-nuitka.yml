@@ -7,6 +7,16 @@ on:
         type: string
         required: false
         default: ""
+      # Never given by a caller; declared so the same names exist however
+      # the workflow was started (see workflow_dispatch below).
+      tag:
+        type: string
+        required: false
+        default: ""
+      prerelease:
+        type: boolean
+        required: false
+        default: false
   # Run by hand, a build is a release: everything it builds - and a native
   # Windows ARM64 build and the signed Android APK, built alongside - is
   # published as one new GitHub release (jobs plan, windows-arm64, android

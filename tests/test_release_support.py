@@ -150,3 +150,34 @@ def test_the_build_workflow_publishes_only_after_every_build_and_shares_the_publ
     assert jobs['release']['permissions'] == {'contents': 'write'}
     release = yaml.safe_load((root / 'release.yml').read_text())
     assert release['jobs']['publish']['uses'] == jobs['release']['uses']
+
+
+def test_no_called_workflow_asks_for_more_than_its_caller_was_given():
+    """GitHub will not start a run ("startup failure", no jobs at all) if a
+    job in a called workflow asks for a permission its caller's job does not
+    have - even a job that would be skipped. That stopped "Release all
+    platforms" once the build learned to publish."""
+    import yaml
+    root = Path(__file__).resolve().parents[1] / '.github' / 'workflows'
+    flows = {p.name: yaml.safe_load(p.read_text()) for p in root.glob('*.yml')}
+    rank = {'none': 0, 'read': 1, 'write': 2}
+
+    def wanted(flow, job):
+        return job.get('permissions', flow.get('permissions', {})) or {}
+
+    def check(name, granted, trail):
+        flow = flows[name]
+        for job_name, job in flow['jobs'].items():
+            asks = wanted(flow, job) if ('permissions' in job or 'permissions' in flow) else granted
+            for scope, level in asks.items():
+                assert rank[level] <= rank[granted.get(scope, 'none')], (
+                    f"{' > '.join(trail + [name])}: job {job_name} asks for {scope}: {level}")
+            if 'uses' in job and job['uses'].startswith('./.github/workflows/'):
+                check(job['uses'].rsplit('/', 1)[1], asks, trail + [name])
+
+    for name, flow in flows.items():
+        for job_name, job in flow['jobs'].items():
+            if 'uses' in job and job['uses'].startswith('./.github/workflows/'):
+                top = wanted(flow, job) if ('permissions' in job or 'permissions' in flow) \
+                    else {'contents': 'write', 'actions': 'write'}
+                check(job['uses'].rsplit('/', 1)[1], top, [f'{name}:{job_name}'])

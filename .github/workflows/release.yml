@@ -69,6 +69,12 @@ jobs:
   desktop:
     name: Windows x64, macOS Intel/Apple Silicon and Linux
     needs: prepare
+    # The build can publish a release itself when it is run by hand, so its
+    # release job asks for contents: write. Called from here that job is
+    # skipped - but GitHub refuses to start a run in which a called workflow
+    # asks for more than its caller was given, skipped or not.
+    permissions:
+      contents: write
     uses: ./.github/workflows/build-nuitka.yml
     with:
       release_version: ${{ needs.prepare.outputs.version }}
