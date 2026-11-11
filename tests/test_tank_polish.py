@@ -247,13 +247,28 @@ def test_an_autosave_that_fails_is_skipped_and_the_game_goes_on(capsys):
     assert 'Autosave failed and was skipped' in capsys.readouterr().out
 
 
-def test_a_connection_to_something_that_is_not_a_neuron_is_left_out_of_the_save():
-    import inspect
-    from src import brain_tool
-    source = inspect.getsource(brain_tool.SquidBrainWindow.get_brain_state)
-    assert 'k[0] in known and k[1] in known' in source
-    from src.brain_io import normalise_brain
-    import pytest
-    with pytest.raises(ValueError):             # what the save format does with one
-        normalise_brain({'neurons': {'cleanliness': {'position': [0, 0]}},
-                         'connections': [['is_sick', 'cleanliness', 0.2]]})
+def test_what_a_squid_learned_from_being_sick_is_saved_and_nothing_stops_the_save():
+    """The sickness reflex wires is_sick -> cleanliness. is_sick is a state
+    every squid carries but a neuron only some brains have; the brain format
+    refuses a connection to a neuron it was not given, and that one
+    connection used to stop the save. It is kept beside the brain's own
+    connections instead - it does move the squid - and a connection that
+    leads nowhere at all is left out."""
+    from src.brain_tool import split_connections
+    from src.brain_io import desktop_brain_state
+    weights = {('anxiety', 'cleanliness'): 0.2, ('is_sick', 'cleanliness'): 0.3,
+               ('is_sick', 'gone_neuron'): 0.1, ('nothing', 'cleanliness'): 0.4}
+    positions = {'anxiety': (0, 0), 'cleanliness': (1, 1)}
+    state = {'anxiety': 50.0, 'cleanliness': 50.0, 'is_sick': True}
+    between, from_state, nowhere = split_connections(weights, positions, state)
+    assert between == [['anxiety', 'cleanliness', 0.2]]
+    assert from_state == [['is_sick', 'cleanliness', 0.3]]
+    assert sorted(nowhere) == ['is_sick -> gone_neuron', 'nothing -> cleanliness']
+    # The save format takes it, and hands the extra list back untouched.
+    saved = desktop_brain_state({'neuron_positions': {k: list(v) for k, v in positions.items()},
+                                 'weights_list': between, 'state_connections': from_state})
+    assert saved['state_connections'] == [['is_sick', 'cleanliness', 0.3]]
+    # And it is the connection that matters: it moves the squid's physiology.
+    from src.propagation import compute_neural_modulation
+    with_it = compute_neural_modulation(state, {('is_sick', 'cleanliness'): 0.3})
+    assert with_it and 'cleanliness' in (with_it[0] if isinstance(with_it, tuple) else with_it)
