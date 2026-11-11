@@ -77,6 +77,8 @@ whether to go. The steps are in `plugins/multiplayer/README`.
 - **Fixed:** the game did not start on macOS when its emoji font was refused
   by the system.
 - **Fixed:** the game crashed on Windows consoles that cannot print emoji.
+- **Fixed:** on a Mac that had run an earlier version, the game could fail to
+  open at all because of a leftover link in its settings folder.
 
 ### Builds and releases
 
