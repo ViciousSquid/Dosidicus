@@ -1,6 +1,6 @@
 # Onion went visiting. Cuthbert threw rocks.
 
-On 11 November 2026, Onion visited Cuthbert over the public internet in
+On 11 November 2026, **Onion** visited **Cuthbert** over the public internet in
 Dosidicus 3.5.0. They were in different cities. Cuthbert's caretaker watched
 the encounter; Onion's caretaker watched Onion leave, then saw an empty tank
 with its decorations still in place.
