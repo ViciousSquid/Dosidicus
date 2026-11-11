@@ -104,6 +104,7 @@ class TankView(Widget):
         self._zzz_tex = self._text_texture("Zzz")
         self._name_texs = {}
         self._fight_animation = CoreImage(asset('fight_cloud.gif'), anim_delay=.04)
+        self._stone_tex = {}        # headstone picture -> texture (None: could not load)
         self.bind(pos=lambda *a: self.redraw(), size=lambda *a: self.redraw())
 
     def _name_texture(self, name):
@@ -161,6 +162,30 @@ class TankView(Widget):
         Color(1, 1, 1, alpha)
         Rectangle(texture=tag, pos=(left, bottom), size=(tw, th))
         Color(1, 1, 1, 1)
+
+    def _draw_headstones(self, sim):
+        """A squid is always in front of a headstone, so the tank draws the
+        stones itself, before any squid, at the size and place the
+        decoration overlay gives them (which keeps an unseen copy to touch)."""
+        from .decorations import _aspect, deco_source
+        base_h = max(dp(56), self.height * 0.18)
+        for stone in sim.decorations:
+            if stone.get("category") != "headstone":
+                continue
+            source = deco_source(stone)
+            if source not in self._stone_tex:
+                try:
+                    self._stone_tex[source] = CoreImage(source).texture
+                except Exception:
+                    self._stone_tex[source] = None
+            tex = self._stone_tex[source]
+            if tex is None:
+                continue
+            height = base_h * stone.get("scale", 1.0)
+            width = height * _aspect(stone)
+            cx, cy = self._map(stone["x"], stone["y"])
+            Color(1, 1, 1, 1)
+            Rectangle(texture=tex, pos=(cx - width / 2, cy - height / 2), size=(width, height))
 
     def _draw_squid(self, squid, squid_w, squid_h, icon_sz):
         """The resident: sprite, tint, name tag and mental-state icon."""
@@ -256,6 +281,9 @@ class TankView(Widget):
             food_sz = max(dp(22), self.height * 0.06)          # 25% smaller
             poop_sz = max(dp(22), self.height * 0.055)
             icon_sz = squid_h * 0.55
+
+            # Headstones first, so everything that lives is in front of them.
+            self._draw_headstones(sim)
 
             # Poop.
             for p in sim.poop_items:

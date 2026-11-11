@@ -287,3 +287,43 @@ def test_a_headstone_can_be_moved_but_never_resized_or_removed():
     assert plant['scale'] == 2.0
     sim.remove_decoration(plant['id'])
     assert plant not in sim.decorations
+
+
+def test_a_curious_squid_pushes_a_headstone_which_stays_a_toy_for_good(monkeypatch):
+    import random
+    sim = Simulation()
+    old = sim.squid
+    for _ in range(int(sim.lifecycle_config['neglect_seconds']) + 1):
+        old.hunger = 100.
+        sim.update(1.)
+    [stone] = headstones(sim)
+    run(sim, Simulation.HATCH_DELAY + 20)
+    sim.hatching = False
+    squid = sim.squid
+    assert squid is not old and not squid.lifecycle.is_dead
+
+    stone['x'], stone['y'] = 400., 300.
+    squid.x, squid.y = 420., 300.
+    squid.is_sleeping = False
+    squid.curiosity, squid.happiness, squid.anxiety = 90., 40., 60.
+    monkeypatch.setattr(random, 'random', lambda: 0.0)          # it does push, this second
+    monkeypatch.setattr(random, 'choice', lambda options: options[-1])
+    sim._push_look, sim._push_rest = 1.0, 0.0
+    sim._play_with_headstones(0.01)
+    assert sim._stone_slides == {stone['id']: 480.}             # 80 to the right, as on desktop
+    assert (squid.happiness, squid.curiosity, squid.anxiety) == (45., 100., 54.)
+    for _ in range(40):                                         # it slides there
+        sim._play_with_headstones(0.02)
+    assert stone['x'] == 480. and not sim._stone_slides
+    assert headstones(sim) == [stone]                           # and is still there
+
+    # Not while it rests from the last push, asleep, or incurious.
+    sim._push_look = 1.0
+    sim._play_with_headstones(0.01)
+    assert not sim._stone_slides
+    sim._push_rest, sim._push_look, squid.curiosity = 0.0, 1.0, 30.
+    sim._play_with_headstones(0.01)
+    assert not sim._stone_slides
+    # Never pushed out of the tank.
+    stone['x'] = sim.tank_size[0] - 40.
+    assert sim.push_headstone(stone, 1) == sim.tank_size[0] - 30.

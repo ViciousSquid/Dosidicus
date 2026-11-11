@@ -272,3 +272,43 @@ def test_what_a_squid_learned_from_being_sick_is_saved_and_nothing_stops_the_sav
     from src.propagation import compute_neural_modulation
     with_it = compute_neural_modulation(state, {('is_sick', 'cleanliness'): 0.3})
     assert with_it and 'cleanliness' in (with_it[0] if isinstance(with_it, tuple) else with_it)
+
+
+# ---- a headstone: behind the squid, and a toy it can push ---------------------
+def test_on_desktop_the_squid_is_in_front_of_a_headstone_and_can_push_it():
+    import os
+    from PyQt5 import QtGui, QtWidgets
+    from src.ui import HEADSTONE_DIR, ResizablePixmapItem
+    from src.squid import Squid
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, HEADSTONE_DIR, 'headstone02.png')
+    scene = QtWidgets.QGraphicsScene(0, 0, 1000, 600)
+    tank = scene.addRect(50, 50, 900, 500, QtGui.QPen(), QtGui.QBrush(QtGui.QColor(255, 255, 255)))
+    tank.setZValue(-3)                                  # as the game stacks it
+    squid_item = scene.addPixmap(QtGui.QPixmap(60, 40))
+    stone = ResizablePixmapItem(QtGui.QPixmap(path), path)
+    scene.addItem(stone)                                # added after the squid, as at a death
+    stone.setPos(300, 300)
+    squid_item.setPos(300, 300)
+    assert tank.zValue() < stone.zValue() < squid_item.zValue()
+    point = squid_item.sceneBoundingRect().center()     # where the two overlap
+    assert stone.sceneBoundingRect().contains(point)
+    on_top = scene.items(point)[0]
+    assert on_top is squid_item                         # the squid is drawn over the stone
+
+    # Pushed like any decoration: it is one of the things near the squid...
+    from src.ui import Ui
+    centre = stone.sceneBoundingRect().center()
+    near = Ui.get_nearby_decorations(type('U', (), {'scene': scene})(),
+                                     centre.x() + 30, centre.y())
+    assert stone in near
+    # ...and the squid's push moves it and lifts its mood, as with a plant.
+    pusher = type('S', (), dict(ui=type('U', (), {'scene': scene})(), push_animation=None,
+                                happiness=50, curiosity=50, anxiety=50,
+                                memory_manager=None, tamagotchi_logic=None,
+                                _on_push_complete=Squid._on_push_complete))()
+    Squid.push_decoration(pusher, stone, 1)
+    if pusher.push_animation is not None:
+        pusher.push_animation.setCurrentTime(pusher.push_animation.duration())
+    assert stone.pos().x() == 380

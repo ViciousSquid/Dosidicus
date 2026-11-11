@@ -90,6 +90,11 @@ class _DecoScatter(Scatter):
         self.bind(size=lambda *_: setattr(img, "size", self.size))
         self.add_widget(img)
         self.img = img
+        # A headstone is drawn by the tank itself, behind the squid
+        # (TankView._draw_headstones): this overlay sits in front of the
+        # squid, so here the stone is only something to touch and drag.
+        if deco.get("category") == "headstone":
+            img.opacity = 0
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos) and self.deco.get("category") == "headstone":
@@ -204,6 +209,8 @@ class DecorationLayer(FloatLayout):
         for v in getattr(self.sim, "visitors", []):
             if v.get("carried_rock") is not None:
                 ids.add(v["carried_rock"])
+        # headstones the squid is pushing
+        ids.update(getattr(self.sim, "_stone_slides", {}).keys())
         for did in ids:
             sc = self._scatters.get(did)
             deco = next((d for d in self.sim.decorations if d["id"] == did), None)

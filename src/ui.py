@@ -164,6 +164,12 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         if self.is_headstone:
             self.category = 'decoration'
             self.can_be_picked_up = False
+            # Behind the squid, always: whatever lives is in front of a
+            # stone. (The squid, like every other decoration, is at 0.)
+            self.setZValue(self.HEADSTONE_Z)
+
+    #: Where a headstone sits in the stacking: under the squid and visitors.
+    HEADSTONE_Z = -1
 
     #: A headstone is never bigger than this share of the squid's size.
     HEADSTONE_SHARE = 0.8
@@ -1074,6 +1080,11 @@ class Ui:
                                         QtGui.QPen(QtGui.QColor(0, 0, 0)), QtGui.QBrush(QtGui.QColor(255, 255, 255)))
         self.cleanliness_overlay = self.scene.addRect(50, 50, self.window_width - 100, self.window_height - 100,
                                                     QtGui.QPen(QtCore.Qt.NoPen), QtGui.QBrush(QtGui.QColor(139, 69, 19, 0)))
+        # The tank and its murk sit below everything in it - below a
+        # headstone too, which is itself below the squid
+        # (ResizablePixmapItem.HEADSTONE_Z).
+        self.rect_item.setZValue(-3)
+        self.cleanliness_overlay.setZValue(-2)
         
         self.dirty_text_items = []
         self.dirty_text_target_count = 0
