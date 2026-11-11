@@ -3659,6 +3659,10 @@ class TamagotchiLogic:
             # this; saving never wrote it, so a coloured squid came back
             # from every save as plain as it hatched.
             'tint_color': rgb_of(getattr(self.squid, 'tint_color', None)),
+            # A hatchling's parents and what it inherited from each
+            # (src/inheritance.py). Kept with the squid for good: it used to
+            # be known only until the game was closed.
+            'lineage': getattr(self.squid, 'lineage', None),
         }
 
         # Statistics are owned by the model. The tab is a read-only projection.
@@ -3713,6 +3717,23 @@ class TamagotchiLogic:
             'LongTerm': long_term_memory,
             'custom_brain': get_custom_brain_save_data()
         }
+
+        # The life in order - every event that shaped this squid and the
+        # brain it had at each (src/life_timeline.py), written beside the
+        # rest as timeline.json for the Laboratory pages in extras/. Built
+        # from what is already above; a save is never held up by it.
+        try:
+            from .life_timeline import build as build_timeline
+            from .life_journey import build_journey, gather_facts
+            chapters = None
+            try:
+                chapters = build_journey(gather_facts(
+                    logic=self, brain=self.brain_window.brain_widget, squid=self.squid))
+            except Exception:
+                chapters = None
+            save_data['timeline'] = build_timeline(save_data, journey=chapters)
+        except Exception as problem:
+            print(f"[Warning] Could not write the life timeline: {problem}")
 
         # Add achievements data if available (will be saved as achievements.json in the ZIP)
         if achievements_data is not None:

@@ -844,6 +844,15 @@ class MainWindow(QtWidgets.QMainWindow):
             print(f"🧬 Inherited {len(inherited)} synapses from {' and '.join(parents)}"
                   f" ({mutated} mutated)")
             self.squid.inherited_from = parents
+            # Kept with the squid and written to its save: who its parents
+            # were, and every synapse it had from each, mutated or not.
+            self.squid.lineage = {
+                'parents': parents,
+                'inherited': [{'synapse': list(gene['synapse']), 'parent': gene['parent'],
+                               'weight': gene['weight'], 'mutated': bool(gene['mutated'])}
+                              for gene in inherited],
+                'hatched_at': time.time(),
+            }
 
         
         # Plugins back up against the new squid, set up as at startup so they

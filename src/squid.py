@@ -38,6 +38,7 @@ class Squid:
         self.ng_icon = None
         self.ng_icon_offset = QtCore.QPointF(0, -100)
         self.tint_color = None
+        self.lineage = None        # parents and inherited synapses, for a hatchling
         self.name = random.choice(SQUID_NAMES)
         self.statistics = SquidStatistics(self)
         # Whether this squid has reproduced, is starving for it, or has died.
@@ -1268,6 +1269,11 @@ class Squid:
             self.tint_color = QtGui.QColor(*state['tint_color'])
         else:
             self.tint_color = None
+        # Whose egg it came from, and what it inherited (None: a fresh egg).
+        lineage = state.get('lineage')
+        self.lineage = lineage if isinstance(lineage, dict) else None
+        if self.lineage:
+            self.inherited_from = [str(p) for p in (self.lineage.get('parents') or [])][:2]
 
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_squid_image()
