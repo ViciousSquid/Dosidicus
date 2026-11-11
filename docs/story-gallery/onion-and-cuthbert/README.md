@@ -27,9 +27,9 @@ and returned with consequences that could be inspected.
 
 ## Two rocks, no fight
 
-The eyewitness account was that Cuthbert grew an aggression neuron, threw
-rocks, and Onion fled. They did not enter a fight. At the time of the report,
-Onion had not revisited; that observation alone does not establish why.
+Eyewitness account from Cuthbert's owner:
+
+> Onion entered the tank and was out of sight from Cuthbert initially. I resized the tank as onion entered and after doing so Cuthbert inked. He then saw Onion for the first time and immediately became aggressive and curious. He hid in his plants then when onion ventured closer to him Cuthbert picked up a rock and threw it at Onion, he continued to do this on and off until Onion left.
 
 Cuthbert's save corroborates **two hits given to Onion**, with **zero fights
 won and zero fights lost** in the rock-related encounter record. Onion's
