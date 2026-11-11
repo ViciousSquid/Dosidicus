@@ -73,7 +73,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt pytest pyyaml
           python -m pytest tests android/tests -q
 
       - name: Package shared desktop engine

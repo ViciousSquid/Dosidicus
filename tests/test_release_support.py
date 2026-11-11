@@ -137,7 +137,7 @@ def test_a_push_only_builds_and_a_called_build_leaves_publishing_to_its_caller(t
 
 
 def test_the_build_workflow_publishes_only_after_every_build_and_shares_the_publish_step():
-    import yaml
+    yaml = pytest.importorskip('yaml')      # PyYAML: installed where the release tests run
     root = Path(__file__).resolve().parents[1] / '.github' / 'workflows'
     build = yaml.safe_load((root / 'build-nuitka.yml').read_text())
     jobs = build['jobs']
@@ -157,7 +157,7 @@ def test_no_called_workflow_asks_for_more_than_its_caller_was_given():
     job in a called workflow asks for a permission its caller's job does not
     have - even a job that would be skipped. That stopped "Release all
     platforms" once the build learned to publish."""
-    import yaml
+    yaml = pytest.importorskip('yaml')      # PyYAML: installed where the release tests run
     root = Path(__file__).resolve().parents[1] / '.github' / 'workflows'
     flows = {p.name: yaml.safe_load(p.read_text()) for p in root.glob('*.yml')}
     rank = {'none': 0, 'read': 1, 'write': 2}
