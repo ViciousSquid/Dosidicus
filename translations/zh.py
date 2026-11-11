@@ -91,6 +91,18 @@ translations = {
     "startup": "启动",
     "show_tutorial_q": "显示教程？",
     "auto_decline": "({seconds}秒后自动拒绝)",
+    # Save slots (src/slot_chooser.py)
+    "save_slots": "存档栏位...",
+    "slot_choose": "选择栏位",
+    "slot_new_game": "新游戏",
+    "slot_delete": "删除",
+    "slot_delete_which": "删除哪一个？",
+    "slot_delete_confirm": "删除{name}？",
+    "slot_back": "返回",
+    "slot_playing": "游玩中",
+    "slot_unnamed": "鱿鱼",
+    "slot_stage_dead": "已死亡",
+    "slot_stage_parent": "亲代",
     "tutorial_title": "教程",
     "tutorial_query": "你想查看教程吗？",
 

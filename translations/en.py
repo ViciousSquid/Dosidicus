@@ -93,6 +93,18 @@ translations = {
     "startup": "Startup",
     "show_tutorial_q": "Show tutorial?",
     "auto_decline": "(Auto-declining in {seconds}s)",
+    # Save slots (src/slot_chooser.py)
+    "save_slots": "Save slots...",
+    "slot_choose": "Choose a slot",
+    "slot_new_game": "New game",
+    "slot_delete": "Delete",
+    "slot_delete_which": "Delete which?",
+    "slot_delete_confirm": "Delete {name}?",
+    "slot_back": "Back",
+    "slot_playing": "playing",
+    "slot_unnamed": "Squid",
+    "slot_stage_dead": "dead",
+    "slot_stage_parent": "parent",
     "tutorial_title": "Tutorial",
     "tutorial_query": "Would you like to see the tutorial?",
 

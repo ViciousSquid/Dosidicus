@@ -3626,6 +3626,11 @@ class TamagotchiLogic:
                 self.statistics_window.update_statistics()
 
             print(f"[Load] Successfully loaded: {os.path.basename(latest)}")
+            # Only a new game started the autosave timer (after its hatching
+            # splash): a game that began from a save was never autosaved.
+            # A load is never failed by its timer.
+            if getattr(self, 'autosave_timer', None) is not None:
+                self.start_autosave()
             return True
 
         except Exception as e:

@@ -315,6 +315,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Check for existing save data
         self.save_manager = SaveManager("saves")
+        self.choose_slot_at_start()
         
         # Track whether we want to show tutorial
         self.show_tutorial = False
@@ -356,6 +357,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user_interface.new_game_action.triggered.connect(self.start_new_game)
         self.user_interface.load_action.triggered.connect(self.load_game)
         self.user_interface.save_action.triggered.connect(self.save_game)
+        if hasattr(self.user_interface, 'save_slots_action'):
+            self.user_interface.save_slots_action.triggered.connect(self.open_save_slots)
         self.user_interface.decorations_action.triggered.connect(self.user_interface.toggle_decoration_window)
         
         # Initialize plugin menu - do this AFTER loading plugins
@@ -529,6 +532,58 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._initialization_complete = True
 
+    def choose_slot_at_start(self):
+        """Which of the three tanks to open (src/save_slots.py).
+
+        The slot last played is the one opened unless the player picks
+        another in the chooser, which is shown after the language is chosen
+        and before anything is loaded. Unattended launches, and a launch
+        that names a personality, are not asked.
+        """
+        slots = self.save_manager.slots
+        slot = slots.choose_startup_slot()
+        asked = (self.specified_personality is None
+                 and os.environ.get('DOSIDICUS_SKIP_LANGUAGE_SPLASH') != '1'
+                 and not any(flag in sys.argv[1:] for flag in NO_SPLASH_FLAGS))
+        if asked:
+            from src.slot_chooser import choose_slot
+            picked = choose_slot(slots)
+            if picked is not None:
+                slot = picked
+                slots.set_active(slot)
+        print(f"> Save slot {slot}")
+        return slot
+
+    def open_save_slots(self):
+        """File > Save slots: choose another tank, or delete one."""
+        from src.slot_chooser import choose_slot
+        slots = self.save_manager.slots
+        picked = choose_slot(slots, self, playing=slots.active)
+        if picked is not None:
+            self.open_slot(picked)
+
+    def open_slot(self, slot):
+        """Leave this tank for another slot's.
+
+        The squid here is saved first and keeps its saves: it is where it
+        was left when its slot is opened again. A slot with a squid in it is
+        loaded as it is when the game starts; an empty one begins a new
+        game. Multiplayer visits end, as they do whenever a tank's squid is
+        replaced.
+        """
+        slots = self.save_manager.slots
+        slot = int(slot)
+        if slot == slots.active or getattr(self, '_switching_slot', False):
+            return False
+        self._switching_slot = True
+        try:
+            self.save_game()
+            self.show_tutorial = False
+            self._begin_new_life(to_slot=slot)
+        finally:
+            self._switching_slot = False
+        return True
+
     def delayed_tutorial_check(self):
         """Check if the user wants to see the tutorial after UI is responsive"""
         # Process pending events to ensure UI is responsive
@@ -588,9 +643,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def create_new_game(self, specified_personality=None, egg_born=False):
         """Create a new game instance"""
-        # Delete any existing save to ensure clean start
+        # Delete any existing save to ensure clean start: every save of the
+        # squid in THIS slot. The other slots' squids are not this game's.
         if self.save_manager.save_exists():
-            self.save_manager.delete_save()
+            self.save_manager.slots.delete(self.save_manager.slots.active)
         
         # Choose personality randomly if not specified
         if specified_personality is None:
@@ -720,7 +776,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print(f"[Hatch] could not save the hatchling yet: {e}")
         return True
 
-    def _begin_new_life(self, egg_born=False, after_death=False):
+    def _begin_new_life(self, egg_born=False, after_death=False, to_slot=None):
         """Replace the squid in this tank with a newborn. Shared by New Game,
         by an egg hatching and by a squid that died with no egg, so all three
         are the same sequence.
@@ -729,7 +785,14 @@ class MainWindow(QtWidgets.QMainWindow):
         still exists, so the multiplayer plugin can end its visits on both
         sides and close its socket instead of carrying on against a squid that
         has been replaced.
+
+        to_slot: the player is leaving this tank for another slot's
+        (open_slot). The tank comes down the same way, but the squid left
+        behind keeps its saves, nothing is carried across - each slot is its
+        own tank, with its own headstones and achievements - and a slot with
+        a squid in it is loaded instead of a newborn hatching.
         """
+        switching = to_slot is not None
         self._cancel_game_callbacks()
         old_logic = getattr(self, 'tamagotchi_logic', None)
         old_squid = getattr(self, 'squid', None)
@@ -738,15 +801,18 @@ class MainWindow(QtWidgets.QMainWindow):
         # - CIRCLE OF LIFE is unlocked by the very death that lays an egg.
         # They live in the dead squid's save, which is deleted below. New
         # Game is a fresh start and keeps no achievements, as it always has.
-        carried_achievements = self._achievements_save_data() if after_death else None
+        carried_achievements = (self._achievements_save_data()
+                                if after_death and not switching else None)
         # Headstones are never removed: every reset keeps the tank's dead.
         ui = getattr(self, 'user_interface', None)
-        carried_headstones = [d for d in (ui.get_decorations_data() if ui else [])
-                              if d.get('deceased') is not None]
+        carried_headstones = [] if switching else [
+            d for d in (ui.get_decorations_data() if ui else [])
+            if d.get('deceased') is not None]
         # An egg carries half of each parent's weights (src/inheritance.py);
         # read them before the parent - and the egg with it - is gone.
         lifecycle = getattr(old_squid, 'lifecycle', None)
-        genes = lifecycle.egg_genes if (egg_born and lifecycle is not None) else {}
+        genes = lifecycle.egg_genes if (egg_born and lifecycle is not None
+                                        and not switching) else {}
 
         # Plugins down. unload_plugin() calls each plugin's shutdown(), which
         # for multiplayer ends every visit and closes the network node.
@@ -766,12 +832,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # Delete this squid's save files: the manual save AND its autosave.
         # delete_save() only removed the newest manual save, so the autosave
         # survived and the replaced squid could come back on the next start.
-        if old_squid is not None:
+        if switching:
+            # Nothing is deleted: the squid left behind was saved before this
+            # began (open_slot), and from here "the save" means the new slot's.
+            self.save_manager.slots.set_active(to_slot)
+            print(f"> Save slot {to_slot}")
+        elif old_squid is not None:
             removed = self.save_manager.delete_saves_for(str(old_squid.uuid))
             print(f"Deleted {removed} save file(s)")
         elif self.save_manager.save_exists():
-            self.save_manager.delete_save(is_autosave=True)
-            self.save_manager.delete_save(is_autosave=False)
+            self.save_manager.slots.delete(self.save_manager.slots.active)
 
         # Clear the squid's own memory files, where its MemoryManager keeps
         # them. This used to be computed from this file's parent directory,
@@ -818,8 +888,14 @@ class MainWindow(QtWidgets.QMainWindow):
             
             print("Scene cleared")
         
-        # Create new game (creates squid but not tamagotchi_logic)
-        self.create_new_game(self.specified_personality, egg_born=egg_born)
+        # A slot with a squid in it is opened as a saved game is at startup:
+        # a squid to load into, and no hatching.
+        resume = self.save_manager.slots.path_for(to_slot) if switching else None
+        if resume:
+            self.squid = Squid(self.user_interface, None, None)
+        else:
+            # Create new game (creates squid but not tamagotchi_logic)
+            self.create_new_game(self.specified_personality, egg_born=egg_born)
         
         # Create TamagotchiLogic
         self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
@@ -833,7 +909,10 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
         self.tamagotchi_logic.plugin_manager = self.plugin_manager
-        
+
+        if resume:
+            self.load_game()
+
         # A hatchling's brain is a newborn's, overlaid with half of each
         # parent's weights - every one recorded as inherited, from whom.
         if genes:
@@ -864,6 +943,34 @@ class MainWindow(QtWidgets.QMainWindow):
             self._restore_achievements_data(carried_achievements)
         if carried_headstones:
             self.user_interface.add_decorations_data(carried_headstones)
+        if resume:
+            self._after_opening_a_saved_slot()
+
+    def _after_opening_a_saved_slot(self):
+        """What starting the game with a save does once it is loaded: the
+        achievements the plugins lost when they were reloaded, the brain
+        window showing every neuron, the simulation running."""
+        try:
+            saved = self.save_manager.load_game()
+            if saved and 'achievements' in saved:
+                self._restore_achievements_data(saved['achievements'])
+        except Exception as problem:
+            print(f"[Warning] Could not restore achievements: {problem}")
+        logic = self.tamagotchi_logic
+        if hasattr(logic, 'statistics_window'):
+            logic.statistics_window.update_statistics()
+        brain_widget = self.brain_window.brain_widget
+        for name in brain_widget.original_neurons:
+            brain_widget.visible_neurons.add(name)
+        for name in getattr(brain_widget, 'neurogenesis_data', {}).get('new_neurons_details', {}):
+            brain_widget.visible_neurons.add(name)
+        if hasattr(brain_widget, 'is_tutorial_mode'):
+            brain_widget.is_tutorial_mode = False
+        brain_widget.update()
+        self.cleanup_duplicate_squids()
+        logic.set_simulation_speed(1)
+        logic.start_autosave()
+        self._schedule_for_game(500, self.position_and_show_decoration_window)
 
     def load_game(self):
         """Delegate to tamagotchi_logic"""

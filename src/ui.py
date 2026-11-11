@@ -1720,6 +1720,9 @@ class Ui:
         file_menu.addAction(self.new_game_action)
         file_menu.addAction(self.load_action)
         file_menu.addAction(self.save_action)
+        # Three tanks, each with its own squid (src/save_slots.py).
+        self.save_slots_action = QtWidgets.QAction(loc.get("save_slots", "Save slots..."), self.window)
+        file_menu.addAction(self.save_slots_action)
 
         view_menu = self.menu_bar.addMenu(loc.get("view"))
         self.brain_designer_action = QtWidgets.QAction(loc.get("brain_designer"), self.window)

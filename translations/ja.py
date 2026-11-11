@@ -91,6 +91,18 @@ translations = {
     "startup": "起動",
     "show_tutorial_q": "チュートリアルを表示しますか？",
     "auto_decline": "({seconds}秒後に自動で閉じます)",
+    # Save slots (src/slot_chooser.py)
+    "save_slots": "セーブスロット...",
+    "slot_choose": "スロットを選ぶ",
+    "slot_new_game": "はじめから",
+    "slot_delete": "削除",
+    "slot_delete_which": "どれを削除？",
+    "slot_delete_confirm": "{name}を削除しますか？",
+    "slot_back": "戻る",
+    "slot_playing": "プレイ中",
+    "slot_unnamed": "イカ",
+    "slot_stage_dead": "死亡",
+    "slot_stage_parent": "親",
     "tutorial_title": "チュートリアル",
     "tutorial_query": "チュートリアルを見ますか？",
 

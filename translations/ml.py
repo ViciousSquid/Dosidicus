@@ -91,6 +91,18 @@ translations = {
     "startup": "Waking Up",
     "show_tutorial_q": "Need a guide?",
     "auto_decline": "(Ghosting in {seconds}s)",
+    # Save slots (src/slot_chooser.py)
+    "save_slots": "Save slots...",
+    "slot_choose": "Pick a slot, bestie",
+    "slot_new_game": "Fresh start",
+    "slot_delete": "Yeet",
+    "slot_delete_which": "Yeet which one?",
+    "slot_delete_confirm": "Yeet {name}? For real?",
+    "slot_back": "Nvm",
+    "slot_playing": "rn",
+    "slot_unnamed": "Squid",
+    "slot_stage_dead": "RIP",
+    "slot_stage_parent": "parent era",
     "tutorial_title": "The 101",
     "tutorial_query": "Do you need me to explain how this works?",
 
