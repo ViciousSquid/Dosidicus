@@ -192,3 +192,43 @@ def test_the_brain_button_is_as_far_above_reset_as_reset_is_from_load():
     loader = (ROOT / 'src' / 'custom_brain_loader.py').read_text(encoding='utf-8')
     assert 'checkbox_layout.setSpacing(network_tab._brain_buttons_gap)' in loader
     assert 'gap = tab_layout.spacing()' in loader
+
+
+# ---- the decoration window opens in the bottom right, however it is opened ----
+def test_the_decoration_window_goes_bottom_right_each_time_it_is_shown(monkeypatch):
+    import os
+    from PyQt5 import QtCore, QtWidgets
+    from src import desktop_style
+    from src.ui import DecorationWindow
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    monkeypatch.setenv(desktop_style.SCREEN_OVERRIDE, '1920x1080')
+    asked = []
+    monkeypatch.setattr(desktop_style, 'place_exactly',
+                        lambda window, x, y, **k: (asked.append((x, y)), window.move(x, y)))
+    window = DecorationWindow()
+    try:
+        area = desktop_style.layout_area(QtWidgets.QApplication.primaryScreen())
+        window.show()                       # from the menu, with D, or as the game starts
+        QtWidgets.QApplication.processEvents()
+        assert asked, 'showing it did not place it'
+        x, y = asked[-1]
+        frame = window.frameGeometry()
+        assert x == area.right() - max(frame.width(), window.width()) - window.CORNER_GAP
+        assert y == area.bottom() - max(frame.height(), window.height()) - window.CORNER_GAP
+        assert x > area.center().x() and y > area.center().y()      # the bottom-right quarter
+
+        window.hide()
+        window.move(100, 100)               # somewhere it was left, hidden: not the player's doing
+        asked.clear()
+        window.show()
+        QtWidgets.QApplication.processEvents()
+        assert asked and asked[-1] == (x, y)
+
+        window.move(300, 200)               # the player drags it away while it is open
+        window.hide()
+        asked.clear()
+        window.show()
+        QtWidgets.QApplication.processEvents()
+        assert asked == [] and (window.pos().x(), window.pos().y()) == (300, 200)
+    finally:
+        window.close()

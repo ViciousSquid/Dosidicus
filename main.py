@@ -637,16 +637,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def position_and_show_decoration_window(self):
         """Position the decoration window in the bottom right and show it"""
         if hasattr(self.user_interface, 'decoration_window') and self.user_interface.decoration_window:
-            # Bottom right of the area the game lays its windows out in: the
-            # same spot on every system (desktop_style.layout_area).
-            from src.desktop_style import layout_area
-            screen_geometry = layout_area(QtWidgets.QApplication.primaryScreen())
-            decoration_window = self.user_interface.decoration_window
-            from src.desktop_style import place_exactly
-            decoration_window.show()
-            place_exactly(decoration_window,
-                          screen_geometry.right() - decoration_window.width() - 20,
-                          screen_geometry.bottom() - decoration_window.height() - 20)
+            # Showing it places it: bottom right of the area the game lays
+            # its windows out in, the same spot on every system and however
+            # it is opened (DecorationWindow.showEvent).
+            self.user_interface.decoration_window.show()
             self.user_interface.decorations_action.setChecked(True)
 
     def start_new_game(self):

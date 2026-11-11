@@ -16,6 +16,20 @@ _READ_ONLY_DIRECTORIES = ("images", "plugins", "src", "translations", "example_s
 _READ_ONLY_FILES = ("version", "README.md", "LICENSE")
 
 
+def _drop_dead_link(path):
+    """Remove `path` if it is a link to something that is no longer there.
+
+    An earlier build linked the player's own files (custom_brains,
+    config.ini) into the app instead of copying them. Once that app was
+    moved, replaced or thrown away the link pointed nowhere: it "does not
+    exist", so a fresh copy was attempted, and the copy then failed because
+    the link itself was in the way - and the game never opened. A link that
+    still leads somewhere is left alone: it is the player's.
+    """
+    if path.is_symlink() and not path.exists():
+        path.unlink()
+
+
 def prepare_macos_runtime(*, executable=None, data_dir=None):
     """Switch frozen .app launches to Application Support with bundled assets.
 
@@ -52,11 +66,13 @@ def prepare_macos_runtime(*, executable=None, data_dir=None):
     # resources in Contents/MacOS.
     config_source = resources / "config.ini"
     config_target = workdir / "config.ini"
+    _drop_dead_link(config_target)
     if config_source.is_file() and not config_target.exists():
         shutil.copy2(config_source, config_target)
 
     brains_source = resources / "custom_brains"
     brains_target = workdir / "custom_brains"
+    _drop_dead_link(brains_target)
     if brains_source.is_dir() and not brains_target.exists():
         shutil.copytree(brains_source, brains_target)
 
