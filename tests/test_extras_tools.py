@@ -177,3 +177,38 @@ def test_the_two_laboratories_name_each_other_and_do_different_work():
     assert 'extras/Laboratory.html' in game and 'lab_whole_life_pointer' in game
     # the page changes nothing and edits no neuron: that is the game's window
     assert 'Unlock editing' not in page and 'Edit Sandbox' not in page
+
+
+# ------------------------------------------------- breeder's hatchling save
+def test_the_breeder_writes_a_hatchling_the_game_opens():
+    """A newborn with the child's brain: no drives (the game gives it a
+    hatchling's), its parents and each inherited synapse on record, and marked
+    as bred in the laboratory. Only for a child bred as the game breeds."""
+    text = (EXTRAS / 'SquidBreeder.html').read_text(encoding='utf-8')
+    for needed in ('function hatchlingSave(', 'bred_by:"laboratory"', '"game_state.json"',
+                   '"brain_state.json"', 'SquidSignature    ', 'made.uuid.replace(/-/g,"_")+".zip"',
+                   'inheritance', 'GAME.personalities'):
+        assert needed in text, needed
+    # its drives are never invented by the page: the squid is written without any
+    assert 'squid:{name,personality,uuid,is_sick:false,lineage,inherited_from:lineage.parents},' in text
+    assert 'asGame ? "block" : "none"' in text
+    from src.personality import Personality
+    assert _generator().game_data()['personalities'] == [p.value for p in Personality]
+
+
+def test_an_heir_is_still_an_heir_after_loading():
+    """inherited_from exists only on a squid that hatched from a parent's egg,
+    so the load loop (which sets what the squid already has) dropped it."""
+    import inspect
+    from src.tamagotchi_logic import TamagotchiLogic
+    source = inspect.getsource(TamagotchiLogic.load_game)
+    assert 'self.squid.inherited_from = [' in source and "squid_data.get('lineage')" in source
+
+
+def test_there_is_one_trainer():
+    """The browser step trainer reimplemented the brain and fell behind it;
+    the headless trainer, served live, took its place."""
+    assert not (EXTRAS / 'StepTrainer.html').exists()
+    assert not (ROOT / 'headless' / 'headless_launcher.html').exists()
+    page = (ROOT / 'headless' / 'trainer.html').read_text(encoding='utf-8')
+    assert not re.findall(r'<script[^>]+src=', page) and 'https://' not in page

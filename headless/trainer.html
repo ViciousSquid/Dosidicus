@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dosidicus Trainer</title>
+<style>
+:root { --bg:#0e1420; --panel:#161e2e; --line:#28344a; --ink:#e6ebf5; --dim:#93a0b8; --accent:#5fd0c5; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display:flex; align-items:center; gap:14px; padding:10px 18px; background:#0a0f18; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+header h1 { font-size:18px; margin:0; } .sub { color:var(--dim); font-size:12px; }
+main { padding:14px 18px 50px; display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:14px; }
+@media (max-width: 980px) { main { grid-template-columns:1fr; } }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
+h2 { font-size:15px; margin:0 0 8px; }
+button, select, input[type=number], .filebtn { background:#22304a; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 11px; font:inherit; }
+button, .filebtn { cursor:pointer; } button:hover, .filebtn:hover { background:#2b3d5e; }
+button.go { background:var(--accent); color:#06231f; border-color:var(--accent); font-weight:600; }
+button.outside { border-color:#a8742a; }
+.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+.big { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+.note { color:var(--dim); font-size:12px; }
+canvas { display:block; width:100%; background:#0b101a; border-radius:8px; border:1px solid var(--line); }
+#brain { height:440px; } #tank { height:170px; } #chart { height:150px; }
+.bar { display:grid; grid-template-columns:96px 1fr 44px; gap:8px; align-items:center; margin:3px 0; font-size:13px; }
+.bar div { height:10px; background:#0b101a; border-radius:5px; overflow:hidden; } .bar i { display:block; height:100%; border-radius:5px; }
+.bar span:last-child { text-align:right; font-variant-numeric:tabular-nums; color:var(--dim); }
+#log { max-height:260px; overflow:auto; font-size:13px; }
+#log div { padding:4px 0; border-bottom:1px solid var(--line); } #log b { color:var(--dim); font-weight:400; font-variant-numeric:tabular-nums; margin-right:8px; }
+#log .neuron { color:#c9b8ff; } #log .intervention { color:#f0b866; } #log .pruned { color:#ff8585; }
+table { border-collapse:collapse; width:100%; font-size:13px; } td { padding:3px 6px; border-bottom:1px solid var(--line); } td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+.dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin:0 4px 0 10px; vertical-align:middle; }
+#lost { display:none; background:#5a1f1f; padding:8px 18px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧪 Dosidicus Trainer</h1>
+  <span class="sub">The headless trainer, live: the same brain modules the game runs, with no tank to draw.</span>
+  <span class="sub" style="margin-left:auto">Trained brains open in the game's Brain Designer and in <code>extras/SquidBreeder.html</code>.</span>
+</header>
+<div id="lost">The trainer is not answering. It stops when its terminal window is closed; run <code>python headless/headless_trainer.py --serve</code> again.</div>
+<main>
+<section>
+  <div class="panel">
+    <div class="row">
+      <button id="run" class="go">▶ Run</button>
+      <button data-step="1">Step 1</button><button data-step="10">Step 10</button><button data-step="100">Step 100</button><button data-step="1000">Step 1000</button>
+      <label class="note">Speed <select id="speed"></select></label>
+      <span style="margin-left:auto;text-align:right"><span class="big" id="tick">0</span> <span class="note">ticks · <span id="tps">0</span>/s</span></span>
+    </div>
+    <div class="row">
+      <span class="note">From outside:</span>
+      <button class="outside" data-kind="feed">🍤 Feed</button><button class="outside" data-kind="startle">⚡ Startle</button><button class="outside" data-kind="clean">🧹 Clean</button>
+      <span class="note">Recorded as your intervention. The squid is never credited with it.</span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>The brain, as it trains</h2>
+    <canvas id="brain"></canvas>
+    <div class="note" style="margin-top:6px">
+      <span class="dot" style="background:#6fa8dc;margin-left:0"></span>drive<span class="dot" style="background:#93c47d"></span>sense<span class="dot" style="background:#f6b26b"></span>action<span class="dot" style="background:#c9b8ff"></span>grown by this squid
+      &nbsp;·&nbsp; a neuron glows with its value; green links excite, red inhibit. <span id="counts"></span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Its drives over this run</h2>
+    <canvas id="chart"></canvas>
+    <div class="note" id="legend" style="margin-top:6px"></div>
+  </div>
+</section>
+<section>
+  <div class="panel">
+    <h2>The squid <span class="note" id="who"></span></h2>
+    <div id="bars"></div>
+    <canvas id="tank" style="margin-top:8px"></canvas>
+    <div class="note" style="margin-top:4px">Its world: 🟠 food, 🟢 plants, ⚪ the squid.</div>
+  </div>
+  <div class="panel">
+    <h2>What it has grown, and what happened</h2>
+    <div id="log"></div>
+  </div>
+  <div class="panel">
+    <h2>What it chose to do</h2>
+    <table id="actions"></table>
+    <h2 style="margin-top:12px">Counts</h2>
+    <table id="stats"></table>
+  </div>
+  <div class="panel">
+    <h2>Start again</h2>
+    <div class="row">
+      <label class="note">Seed <input id="seed" type="number" style="width:90px" placeholder="random"></label>
+      <label class="note">Scenario <select id="scenario"></select></label>
+    </div>
+    <div class="row">
+      <label class="note"><input id="blank" type="checkbox"> blank brain (the control: eight neurons, no wiring)</label>
+      <label class="note"><input id="learning" type="checkbox" checked> learning on</label>
+    </div>
+    <div class="row">
+      <button id="reset">Start again</button>
+      <label class="filebtn">📂 Load a brain (.json)<input id="load" type="file" accept=".json" style="display:none"></label>
+      <a class="filebtn" href="/brain.json" style="text-decoration:none">💾 Download this brain</a>
+    </div>
+    <div class="note" id="scenarioNote"></div>
+  </div>
+</section>
+</main>
+<script>
+const COLOURS = {drive: '#6fa8dc', sense: '#93c47d', action: '#f6b26b', grown: '#c9b8ff'};
+const DRIVE_COLOURS = {hunger: '#f6b26b', happiness: '#ffd966', cleanliness: '#76c7f0', sleepiness: '#9d8cf0',
+                       satisfaction: '#7ddc7d', anxiety: '#ff6b6b', curiosity: '#5fd0c5'};
+const $ = id => document.getElementById(id);
+let state = null, history = [], lastTick = -1, filled = false;
+
+async function call(body) {
+  const reply = await fetch('/control', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const data = await reply.json();
+  if (!reply.ok) { alert(data.error || 'The trainer refused that.'); return; }
+  if (body.do === 'reset' || body.do === 'load') { history = []; lastTick = -1; }
+  show(data);
+}
+async function poll() {
+  try { show(await (await fetch('/state')).json()); $('lost').style.display = 'none'; }
+  catch (e) { $('lost').style.display = 'block'; }
+}
+
+function fit(canvas) {
+  const ratio = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w * ratio || canvas.height !== h * ratio) { canvas.width = w * ratio; canvas.height = h * ratio; }
+  const ctx = canvas.getContext('2d'); ctx.setTransform(ratio, 0, 0, ratio, 0, 0); ctx.clearRect(0, 0, w, h);
+  return [ctx, w, h];
+}
+
+function drawBrain(s) {
+  const [ctx, w, h] = fit($('brain'));
+  if (!s.neurons.length) return;
+  const xs = s.neurons.map(n => n.x), ys = s.neurons.map(n => n.y), pad = 36;
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const place = {};
+  s.neurons.forEach(n => { place[n.name] = [pad + (x1 > x0 ? (n.x - x0) / (x1 - x0) : .5) * (w - 2 * pad),
+                                            pad + (y1 > y0 ? (n.y - y0) / (y1 - y0) : .5) * (h - 2 * pad)]; });
+  for (const [a, b, weight] of s.connections) {
+    ctx.beginPath(); ctx.moveTo(...place[a]); ctx.lineTo(...place[b]);
+    ctx.lineWidth = Math.max(.5, Math.min(2.4, Math.abs(weight) * 2.4));
+    ctx.strokeStyle = weight >= 0 ? 'rgba(110,200,140,.5)' : 'rgba(230,110,110,.5)'; ctx.stroke();
+  }
+  ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'center';
+  const taken = [];
+  for (const n of s.neurons) {
+    const [x, y] = place[n.name], level = Math.max(0, Math.min(1, n.value / 100));
+    ctx.beginPath(); ctx.arc(x, y, 7 + level * 5, 0, Math.PI * 2);
+    ctx.globalAlpha = .3 + .7 * level; ctx.fillStyle = COLOURS[n.kind] || '#bbb'; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.lineWidth = n.kind === 'grown' ? 2 : 1; ctx.strokeStyle = n.kind === 'grown' ? '#fff' : 'rgba(255,255,255,.35)'; ctx.stroke();
+    const label = n.name.replace(/_/g, ' '), width = ctx.measureText(label).width;
+    const ly = [y - 15, y + 24, y - 26].find(v => !taken.some(t => Math.abs(t.y - v) < 10 && Math.abs(t.x - x) < (t.w + width) / 2 + 3)) || y - 15;
+    taken.push({x, y: ly, w: width});
+    ctx.fillStyle = 'rgba(225,230,240,.85)'; ctx.fillText(label, x, ly);
+  }
+}
+
+function drawTank(s) {
+  const [ctx, w, h] = fit($('tank'));
+  const dot = (p, colour, r) => { ctx.beginPath(); ctx.arc(8 + p[0] * (w - 16), 8 + p[1] * (h - 16), r, 0, Math.PI * 2); ctx.fillStyle = colour; ctx.fill(); };
+  s.world.plants.forEach(p => dot(p, '#3fa860', 9));
+  s.world.food.forEach(p => dot(p, '#f6a04a', 4));
+  dot(s.squid.position, s.squid.is_startled ? '#ff6b6b' : s.squid.is_sleeping ? '#7c86a8' : '#ffffff', 7);
+}
+
+function drawChart() {
+  const [ctx, w, h] = fit($('chart'));
+  if (history.length < 2) return;
+  ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
+  [0, 50, 100].forEach(v => { const y = h - 6 - v / 100 * (h - 12); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); });
+  const t0 = history[0].tick, t1 = history[history.length - 1].tick || 1;
+  for (const [name, colour] of Object.entries(DRIVE_COLOURS)) {
+    ctx.beginPath();
+    history.forEach((p, i) => { const x = (p.tick - t0) / Math.max(1, t1 - t0) * w, y = h - 6 - p.drives[name] / 100 * (h - 12);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.strokeStyle = colour; ctx.lineWidth = 1.6; ctx.stroke();
+  }
+}
+
+function text(tag, content, cls) { const n = document.createElement(tag); n.textContent = content; if (cls) n.className = cls; return n; }
+
+function show(s) {
+  if (!s || s.error) return;
+  state = s;
+  if (!filled) {
+    filled = true;
+    s.speeds.forEach(v => { const o = text('option', v ? `${v} ticks a second` : 'as fast as it will go'); o.value = v; $('speed').appendChild(o); });
+    const none = text('option', 'none'); none.value = ''; $('scenario').appendChild(none);
+    Object.keys(s.scenarios).forEach(k => { const o = text('option', k); o.value = k; $('scenario').appendChild(o); });
+    $('legend').replaceChildren(...Object.entries(DRIVE_COLOURS).flatMap(([k, c]) => {
+      const d = document.createElement('span'); d.className = 'dot'; d.style.background = c; return [d, document.createTextNode(k)]; }));
+  }
+  $('speed').value = s.speed;
+  $('run').textContent = s.running ? '⏸ Pause' : '▶ Run';
+  $('tick').textContent = s.tick.toLocaleString();
+  $('tps').textContent = s.running ? Math.round(s.ticks_per_second).toLocaleString() : 0;
+  $('who').textContent = `${s.squid.personality || ''} · ${s.squid.status || ''}` + (s.seed !== null ? ` · seed ${s.seed}` : '') +
+    (s.blank ? ' · blank brain' : '') + (s.learning ? '' : ' · learning off') + (s.scenario ? ` · ${s.scenario}` : '');
+  $('counts').textContent = `${s.neurons.length} neurons (${s.neurons.filter(n => n.kind === 'grown').length} grown), ${s.connections.length} connections.`;
+  $('bars').replaceChildren(...Object.entries(s.squid.drives).map(([name, value]) => {
+    const row = document.createElement('div'); row.className = 'bar';
+    const track = document.createElement('div'), fill = document.createElement('i');
+    fill.style.width = Math.max(0, Math.min(100, value)) + '%'; fill.style.background = DRIVE_COLOURS[name] || '#888'; track.appendChild(fill);
+    row.append(text('span', name), track, text('span', Math.round(value))); return row; }));
+  if (s.tick !== lastTick) {
+    if (s.tick < lastTick) history = [];
+    lastTick = s.tick; history.push({tick: s.tick, drives: s.squid.drives});
+    if (history.length > 900) history = history.filter((_, i) => i % 2 === 0);
+  }
+  $('log').replaceChildren(...[...s.log].reverse().map(e => { const row = document.createElement('div'); row.className = e.kind;
+    row.append(text('b', 'tick ' + e.tick.toLocaleString()), document.createTextNode(e.text)); return row; }));
+  if (!s.log.length) $('log').appendChild(text('div', 'Nothing yet. A neuron grows only when the brain meets something it cannot represent.', 'note'));
+  const rows = (table, entries) => table.replaceChildren(...entries.map(([k, v]) => { const tr = document.createElement('tr');
+    tr.append(text('td', String(k).replace(/_/g, ' ')), text('td', typeof v === 'number' ? (Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1)) : v)); return tr; }));
+  rows($('actions'), Object.entries(s.actions));
+  rows($('stats'), Object.entries(s.stats).filter(([k]) => !['target_ticks', 'ticks_completed'].includes(k)));
+  $('scenarioNote').textContent = s.scenarios[$('scenario').value] || '';
+  drawBrain(s); drawTank(s); drawChart();
+}
+
+$('run').onclick = () => call({do: state && state.running ? 'pause' : 'run'});
+document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => call({do: 'step', ticks: Number(b.dataset.step)}));
+document.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => call({do: 'intervene', kind: b.dataset.kind}));
+$('speed').onchange = () => call({do: 'speed', speed: Number($('speed').value)});
+$('scenario').onchange = () => { $('scenarioNote').textContent = (state && state.scenarios[$('scenario').value]) || ''; };
+$('reset').onclick = () => call({do: 'reset', seed: $('seed').value, scenario: $('scenario').value, blank: $('blank').checked, learning: $('learning').checked});
+$('load').onchange = async e => {
+  try { await call({do: 'load', brain: JSON.parse(await e.target.files[0].text())}); }
+  catch (problem) { alert('That is not a brain file: ' + problem.message); }
+  e.target.value = '';
+};
+window.addEventListener('resize', () => state && show(state));
+poll(); setInterval(poll, 250);
+</script>
+</body>
+</html>

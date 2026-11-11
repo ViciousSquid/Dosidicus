@@ -75,8 +75,9 @@ td.period .long { font-size:12px; opacity:.75; }
     <input id="files" type="file" accept=".zip" multiple style="display:none"></label>
   <label class="filebtn">📜 Add a session (.json)
     <input id="sessionFile" type="file" accept=".json" style="display:none"></label>
-  <a class="filebtn" href="SaveViewer.html" style="text-decoration:none">Save Viewer</a>
-  <a class="filebtn" href="SquidBreeder.html" style="text-decoration:none">Breeder</a>
+  <a class="filebtn" href="SaveViewer.html" style="text-decoration:none" title="Everything in one save, file by file">Save Viewer</a>
+  <a class="filebtn" href="SquidBreeder.html" style="text-decoration:none" title="Breed two squid as the game does; writes a hatchling the game opens">Breeder</a>
+  <a class="filebtn" href="README.md" style="text-decoration:none" title="What each tool is for">Guide</a>
 </header>
 <nav id="nav"></nav>
 <main id="main"></main>
@@ -457,19 +458,23 @@ function viewWhy(main) {
 function viewFamily(main) {
   if (needsSpecimen(main)) return;
   const T = active.timeline, life = active.life || {};
-  const lineage = T ? T.lineage : {parents: [], inherited: []};
+  // Read from the timeline; a save without one (a hatchling straight from the
+  // Breeder, say) still says who its parents were.
+  const told = ((active.save.game_state || {}).squid || {}).lineage;
+  const lineage = T ? T.lineage : {parents: (told && told.parents) || [], inherited: (told && told.inherited) || [],
+                                   bred_by: told && told.bred_by};
   const box = el('div', {class: 'panel'}, el('h2', {}, `${active.name}'s family`));
   if (lineage.parents.length) {
     const inherited = lineage.inherited;
     box.append(el('p', {}, `Hatched from the egg of ${lineage.parents.join(' and ')}` +
-      (lineage.bred_by ? ` (bred with the ${lineage.bred_by})` : '') + '.'),
+      (lineage.bred_by === 'laboratory' ? ', bred in the Squid Breeder rather than by two squid meeting' : '') + '.'),
       el('p', {}, lineage.parents.map(p => el('span', {class: 'chip'},
         `${p}: ${inherited.filter(g => g.parent === p).length} synapses`)),
         el('span', {class: 'chip'}, `${inherited.filter(g => g.mutated).length} mutated`)));
     if (inherited.length) box.append(el('table', {}, el('thead', {}, el('tr', {}, ['Synapse', 'From', 'Weight it was given', 'Mutated', 'Weight now'].map(h => el('th', {}, h)))),
-      el('tbody', {}, inherited.map(g => { const now = T.connections.find(c => c.source === g.synapse[0] && c.target === g.synapse[1]);
+      el('tbody', {}, inherited.map(g => { const now = T && T.connections.find(c => c.source === g.synapse[0] && c.target === g.synapse[1]);
         return el('tr', {}, el('td', {}, `${words(g.synapse[0])} → ${words(g.synapse[1])}`), el('td', {}, g.parent),
-          el('td', {}, signed(g.weight)), el('td', {}, g.mutated ? 'yes' : ''), el('td', {class: 'dim'}, now ? signed(now.weight) : 'gone')); }))));
+          el('td', {}, signed(g.weight)), el('td', {}, g.mutated ? 'yes' : ''), el('td', {class: 'dim'}, now ? signed(now.weight) : T ? 'gone' : '—')); }))));
   } else {
     box.append(el('p', {}, 'Hatched from a fresh egg: it has no parents on record, and the wiring every squid is born with.'));
   }

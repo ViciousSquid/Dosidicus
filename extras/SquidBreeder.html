@@ -84,6 +84,16 @@ label { margin-right: 10px; }
 
 <button id="saveBtn" onclick="saveJSON()" style="background: #3399ff; color: white; padding: 15px 30px; font-size: 20px; border: none; border-radius: 10px; cursor: pointer; display: none; margin: -10px auto 20px auto;">💾 Save Child Brain</button>
 
+<div id="hatchPanel" class="panel" style="display:none; max-width:820px; margin:0 auto 20px auto;">
+<h3>🥚 Hatch it in the game</h3>
+<p style="font-size:14px;opacity:.9">Writes a save the game opens: a newborn squid with this brain, and a record of
+which parent each inherited synapse came from. It is marked as bred here, in the laboratory, not by two squid meeting.</p>
+Name <input type="text" id="hatchName" value="Hatchling" maxlength="24" style="padding:6px;font-size:15px">
+&nbsp; Personality <select id="hatchPersonality" style="padding:6px;font-size:15px"></select>
+<button type="button" onclick="saveHatchling()" style="background:#ffb347;color:#222;padding:10px 22px;font-size:17px;border:none;border-radius:8px;cursor:pointer;margin-left:12px">🥚 Save hatchling (.zip)</button>
+<p id="hatchNote" style="font-size:13px;opacity:.85"></p>
+</div>
+
 <div class="panel">
 <h3>Offspring</h3>
 
@@ -134,6 +144,14 @@ async function loadFile(e,t){
         // brain in it at all.
         const zip=await JSZip.loadAsync(f);
         const names=Object.keys(zip.files);
+        parentNames[t]=f.name.replace(/\.zip$/i,"");
+        const game=names.find(k=>k.split("/").pop()==="game_state.json");
+        if(game){
+            try{
+                const squid=(JSON.parse(await zip.files[game].async("string")).squid)||{};
+                if(squid.name) parentNames[t]=String(squid.name);
+            }catch(err){ /* the file name will do */ }
+        }
         const pick=["brain_state.json","custom_brain.json"]
             .map(want=>names.find(k=>k.split("/").pop()===want)).find(Boolean)
             || names.find(k=>k.endsWith(".json"));
@@ -146,10 +164,14 @@ async function loadFile(e,t){
         input(t).value=txt;
         renderNetwork(t);
     } else {
+        parentNames[t]=f.name.replace(/\.json$/i,"");
         input(t).value=await f.text();
         renderNetwork(t);
     }
 }
+
+// Who each parent is: its name in its save, or else the file's.
+const parentNames={A:"Squid A",B:"Squid B"};
 
 const input = t => document.getElementById("input"+t);
 
@@ -285,7 +307,95 @@ function breed(){
 
     describeMode(child);
     document.getElementById("saveBtn").style.display = "block";
+    // Only a child bred as the game breeds is a squid the game could have hatched.
+    document.getElementById("hatchPanel").style.display = asGame ? "block" : "none";
+    document.getElementById("hatchNote").textContent = "";
 }
+
+// ================= HATCHLING SAVE =================
+// A save the game opens: a newborn with the child's brain. It holds only
+// what a hatchling has. Its drives are left out, so the game gives it the
+// ones every squid hatches with; nothing a parent learned or grew is in it.
+
+function newUuid(){
+    if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    const b=new Uint8Array(16);
+    (window.crypto||window.msCrypto).getRandomValues(b);
+    b[6]=(b[6]&0x0f)|0x40; b[8]=(b[8]&0x3f)|0x80;
+    const h=[...b].map(x=>x.toString(16).padStart(2,"0")).join("");
+    return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+function hatchlingSave(child,name,personality){
+    const now=Date.now()/1000, uuid=newUuid();
+    let nameA=parentNames.A, nameB=parentNames.B;
+    if(nameA===nameB){ nameA+=" (A)"; nameB+=" (B)"; }
+    const who={A:nameA,B:nameB};
+    const newborn={};
+    for(const [src,dst,w] of GAME.newborn_connections) newborn[src+"|"+dst]=w;
+    const mutated=new Set(child._lineage.mutated);
+    const inherited=[], totals=[];
+    Object.keys(child.weights).sort().forEach(k=>{
+        const [source,target]=k.split("|"), from=child._lineage.weights[k], weight=child.weights[k];
+        const born=newborn[k];
+        const counts={}, sums={};
+        if(born!==undefined){ counts.innate=1; sums.innate=born; }
+        if(from==="A"||from==="B"){
+            inherited.push({synapse:[source,target],parent:who[from],weight,mutated:mutated.has(k)});
+            counts.inheritance=1;
+            sums.inheritance=Math.round((weight-(born||0))*1e4)/1e4;
+        }
+        totals.push({edge:[source,target],counts,totals:sums,first_seen:now});
+    });
+    const brain=brainFile(child);
+    brain.provenance={total_changes:totals.length,origins:{},pruned:[],totals};
+    const lineage={parents:[nameA,nameB].sort(),inherited,hatched_at:now,bred_by:"laboratory"};
+    const files={
+        "game_state.json":{
+            squid:{name,personality,uuid,is_sick:false,lineage,inherited_from:lineage.parents},
+            tamagotchi_logic:{cleanliness_threshold_time:0,hunger_threshold_time:0,last_clean_time:0,points:0},
+            decorations:[],
+            lifecycle:{stage:"living",reproduction:null,egg:null,death:null,neglected_seconds:0,sick_seconds:0},
+        },
+        "brain_state.json":brain,
+        "statistics.json":{},
+        "ShortTerm.json":[],
+        "LongTerm.json":[],
+    };
+    return {uuid,files,lineage};
+}
+
+async function saveHatchling(){
+    const child=window._offspring;
+    if(!child||!child._bred||child._bred.how!=="as the game does"){ alert("Breed as the game does first."); return; }
+    const name=(document.getElementById("hatchName").value||"Hatchling").trim().slice(0,24)||"Hatchling";
+    let personality=document.getElementById("hatchPersonality").value;
+    if(personality==="random") personality=GAME.personalities[Math.floor(Math.random()*GAME.personalities.length)];
+    const made=hatchlingSave(child,name,personality);
+    const zip=new JSZip();
+    for(const [file,data] of Object.entries(made.files)) zip.file(file,JSON.stringify(data,null,1));
+    zip.file("uuid.txt","SquidSignature    "+made.uuid);
+    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
+    window._hatchling={made,blob};
+    const link=document.createElement("a");
+    link.href=URL.createObjectURL(blob);
+    // The game names a squid's save after it: its uuid, with underscores.
+    const fileName=made.uuid.replace(/-/g,"_")+".zip";
+    link.download=fileName;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    document.getElementById("hatchNote").textContent=
+        `${name} (${personality}), child of ${made.lineage.parents.join(" and ")}: ${made.lineage.inherited.length} inherited synapses, `+
+        `${made.lineage.inherited.filter(g=>g.mutated).length} mutated. Saved as ${fileName}. `+
+        "Put this file in the game's saves folder: it takes a free save slot, and you open it from the game's Save Manager.";
+}
+
+(function(){
+    const select=document.getElementById("hatchPersonality");
+    if(!select||!GAME) return;
+    ["random",...GAME.personalities].forEach(p=>{
+        const o=document.createElement("option"); o.value=p; o.textContent=p; select.appendChild(o);
+    });
+})();
 
 function describeMode(child){
     const note=document.getElementById("modeNote");

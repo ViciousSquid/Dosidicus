@@ -3546,6 +3546,15 @@ class TamagotchiLogic:
                     # state. Older saves may nest their persisted values here.
                     if attr != 'statistics' and hasattr(self.squid, attr):
                         setattr(self.squid, attr, value)
+                # Whose egg it hatched from is read off its lineage. A squid
+                # that hatched from a fresh egg has no such attribute at all,
+                # so the loop above never restored it and an heir forgot,
+                # at its first reload, that it was one.
+                lineage = squid_data.get('lineage')
+                self.squid.lineage = lineage if isinstance(lineage, dict) else None
+                if self.squid.lineage:
+                    self.squid.inherited_from = [
+                        str(parent) for parent in (self.squid.lineage.get('parents') or [])][:2]
 
             # Restore personality
             if 'personality' in squid_data:

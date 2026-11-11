@@ -406,6 +406,15 @@ window.DOSIDICUS = {
    258.0
   ]
  },
+ "personalities": [
+  "timid",
+  "adventurous",
+  "lazy",
+  "energetic",
+  "introvert",
+  "greedy",
+  "stubborn"
+ ],
  "social_neurons": [
   "aggression",
   "social_fight",

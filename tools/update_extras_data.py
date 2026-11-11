@@ -26,6 +26,7 @@ TARGET = ROOT / 'extras' / 'vendor' / 'dosidicus_data.js'
 def game_data():
     from src import brain_constants as constants
     from src import fighting, inheritance, lifecycle
+    from src.personality import Personality
     from src.portable_brain import HeadlessBrain, TrainingConfig
     newborn = HeadlessBrain(TrainingConfig())
     version = re.search(r'^dosidicus:\s*(\S+)', (ROOT / 'version').read_text(), flags=re.M)
@@ -51,6 +52,7 @@ def game_data():
         'aggression_neuron': constants.AGGRESSION_NEURON,
         # src/fighting.py, src/lifecycle.py
         'aggression_threshold': fighting.AGGRESSION_THRESHOLD,
+        'personalities': [p.value for p in Personality],
         'lifecycle_stages': list(lifecycle.STAGES),
         'death_causes': list(lifecycle.CAUSES),
     }

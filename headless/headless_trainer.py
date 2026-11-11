@@ -789,6 +789,9 @@ Examples:
     
   Quick training with default brain:
     python headless_trainer.py --ticks 5000 --output quick_trained.json
+
+  Watch it train, pause it, step it, in a web browser:
+    python headless_trainer.py --serve
         """
     )
     
@@ -808,6 +811,11 @@ Examples:
     parser.add_argument('--list-scenarios', action='store_true', help='List available training scenarios')
     parser.add_argument('--progress', '-p', type=int, default=500, help='Progress report interval (default: 500)')
     parser.add_argument('--quiet', '-q', action='store_true', help='Minimal output')
+    parser.add_argument('--serve', nargs='?', type=int, const=8765, default=None, metavar='PORT',
+                        help='Train while you watch: serve a page on this computer '
+                             '(default port 8765) showing the brain as it trains, with '
+                             'pause, step, speed, interventions and the trained brain to '
+                             'download. --ticks and --output are not used with it.')
     
     # Config overrides
     parser.add_argument('--learning-rate', type=float, help='Hebbian learning rate')
@@ -842,6 +850,19 @@ Examples:
     if args.blank:
         config.blank = True
         
+    # The same trainer, watched and steered from a page (headless/serve.py).
+    if args.serve is not None:
+        if args.brain and not os.path.exists(args.brain):
+            print(f"✗ Brain file not found: {args.brain}")
+            sys.exit(1)
+        from headless.serve import serve
+        try:
+            serve(args.serve, config, brain=args.brain, scenario=args.scenario)
+        except (ValueError, OSError) as problem:
+            print(f"✗ {problem}")
+            sys.exit(1)
+        return
+
     # Create simulation
     sim = HeadlessSimulation(config)
     
