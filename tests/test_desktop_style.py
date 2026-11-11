@@ -286,15 +286,20 @@ def test_the_brain_designer_button_is_a_plain_black_and_white_brain():
     start = text.index('self.new_50x50_button = QtWidgets.QPushButton("\U0001F9E0")')
     style = text[start:text.index('QPushButton:hover', start)]
     assert 'font-family: "Dosidicus Line Emoji"' in style and 'color: #000000' in style
-    # Drawn from the line font it is one colour: every painted pixel is a grey.
+    # The line font is one colour because it carries no colour pictures at
+    # all - asked of the font itself, not of how some system draws it (how a
+    # glyph is antialiased differs between Qt builds, and sub-pixel coverage
+    # is not grey).
     font = QtGui.QRawFont(str(desktop_style.font_directory() / 'DosidicusLineEmoji.ttf'), 40)
-    image = font.alphaMapForGlyph(font.glyphIndexesForString('\U0001F9E0')[0])
-    assert not image.isNull() and image.width() > 20
-    # Checked pixel by pixel: QImage.isGrayscale() answers False for an
-    # alpha-only image, which is what some Qt builds return here.
-    colours = {image.pixelColor(x, y).getRgb()[:3] for y in range(image.height())
-               for x in range(image.width())}
-    assert all(red == green == blue for red, green, blue in colours)
+    assert font.isValid()
+    for colour_table in ('CBDT', 'COLR', 'SVG ', 'sbix'):
+        assert font.fontTable(colour_table).isEmpty(), colour_table
+    brain = font.glyphIndexesForString('\U0001F9E0')
+    assert brain and brain[0] != 0                       # and it does have the brain
+    assert font.boundingRect(brain[0]).width() > 20
+    # The colour emoji font, for contrast, is the one with pictures in it.
+    colour = QtGui.QRawFont(str(desktop_style.font_directory() / 'DosidicusEmoji.ttf'), 40)
+    assert not colour.fontTable('CBDT').isEmpty()
 
 
 def test_what_fio_ui_lacks_comes_from_the_games_other_fonts_first():
