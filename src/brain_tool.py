@@ -855,12 +855,26 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         Only non-core state (booleans, direction, position) and neurogenesis data are saved.
         """
         # Convert weights to a list for safe JSON serialization
-        weights_list = []
+        # A connection is saved only if both its ends are neurons this brain
+        # has. Learning can leave one to a state that has no neuron of its
+        # own (is_sick -> cleanliness, after a sickness): the save format
+        # refuses a connection to a neuron it was not given, and one such
+        # connection used to stop the whole save - and, from the autosave
+        # timer, the game.
+        known = set(self.brain_widget.neuron_positions)
+        weights_list, strays = [], []
         for k, v in self.brain_widget.weights.items():
             if isinstance(k, tuple) and len(k) == 2:
-                 weights_list.append([k[0], k[1], v])
+                if k[0] in known and k[1] in known:
+                    weights_list.append([k[0], k[1], v])
+                else:
+                    strays.append(f"{k[0]} -> {k[1]}")
             else:
                  print(f"Warning: Skipping non-standard weight key: {k}")
+        if strays and strays != getattr(self, '_reported_stray_connections', None):
+            self._reported_stray_connections = strays
+            print(f"Not saved: {len(strays)} connection(s) to something that is not a "
+                  f"neuron in this brain ({', '.join(strays[:5])})")
 
         # Core neurons whose values come from squid (single source of truth)
         core_stat_neurons = {'hunger', 'happiness', 'cleanliness', 'sleepiness', 

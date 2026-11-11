@@ -3871,8 +3871,16 @@ class TamagotchiLogic:
         self.autosave_timer.start(300000)  # 300000 ms = 5 minutes
 
     def autosave(self):
+        """Save on the timer. Whatever goes wrong with a save, the game goes
+        on: an error raised from a timer ends the whole program, and a squid
+        lost to a failed autosave is worse than one autosave missed."""
         print("     Autosaving...")
-        self.save_game(is_autosave=True)
+        try:
+            self.save_game(is_autosave=True)
+        except Exception as problem:
+            import traceback
+            traceback.print_exc()
+            print(f"     Autosave failed and was skipped: {problem}")
 
     # New methods to update the new neurons
     def update_satisfaction(self):

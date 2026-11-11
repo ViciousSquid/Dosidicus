@@ -44,8 +44,9 @@ def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
 def memory_key_for_record(record) -> str:
     """The memory key an encounter is filed under.
 
-    Ordinarily 'peer:<uuid>', so repeat encounters with one individual
-    reinforce one memory. An encounter that produced a mating is a different
+    Ordinarily 'peer:<uuid>' for the first encounter with an individual; a
+    later one is filed by PeerLedger.record under 'peer:<uuid>:again:<when>',
+    so that what happened in it is kept. An encounter that produced a mating is a different
     experience and gets its own key, 'peer:<uuid>:mating:<id>': MemoryManager
     keeps the first value written under a key, so filed under the plain key a
     mating with a squid already met would be dropped - and because the id is
@@ -196,6 +197,22 @@ class PeerLedger:
         if manager is None or not hasattr(manager, 'add_short_term_memory'):
             return False
         key = memory_key_for_record(record)
+        # A later encounter with a squid already remembered is its own
+        # memory. MemoryManager keeps the FIRST value written under a key, so
+        # filed again under 'peer:<uuid>' everything about the later one was
+        # dropped - a host whose visitor stayed (an encounter is closed and
+        # a new one begun every few minutes) kept the first few minutes and
+        # nothing after: the fights in them were never counted against that
+        # squid, and the first memory, its time refreshed, looked as if it
+        # had been filed again.
+        if key == record.memory_key and hasattr(manager, 'get_memories_by_key_prefix'):
+            try:
+                taken = any(m.get('key') == key for m in
+                            manager.get_memories_by_key_prefix(MEMORY_CATEGORY, key))
+            except Exception:
+                taken = False
+            if taken:
+                key = f"{key}:again:{int(record.started_at * 1000000):x}"
         manager.add_short_term_memory(
             category=MEMORY_CATEGORY,
             key=key,
