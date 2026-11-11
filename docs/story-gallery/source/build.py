@@ -37,6 +37,12 @@ for old in (OUT / 'img').glob('*.webp'):
 e = html.escape
 SIZES = {}
 players = session['players']
+# What each player plays on: a computer, or a phone running the Android game.
+_phones = sum(1 for p in players if p.get('platform') == 'phone')
+_desktops = len(players) - _phones
+games_in_words = (f'{len(players)} copies of the desktop game' if not _phones else
+                  f"{_desktops} cop{'y' if _desktops == 1 else 'ies'} of the desktop game and "
+                  f"{_phones} of the Android game on a phone")
 names = [p['name'] for p in players]
 timeline = session['timeline']
 shots = session['shots']
@@ -282,7 +288,7 @@ page = f"""<title>Dosidicus Story Gallery</title>
 <header class="hero">
   <p class="eyebrow">Dosidicus · internet play</p>
   <h1>{len(players)} squid, {len(players)} homes, {minutes:g} minutes</h1>
-  <p class="lede">{len(players)} copies of the desktop game, each in a home of its own behind its own router,
+  <p class="lede">{games_in_words}, each in a home of its own behind its own router,
   found each other with friend codes and were then left alone for {minutes:g} minutes. Nothing told any squid
   what to do. This is what happened, as it was written down while it happened: every address, code, thought,
   message and number below is from the run.</p>
@@ -418,7 +424,7 @@ def md_images(keys, limit=4):
 
 
 md = [f'# {len(players)} squid, {len(players)} homes, {minutes:g} minutes', '',
-      f'{len(players)} copies of the desktop game, each in a home of its own behind its own router, '
+      f'{games_in_words}, each in a home of its own behind its own router, '
       f'found each other with friend codes and were then left alone for {minutes:g} minutes. Nothing '
       'told any squid what to do. Every address, code, thought and number here is from the run.', '',
       '**The full page, with every picture and the whole session line by line, is '

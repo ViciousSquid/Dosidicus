@@ -227,7 +227,11 @@ def worker(output, number):
     report_message = window.user_interface.show_message
 
     def show_message(message, *a, **k):
-        event('message', str(message))
+        # The tank's own line about a fight in it ("Inky: Lost a fight when
+        # it was attacked: ...") is the fight, for the record and the page.
+        text = str(message)
+        fought = ': Won a fight' in text or ': Lost a fight' in text
+        event('fight' if fought else 'message', text)
         return report_message(message, *a, **k)
     window.user_interface.show_message = show_message
 
@@ -291,6 +295,11 @@ def worker(output, number):
             if uuid not in visitors:
                 event('departure', f'{visitor} left this tank', visitor=visitor)
         seen['visitors'] = visitors
+        # a fight breaking out in this tank: pictured while the cloud is up
+        starts = set(getattr(plugin, '_fight_starts', None) or ())
+        for fight_id in starts - seen.setdefault('fight_starts', set()):
+            state['pending_fight_shot'] = time.monotonic() + 1.2
+        seen['fight_starts'] |= starts
         # what it thinks
         thoughts = list(getattr(b, 'social_thoughts', None) or ())
         for entry in thoughts[seen['thoughts']:]:
@@ -432,6 +441,10 @@ def worker(output, number):
                 shot('friends-4-connected', f"{name}'s linked tanks, a few seconds later", dialog)
                 dialog.hide()
                 state['dialog'] = None
+            if state.get('pending_fight_shot') and time.monotonic() >= state['pending_fight_shot']:
+                state['pending_fight_shot'] = None
+                seen['fights'].add(len(seen['fights']) + 1)
+                shot(f'fight-{len(seen["fights"])}', f"A fight in {name}'s tank")
             pending = state.get('pending_visitor_shot')
             if pending and time.monotonic() >= pending:
                 state['pending_visitor_shot'] = None
