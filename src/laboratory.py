@@ -115,6 +115,7 @@ class NeuronLaboratory(QDialog):
         lay.addLayout(bar)
         lay.addWidget(self.tabs)
         lay.addWidget(self.status_lbl)
+        lay.addWidget(self._whole_life_pointer())
 
         self.tabs.currentChanged.connect(self._paint_current_page)
 
@@ -131,6 +132,32 @@ class NeuronLaboratory(QDialog):
     # ================================================================
     #  Construction helpers
     # ================================================================
+    def _whole_life_pointer(self):
+        """One line saying where the other laboratory is.
+
+        This window is for a living brain, one neuron at a time. The page in
+        extras/ reads saves instead: a whole life in order, a family, several
+        squid side by side. Neither does the other's work, so each names the
+        other. The name is a link to the page, which every build ships
+        (src/extras_path.py); View > Life History opens it too.
+        """
+        from .extras_path import laboratory_page
+        page = laboratory_page()
+        name = "extras/Laboratory.html"
+        if page is not None:
+            name = f"<a href='{QtCore.QUrl.fromLocalFile(str(page)).toString()}'>{name}</a>"
+        label = QLabel(loc(
+            "lab_whole_life_pointer",
+            "This window studies one living brain. For a squid's whole life "
+            "in order, its family, or several squid compared from their "
+            "saves, open {page} in a web browser.", page=name))
+        label.setTextFormat(Qt.RichText)
+        label.setOpenExternalLinks(True)
+        label.setWordWrap(True)
+        label.setStyleSheet("color:#667;font-size:9pt;")
+        self.whole_life_lbl = label
+        return label
+
     def _build_overview_tab(self):
         self.ov_scroll = QScrollArea()
         self.ov_widget = QWidget()

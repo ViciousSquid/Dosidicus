@@ -42,6 +42,7 @@ translations = {
     "statistics": "Statistiques",
     "brain_tool": "Outil Cerebral",
     "neuron_lab": "Laboratoire de Neurones",
+    "lab_page": "Histoire de vie (s'ouvre dans le navigateur)",
     "task_manager": "Gestionnaire de Taches",
 
     # ===== MENU VITESSE =====
@@ -91,6 +92,18 @@ translations = {
     "startup": "Démarrage",
     "show_tutorial_q": "Afficher le tutoriel ?",
     "auto_decline": "(Refus automatique dans {seconds}s)",
+    # Save slots (src/slot_chooser.py)
+    "save_slots": "Emplacements...",
+    "slot_choose": "Choisis un emplacement",
+    "slot_new_game": "Nouvelle partie",
+    "slot_delete": "Supprimer",
+    "slot_delete_which": "Lequel supprimer ?",
+    "slot_delete_confirm": "Supprimer {name} ?",
+    "slot_back": "Retour",
+    "slot_playing": "en cours",
+    "slot_unnamed": "Calmar",
+    "slot_stage_dead": "mort",
+    "slot_stage_parent": "parent",
     "tutorial_title": "Tutoriel",
     "tutorial_query": "Voulez-vous voir le tutoriel ?",
 

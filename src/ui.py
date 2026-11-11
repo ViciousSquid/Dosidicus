@@ -164,6 +164,12 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         if self.is_headstone:
             self.category = 'decoration'
             self.can_be_picked_up = False
+            # Behind the squid, always: whatever lives is in front of a
+            # stone. (The squid, like every other decoration, is at 0.)
+            self.setZValue(self.HEADSTONE_Z)
+
+    #: Where a headstone sits in the stacking: under the squid and visitors.
+    HEADSTONE_Z = -1
 
     #: A headstone is never bigger than this share of the squid's size.
     HEADSTONE_SHARE = 0.8
@@ -579,6 +585,18 @@ class Ui:
         self._neurogenesis_debug_dialog.update_debug_info()
         self._neurogenesis_debug_dialog.show()
         self._neurogenesis_debug_dialog.raise_()
+
+    def open_laboratory_page(self):
+        """View > Life History: the save-file tools, in the web browser."""
+        from .extras_path import laboratory_page
+        page = laboratory_page()
+        if page is None:
+            self.show_message("The laboratory tools (the extras folder) are not with this copy of the game")
+            return False
+        opened = QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(page)))
+        if not opened:
+            self.show_message(f"Open this file in a web browser: {page}")
+        return opened
 
     def show_neuron_laboratory(self):
         if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
@@ -1074,6 +1092,11 @@ class Ui:
                                         QtGui.QPen(QtGui.QColor(0, 0, 0)), QtGui.QBrush(QtGui.QColor(255, 255, 255)))
         self.cleanliness_overlay = self.scene.addRect(50, 50, self.window_width - 100, self.window_height - 100,
                                                     QtGui.QPen(QtCore.Qt.NoPen), QtGui.QBrush(QtGui.QColor(139, 69, 19, 0)))
+        # The tank and its murk sit below everything in it - below a
+        # headstone too, which is itself below the squid
+        # (ResizablePixmapItem.HEADSTONE_Z).
+        self.rect_item.setZValue(-3)
+        self.cleanliness_overlay.setZValue(-2)
         
         self.dirty_text_items = []
         self.dirty_text_target_count = 0
@@ -1709,6 +1732,9 @@ class Ui:
         file_menu.addAction(self.new_game_action)
         file_menu.addAction(self.load_action)
         file_menu.addAction(self.save_action)
+        # Three tanks, each with its own squid (src/save_slots.py).
+        self.save_slots_action = QtWidgets.QAction(loc.get("save_slots", "Save slots..."), self.window)
+        file_menu.addAction(self.save_slots_action)
 
         view_menu = self.menu_bar.addMenu(loc.get("view"))
         self.brain_designer_action = QtWidgets.QAction(loc.get("brain_designer"), self.window)
@@ -1742,6 +1768,21 @@ class Ui:
         self.neurogenesis_debug_action = QtWidgets.QAction(loc.get("neuron_lab"), self.window)
         self.neurogenesis_debug_action.triggered.connect(self.show_neuron_laboratory)
         view_menu.addAction(self.neurogenesis_debug_action)
+
+        # The tools shipped beside the game (extras/): a squid's whole life,
+        # its family, several squid compared - from their saves, in a web
+        # browser. It is not the Neuron Laboratory above, which studies one
+        # living neuron, so it is not called a laboratory here: two entries
+        # of that name, one under the other, were one too many. It is named
+        # for what it shows, and set apart from the windows above it.
+        view_menu.addSeparator()
+        self.laboratory_page_action = QtWidgets.QAction(
+            loc.get("lab_page", default="Life History (opens in your browser)"), self.window)
+        self.laboratory_page_action.setStatusTip(
+            "A squid's whole life from its save, its family, and squid compared")
+        self.laboratory_page_action.triggered.connect(self.open_laboratory_page)
+        view_menu.addAction(self.laboratory_page_action)
+        view_menu.addSeparator()
 
         self.preferences_action = QtWidgets.QAction(loc.get("preferences"), self.window)
         self.preferences_action.triggered.connect(self.show_preferences)

@@ -177,6 +177,9 @@ class PeerLedger:
             if any(m.get('key') == key for m in existing):
                 return False
         summary = self.summary(record.peer.uuid)
+        #: Whether this is the first encounter with that squid on record -
+        #: what "another squid met" is counted from (count_first_meeting).
+        self.last_was_new_squid = summary.encounters == 0
         summary.name = record.peer.name or summary.name
         summary.encounters += 1
         if record.valence >= 0:
@@ -238,6 +241,17 @@ class PeerLedger:
             if manager.should_transfer_to_long_term(candidate):
                 manager.transfer_to_long_term_memory(MEMORY_CATEGORY, key)
         return True
+
+    def count_first_meeting(self, statistics) -> bool:
+        """Count a squid met for the first time in the squid's statistics
+        ("Other squids encountered"). The statistic existed and was shown,
+        and nothing ever counted it: it read 0 for a squid that had spent
+        its life among others. Call after record(); True if it counted."""
+        if not getattr(self, 'last_was_new_squid', False) or statistics is None:
+            return False
+        self.last_was_new_squid = False
+        increment = getattr(statistics, 'increment', None)
+        return bool(callable(increment) and increment('other_squids_encountered'))
 
     # -- cache ----------------------------------------------------------
     def refresh(self) -> None:

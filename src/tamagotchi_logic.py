@@ -12,6 +12,7 @@ from .squid import Personality, Squid
 from .ui import ResizablePixmapItem
 from .brain_tool import SquidBrainWindow
 from .learning import HebbianLearning
+from .tint import rgb_of
 from .interactions import RockInteractionManager
 from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
@@ -3545,6 +3546,15 @@ class TamagotchiLogic:
                     # state. Older saves may nest their persisted values here.
                     if attr != 'statistics' and hasattr(self.squid, attr):
                         setattr(self.squid, attr, value)
+                # Whose egg it hatched from is read off its lineage. A squid
+                # that hatched from a fresh egg has no such attribute at all,
+                # so the loop above never restored it and an heir forgot,
+                # at its first reload, that it was one.
+                lineage = squid_data.get('lineage')
+                self.squid.lineage = lineage if isinstance(lineage, dict) else None
+                if self.squid.lineage:
+                    self.squid.inherited_from = [
+                        str(parent) for parent in (self.squid.lineage.get('parents') or [])][:2]
 
             # Restore personality
             if 'personality' in squid_data:
@@ -3616,6 +3626,11 @@ class TamagotchiLogic:
                 self.statistics_window.update_statistics()
 
             print(f"[Load] Successfully loaded: {os.path.basename(latest)}")
+            # Only a new game started the autosave timer (after its hatching
+            # splash): a game that began from a save was never autosaved.
+            # A load is never failed by its timer.
+            if getattr(self, 'autosave_timer', None) is not None:
+                self.start_autosave()
             return True
 
         except Exception as e:
@@ -3654,6 +3669,14 @@ class TamagotchiLogic:
             'personality': self.squid.personality.value,
             'uuid': str(self.squid.uuid),  # Convert UUID to string
             'name': getattr(self.squid, 'name', 'Squid'),  # Save squid name if it exists
+            # Its colour, as its player chose it. Loading has always read
+            # this; saving never wrote it, so a coloured squid came back
+            # from every save as plain as it hatched.
+            'tint_color': rgb_of(getattr(self.squid, 'tint_color', None)),
+            # A hatchling's parents and what it inherited from each
+            # (src/inheritance.py). Kept with the squid for good: it used to
+            # be known only until the game was closed.
+            'lineage': getattr(self.squid, 'lineage', None),
         }
 
         # Statistics are owned by the model. The tab is a read-only projection.
@@ -3708,6 +3731,23 @@ class TamagotchiLogic:
             'LongTerm': long_term_memory,
             'custom_brain': get_custom_brain_save_data()
         }
+
+        # The life in order - every event that shaped this squid and the
+        # brain it had at each (src/life_timeline.py), written beside the
+        # rest as timeline.json for the Laboratory pages in extras/. Built
+        # from what is already above; a save is never held up by it.
+        try:
+            from .life_timeline import build as build_timeline
+            from .life_journey import build_journey, gather_facts
+            chapters = None
+            try:
+                chapters = build_journey(gather_facts(
+                    logic=self, brain=self.brain_window.brain_widget, squid=self.squid))
+            except Exception:
+                chapters = None
+            save_data['timeline'] = build_timeline(save_data, journey=chapters)
+        except Exception as problem:
+            print(f"[Warning] Could not write the life timeline: {problem}")
 
         # Add achievements data if available (will be saved as achievements.json in the ZIP)
         if achievements_data is not None:

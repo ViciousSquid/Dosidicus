@@ -181,3 +181,75 @@ def test_no_called_workflow_asks_for_more_than_its_caller_was_given():
                 top = wanted(flow, job) if ('permissions' in job or 'permissions' in flow) \
                     else {'contents': 'write', 'actions': 'write'}
                 check(job['uses'].rsplit('/', 1)[1], top, [f'{name}:{job_name}'])
+
+
+def test_every_build_ships_the_laboratory_tools(tmp_path):
+    """extras/ goes into the runtime data of every platform's build, whole
+    and without caches, and a build that would lack part of it fails."""
+    import shutil
+    from pathlib import Path
+    from tools.release_support import RUNTIME
+    root = Path(__file__).resolve().parents[1]
+    assert 'extras' in RUNTIME
+    for name in ('images', 'src', 'plugins'):
+        (tmp_path / name).mkdir()
+    (tmp_path / 'config.ini').write_text('[General]\n')
+    (tmp_path / 'version').write_text('dosidicus: 3.5.0\n')
+    shutil.copytree(root / 'extras', tmp_path / 'extras')
+    (tmp_path / 'extras' / '__pycache__').mkdir(exist_ok=True)
+    (tmp_path / 'extras' / '__pycache__' / 'x.pyc').write_bytes(b'x')
+    target = tmp_path / 'output'
+    copy_runtime(tmp_path, target)
+    shipped = target / 'extras'
+    for name in ('Laboratory.html', 'SaveViewer.html', 'SquidBreeder.html', 'README.md'):
+        assert (shipped / name).read_bytes() == (root / 'extras' / name).read_bytes()
+    # every script a page loads from beside itself went with it
+    import re
+    for page in shipped.glob('*.html'):
+        for source in re.findall(r'<script[^>]+src="([^"]+)"', page.read_text(encoding='utf-8')):
+            assert (shipped / source).is_file(), f'{page.name}: {source}'
+    assert not (shipped / '__pycache__').exists()
+    # a tree with the tools but missing a piece does not make a release
+    (tmp_path / 'extras' / 'vendor' / 'lab.js').unlink()
+    with pytest.raises(ValueError, match='extras/vendor/lab.js'):
+        copy_runtime(tmp_path, tmp_path / 'second')
+    # each platform's build assembles its data through that one function
+    workflows = root / '.github' / 'workflows'
+    assert 'release_support.py runtime' in (workflows / 'build-nuitka.yml').read_text()
+    arm = (workflows / 'build-windows-arm64.yml').read_text()
+    assert 'release_support.py runtime' in arm and '"extras"' in arm
+
+
+def test_the_game_finds_and_opens_the_laboratory(tmp_path, monkeypatch):
+    import inspect
+    from pathlib import Path
+    from src import extras_path
+    root = Path(__file__).resolve().parents[1]
+    assert extras_path.laboratory_page() == root / 'extras' / 'Laboratory.html'
+    # a Mac app works from its data folder, where the app's extras are linked
+    from src import macos_runtime
+    assert 'extras' in macos_runtime._READ_ONLY_DIRECTORIES
+    resources = tmp_path / 'Dosidicus.app' / 'Contents' / 'MacOS'
+    (resources / 'extras').mkdir(parents=True)
+    (resources / 'extras' / 'Laboratory.html').write_text('<html></html>')
+    (resources / 'Dosidicus').write_text('')
+    home = tmp_path / 'data'
+    before = Path.cwd()
+    try:
+        assert macos_runtime.prepare_macos_runtime(executable=resources / 'Dosidicus', data_dir=home) == home
+        assert (home / 'extras' / 'Laboratory.html').is_file()
+        # found from the working folder when it is nowhere beside the program
+        monkeypatch.setattr(extras_path, '__file__', str(tmp_path / 'elsewhere' / 'src' / 'extras_path.py'))
+        monkeypatch.setattr(extras_path.sys, 'executable', str(tmp_path / 'elsewhere' / 'python'))
+        monkeypatch.setattr(extras_path.sys, 'argv', [str(tmp_path / 'elsewhere' / 'main.py')])
+        assert extras_path.laboratory_page().resolve() == (resources / 'extras' / 'Laboratory.html').resolve()
+    finally:
+        import os
+        os.chdir(before)
+    from src.ui import Ui
+    assert 'laboratory_page()' in inspect.getsource(Ui.open_laboratory_page)
+    source = inspect.getsource(Ui)
+    assert 'self.laboratory_page_action.triggered.connect(self.open_laboratory_page)' in source
+    import importlib
+    for code in ('en', 'de', 'es', 'fr', 'ja', 'zh', 'ml'):
+        assert importlib.import_module(f'translations.{code}').translations.get('lab_page'), code

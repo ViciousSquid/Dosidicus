@@ -277,6 +277,13 @@ class AboutTab(BrainBaseTab):
             # Update the squid's name
             if hasattr(self.tamagotchi_logic, 'squid') and self.tamagotchi_logic.squid:
                 self.tamagotchi_logic.squid.name = new_name
+                # Its save slot is named after it, and reads the name from
+                # its save: saved now, the slot is renamed now. The file
+                # itself keeps the squid's uuid as its name.
+                try:
+                    self.tamagotchi_logic.save_game()
+                except Exception as problem:
+                    print(f"[Rename] Renamed, but could not save yet: {problem}")
 
     def show_certificate(self):
         """Show the squid certificate window"""

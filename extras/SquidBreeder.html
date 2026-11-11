@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <title>Squid Breeder</title>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/dosidicus_data.js"></script>
 
 <style>
 body {
@@ -83,6 +84,16 @@ label { margin-right: 10px; }
 
 <button id="saveBtn" onclick="saveJSON()" style="background: #3399ff; color: white; padding: 15px 30px; font-size: 20px; border: none; border-radius: 10px; cursor: pointer; display: none; margin: -10px auto 20px auto;">💾 Save Child Brain</button>
 
+<div id="hatchPanel" class="panel" style="display:none; max-width:820px; margin:0 auto 20px auto;">
+<h3>🥚 Hatch it in the game</h3>
+<p style="font-size:14px;opacity:.9">Writes a save the game opens: a newborn squid with this brain, and a record of
+which parent each inherited synapse came from. It is marked as bred here, in the laboratory, not by two squid meeting.</p>
+Name <input type="text" id="hatchName" value="Hatchling" maxlength="24" style="padding:6px;font-size:15px">
+&nbsp; Personality <select id="hatchPersonality" style="padding:6px;font-size:15px"></select>
+<button type="button" onclick="saveHatchling()" style="background:#ffb347;color:#222;padding:10px 22px;font-size:17px;border:none;border-radius:8px;cursor:pointer;margin-left:12px">🥚 Save hatchling (.zip)</button>
+<p id="hatchNote" style="font-size:13px;opacity:.85"></p>
+</div>
+
 <div class="panel">
 <h3>Offspring</h3>
 
@@ -91,6 +102,7 @@ label { margin-right: 10px; }
 <label><input type="checkbox" id="fA" checked>Parent A</label>
 <label><input type="checkbox" id="fB" checked>Parent B</label>
 <label><input type="checkbox" id="fBoth" checked>Both Parents</label>
+<span style="font-size:13px;opacity:.8">&nbsp; green: A &nbsp; blue: B &nbsp; grey: as every squid hatches</span>
 
 <br><br><b>Neuron Type:</b><br>
 <label><input type="checkbox" id="fCore" checked>Core</label>
@@ -99,9 +111,15 @@ label { margin-right: 10px; }
 <br><br><b>View Mode:</b><br>
 <label><input type="checkbox" id="heatmap">Weight Δ Heatmap</label>
 
-<br><br><b>Mutation:</b><br>
-Rate <input type="range" id="mutRate" min="0" max="1" step="0.01" value="0.1">
-Strength <input type="range" id="mutStrength" min="0" max="2" step="0.1" value="0.3">
+<br><br><b>How to breed:</b><br>
+<label><input type="radio" name="mode" id="modeGame" checked>As the game does</label>
+<label><input type="radio" name="mode" id="modeBlend">Free blend (not what the game does)</label>
+<p id="modeNote" style="font-size:13px;opacity:.85;max-width:780px"></p>
+
+<b>Mutation:</b><br>
+Rate <input type="range" id="mutRate" min="0" max="1" step="0.01" value="0.1"> <span id="mutRateValue"></span>
+Strength <input type="range" id="mutStrength" min="0" max="2" step="0.05" value="0.1"> <span id="mutStrengthValue"></span>
+<button type="button" onclick="gameMutation()" style="margin-left:10px">Game's values</button>
 </div>
 
 <textarea id="output"></textarea>
@@ -121,33 +139,116 @@ async function loadFile(e,t){
     if(!f) return;
 
     if(f.name.endsWith(".zip")){
+        // A save holds several JSON files. The brain is brain_state.json;
+        // taking whichever came first loaded game_state.json, which has no
+        // brain in it at all.
         const zip=await JSZip.loadAsync(f);
-        for(const k of Object.keys(zip.files)){
-            if(k.endsWith(".json")){
-                const txt=await zip.files[k].async("string");
-                input(t).value=txt;
-                renderNetwork(t);
-                return;
-            }
+        const names=Object.keys(zip.files);
+        parentNames[t]=f.name.replace(/\.zip$/i,"");
+        const game=names.find(k=>k.split("/").pop()==="game_state.json");
+        if(game){
+            try{
+                const squid=(JSON.parse(await zip.files[game].async("string")).squid)||{};
+                if(squid.name) parentNames[t]=String(squid.name);
+            }catch(err){ /* the file name will do */ }
         }
+        const pick=["brain_state.json","custom_brain.json"]
+            .map(want=>names.find(k=>k.split("/").pop()===want)).find(Boolean)
+            || names.find(k=>k.endsWith(".json"));
+        if(!pick){ alert("That zip has no brain in it."); return; }
+        let txt=await zip.files[pick].async("string");
+        if(txt.trim()==="null" && pick.endsWith("custom_brain.json")){
+            const other=names.find(k=>k.endsWith("brain_state.json"));
+            if(other) txt=await zip.files[other].async("string");
+        }
+        input(t).value=txt;
+        renderNetwork(t);
     } else {
+        parentNames[t]=f.name.replace(/\.json$/i,"");
         input(t).value=await f.text();
         renderNetwork(t);
     }
 }
 
+// Who each parent is: its name in its save, or else the file's.
+const parentNames={A:"Squid A",B:"Squid B"};
+
 const input = t => document.getElementById("input"+t);
 
 // ================= BREED =================
 
-function breed(){
-    const A=normaliseBrain(JSON.parse(inputA.value));
-    const B=normaliseBrain(JSON.parse(inputB.value));
+// What the game does (src/inheritance.py), step for step:
+//
+//   * each parent passes on a GAMETE: a random half of its synapses between
+//     the neurons every squid is born with. No neuron a parent grew is
+//     inherited - a hatchling grows its own;
+//   * the hatchling starts as a newborn brain, and both gametes are laid over
+//     its innate wiring. Where both parents passed on the same synapse, one
+//     of them is chosen at random;
+//   * a tenth of the inherited weights mutate, by up to 0.1 either way, and
+//     every weight stays within -1 to 1.
+//
+// The newborn brain and the two numbers come from the game itself
+// (vendor/dosidicus_data.js, written by tools/update_extras_data.py).
+const GAME=window.DOSIDICUS||null;
 
+function gameteOf(parent){
+    const born=new Set(Object.keys(GAME.newborn_neurons));
+    const edges=Object.keys(parent.weights).filter(k=>{
+        const [a,b]=k.split("|");
+        return a!==b && born.has(a) && born.has(b) && Number.isFinite(parent.weights[k]);
+    }).sort();
+    // a random half, without replacement
+    for(let i=edges.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [edges[i],edges[j]]=[edges[j],edges[i]];
+    }
+    const genes={};
+    edges.slice(0,Math.floor(edges.length/2)).slice(0,GAME.max_genes).forEach(k=>{
+        genes[k]=Math.max(-1,Math.min(1,Math.round(parent.weights[k]*1e4)/1e4));
+    });
+    return genes;
+}
+
+function breedAsTheGameDoes(A,B){
+    const rate=+mutRate.value, size=+mutStrength.value;
+    const child={neurons:{},weights:{},state:{},_lineage:{neurons:{},weights:{},mutated:[]}};
+    for(const [name,pos] of Object.entries(GAME.newborn_neurons)){
+        child.neurons[name]={position:pos.slice()};
+        child._lineage.neurons[name]="innate";
+    }
+    for(const [src,dst,w] of GAME.newborn_connections){
+        child.weights[src+"|"+dst]=w;
+        child._lineage.weights[src+"|"+dst]="innate";
+    }
+    const offered={};
+    [["A",gameteOf(A)],["B",gameteOf(B)]].forEach(([who,genes])=>{
+        for(const k in genes) (offered[k]=offered[k]||[]).push([who,genes[k]]);
+    });
+    Object.keys(offered).sort().forEach(k=>{
+        const [who,weight]=offered[k][Math.floor(Math.random()*offered[k].length)];
+        let w=weight;
+        if(Math.random()<rate){
+            w=Math.max(-1,Math.min(1,w+(Math.random()*2-1)*size));
+            child._lineage.mutated.push(k);
+        }
+        child.weights[k]=Math.round(w*1e4)/1e4;
+        child._lineage.weights[k]=who;
+    });
+    child._bred={how:"as the game does",mutation_rate:rate,mutation_size:size,
+                 inherited:Object.keys(offered).length,
+                 left_behind:{A:grownBy(A),B:grownBy(B)}};
+    return child;
+}
+
+function grownBy(parent){
+    const born=new Set(Object.keys(GAME.newborn_neurons));
+    return Object.keys(parent.neurons||{}).filter(n=>!born.has(n)).sort();
+}
+
+function breedByBlending(A,B){
     const child=structuredClone(A);
-    child._lineage={neurons:{},weights:{}};
-
-    // neurons
+    child._lineage={neurons:{},weights:{},mutated:[]};
     for(let n in B.neurons){
         if(!child.neurons[n]){
             child.neurons[n]=B.neurons[n];
@@ -157,33 +258,174 @@ function breed(){
     for(let n in A.neurons){
         if(!child._lineage.neurons[n]) child._lineage.neurons[n]="A";
     }
-
-    // weights
     child.weights={};
     const keys=new Set([...Object.keys(A.weights),...Object.keys(B.weights)]);
     keys.forEach(k=>{
         const inA=k in A.weights;
         const inB=k in B.weights;
-
         const wa=A.weights[k]??rand();
         const wb=B.weights[k]??rand();
-
         child.weights[k]=(wa+wb)/2;
-
         child._lineage.weights[k]=inA&&inB?"both":(inA?"A":"B");
     });
-
     mutate(child);
+    child._bred={how:"free blend - not how the game breeds"};
+    return child;
+}
 
-    output.value=JSON.stringify(child,null,2);
+// What is written out is a brain the game can load (Network tab > Load
+// brain): neurons with positions and a list of connections. It used to be
+// this tool's own "source|target" map, which nothing in the game reads.
+function brainFile(child){
+    const connections=Object.keys(child.weights).sort().map(k=>{
+        const [source,target]=k.split("|");
+        return {source,target,weight:child.weights[k]};
+    }).filter(c=>child.neurons[c.source]&&child.neurons[c.target]);
+    const neurons={};
+    for(const [name,n] of Object.entries(child.neurons)) neurons[name]={position:n.position};
+    return {neurons,connections,bred:child._bred,lineage:child._lineage.weights,
+            mutated:child._lineage.mutated};
+}
+
+function breed(){
+    let A,B;
+    try{
+        A=normaliseBrain(JSON.parse(inputA.value));
+        B=normaliseBrain(JSON.parse(inputB.value));
+    }catch(e){ alert("Load a brain for both squid first."); return; }
+    if(!A||!A.neurons||!B||!B.neurons){ alert("One of those is not a brain."); return; }
+
+    const asGame=modeGame.checked && GAME;
+    const child=asGame?breedAsTheGameDoes(A,B):breedByBlending(A,B);
+
+    output.value=JSON.stringify(brainFile(child),null,2);
     renderOffspring(child);
 
     window._offspring=child;
     window._parentA=A;
     window._parentB=B;
 
-    // Reveal save button
+    describeMode(child);
     document.getElementById("saveBtn").style.display = "block";
+    // Only a child bred as the game breeds is a squid the game could have hatched.
+    document.getElementById("hatchPanel").style.display = asGame ? "block" : "none";
+    document.getElementById("hatchNote").textContent = "";
+}
+
+// ================= HATCHLING SAVE =================
+// A save the game opens: a newborn with the child's brain. It holds only
+// what a hatchling has. Its drives are left out, so the game gives it the
+// ones every squid hatches with; nothing a parent learned or grew is in it.
+
+function newUuid(){
+    if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    const b=new Uint8Array(16);
+    (window.crypto||window.msCrypto).getRandomValues(b);
+    b[6]=(b[6]&0x0f)|0x40; b[8]=(b[8]&0x3f)|0x80;
+    const h=[...b].map(x=>x.toString(16).padStart(2,"0")).join("");
+    return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+function hatchlingSave(child,name,personality){
+    const now=Date.now()/1000, uuid=newUuid();
+    let nameA=parentNames.A, nameB=parentNames.B;
+    if(nameA===nameB){ nameA+=" (A)"; nameB+=" (B)"; }
+    const who={A:nameA,B:nameB};
+    const newborn={};
+    for(const [src,dst,w] of GAME.newborn_connections) newborn[src+"|"+dst]=w;
+    const mutated=new Set(child._lineage.mutated);
+    const inherited=[], totals=[];
+    Object.keys(child.weights).sort().forEach(k=>{
+        const [source,target]=k.split("|"), from=child._lineage.weights[k], weight=child.weights[k];
+        const born=newborn[k];
+        const counts={}, sums={};
+        if(born!==undefined){ counts.innate=1; sums.innate=born; }
+        if(from==="A"||from==="B"){
+            inherited.push({synapse:[source,target],parent:who[from],weight,mutated:mutated.has(k)});
+            counts.inheritance=1;
+            sums.inheritance=Math.round((weight-(born||0))*1e4)/1e4;
+        }
+        totals.push({edge:[source,target],counts,totals:sums,first_seen:now});
+    });
+    const brain=brainFile(child);
+    brain.provenance={total_changes:totals.length,origins:{},pruned:[],totals};
+    const lineage={parents:[nameA,nameB].sort(),inherited,hatched_at:now,bred_by:"laboratory"};
+    const files={
+        "game_state.json":{
+            squid:{name,personality,uuid,is_sick:false,lineage,inherited_from:lineage.parents},
+            tamagotchi_logic:{cleanliness_threshold_time:0,hunger_threshold_time:0,last_clean_time:0,points:0},
+            decorations:[],
+            lifecycle:{stage:"living",reproduction:null,egg:null,death:null,neglected_seconds:0,sick_seconds:0},
+        },
+        "brain_state.json":brain,
+        "statistics.json":{},
+        "ShortTerm.json":[],
+        "LongTerm.json":[],
+    };
+    return {uuid,files,lineage};
+}
+
+async function saveHatchling(){
+    const child=window._offspring;
+    if(!child||!child._bred||child._bred.how!=="as the game does"){ alert("Breed as the game does first."); return; }
+    const name=(document.getElementById("hatchName").value||"Hatchling").trim().slice(0,24)||"Hatchling";
+    let personality=document.getElementById("hatchPersonality").value;
+    if(personality==="random") personality=GAME.personalities[Math.floor(Math.random()*GAME.personalities.length)];
+    const made=hatchlingSave(child,name,personality);
+    const zip=new JSZip();
+    for(const [file,data] of Object.entries(made.files)) zip.file(file,JSON.stringify(data,null,1));
+    zip.file("uuid.txt","SquidSignature    "+made.uuid);
+    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
+    window._hatchling={made,blob};
+    const link=document.createElement("a");
+    link.href=URL.createObjectURL(blob);
+    // The game names a squid's save after it: its uuid, with underscores.
+    const fileName=made.uuid.replace(/-/g,"_")+".zip";
+    link.download=fileName;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    document.getElementById("hatchNote").textContent=
+        `${name} (${personality}), child of ${made.lineage.parents.join(" and ")}: ${made.lineage.inherited.length} inherited synapses, `+
+        `${made.lineage.inherited.filter(g=>g.mutated).length} mutated. Saved as ${fileName}. `+
+        "Put this file in the game's saves folder: it takes a free save slot, and you open it from the game's Save Manager.";
+}
+
+(function(){
+    const select=document.getElementById("hatchPersonality");
+    if(!select||!GAME) return;
+    ["random",...GAME.personalities].forEach(p=>{
+        const o=document.createElement("option"); o.value=p; o.textContent=p; select.appendChild(o);
+    });
+})();
+
+function describeMode(child){
+    const note=document.getElementById("modeNote");
+    if(modeGame.checked && GAME){
+        let text="A random half of each parent's newborn wiring, laid over a newborn brain; "+
+                 "where both passed on the same synapse one is chosen at random; "+
+                 "then mutation. No grown neuron is inherited.";
+        if(child && child._bred){
+            const left=child._bred.left_behind;
+            text+=` This child inherited ${child._bred.inherited} synapses, `+
+                  `${child._lineage.mutated.length} of them mutated.`;
+            if(left.A.length||left.B.length)
+                text+=` Not inherited: ${[...new Set([...left.A,...left.B])].join(", ")}.`;
+        }
+        note.textContent=text;
+    } else {
+        note.textContent="Every weight is the average of the two parents', missing ones are "+
+                         "random, and every neuron either parent has is kept. The game never does this.";
+    }
+}
+
+function gameMutation(){
+    if(!GAME) return;
+    mutRate.value=GAME.mutation_rate;
+    mutStrength.value=GAME.mutation_size;
+    showMutation();
+}
+function showMutation(){
+    mutRateValue.textContent=(+mutRate.value).toFixed(2)+(GAME&&+mutRate.value===GAME.mutation_rate?" (game)":"");
+    mutStrengthValue.textContent=(+mutStrength.value).toFixed(2)+(GAME&&+mutStrength.value===GAME.mutation_size?" (game)":"");
 }
 
 // ================= SAVE =================
@@ -342,13 +584,15 @@ function render(data,id,isOffspring=false){
 // ================= HELPERS =================
 
 function pass(o){
-    return (o==="A"&&fA.checked)||(o==="B"&&fB.checked)||(o==="both"&&fBoth.checked)||(o==="novel");
+    return (o==="A"&&fA.checked)||(o==="B"&&fB.checked)||(o==="both"&&fBoth.checked)
+        ||(o==="novel")||(o==="innate");
 }
 
 function color(o){
     if(o==="A") return "#00ff88";
     if(o==="B") return "#3399ff";
     if(o==="novel") return "#ffcc00";
+    if(o==="innate") return "#777777";     // as it hatched: from neither parent
     return "#ffffff";
 }
 
@@ -411,6 +655,11 @@ function forward(net,target){
 }
 
 // ================= UI =================
+
+["mutRate","mutStrength"].forEach(id=>document.getElementById(id).oninput=showMutation);
+["modeGame","modeBlend"].forEach(id=>document.getElementById(id).onchange=()=>describeMode(null));
+gameMutation();
+describeMode(null);
 
 ["fA","fB","fBoth","fCore","fCustom","heatmap"].forEach(id=>{
     document.getElementById(id).onchange=()=>{

@@ -42,6 +42,7 @@ translations = {
     "statistics": "Estadisticas",
     "brain_tool": "Herramienta Cerebral",
     "neuron_lab": "Laboratorio de Neuronas",
+    "lab_page": "Historia de vida (se abre en el navegador)",
     "task_manager": "Administrador de Tareas",
 
     # ===== MENU VELOCIDAD =====
@@ -91,6 +92,18 @@ translations = {
     "startup": "Inicio",
     "show_tutorial_q": "¿Mostrar tutorial?",
     "auto_decline": "(Autocancelación en {seconds}s)",
+    # Save slots (src/slot_chooser.py)
+    "save_slots": "Ranuras de guardado...",
+    "slot_choose": "Elige una ranura",
+    "slot_new_game": "Nueva partida",
+    "slot_delete": "Borrar",
+    "slot_delete_which": "¿Cuál borrar?",
+    "slot_delete_confirm": "¿Borrar a {name}?",
+    "slot_back": "Volver",
+    "slot_playing": "en juego",
+    "slot_unnamed": "Calamar",
+    "slot_stage_dead": "muerto",
+    "slot_stage_parent": "progenitor",
     "tutorial_title": "Tutorial",
     "tutorial_query": "¿Te gustaría ver el tutorial?",
 

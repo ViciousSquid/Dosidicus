@@ -36,6 +36,7 @@ LOGIC = None
 BRAIN = None
 SQUID = None
 _TMPDIR = None
+_SAVE_MANAGER_INIT = None
 _PREV_CWD = None
 
 
@@ -49,7 +50,8 @@ def setUpModule():
     # Keep saves out of the working tree and guarantee a fresh simulation.
     _TMPDIR = tempfile.TemporaryDirectory(prefix="dosidicus-test-")
     from src import save_manager
-    _orig_init = save_manager.SaveManager.__init__
+    global _SAVE_MANAGER_INIT
+    _orig_init = _SAVE_MANAGER_INIT = save_manager.SaveManager.__init__
 
     def _tmp_init(self, save_directory="saves"):
         _orig_init(self, os.path.join(_TMPDIR.name, "saves"))
@@ -101,6 +103,12 @@ def tearDownModule():
         WINDOW.tamagotchi_logic.stop()
         WINDOW.squid.retire()
         WINDOW.splash.timer.stop()
+    # Give SaveManager back its own folder. Left patched, every test after
+    # this module shared one save folder whatever folder it asked for - and
+    # with save slots, whose squid "the save" is depends on the folder.
+    if _SAVE_MANAGER_INIT is not None:
+        from src import save_manager
+        save_manager.SaveManager.__init__ = _SAVE_MANAGER_INIT
     if _PREV_CWD:
         os.chdir(_PREV_CWD)
     if _TMPDIR is not None:

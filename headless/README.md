@@ -1,20 +1,25 @@
 ## Headless Brain Trainer
-A standalone training system for Dosidicus neural network brains that runs without GUI overhead, enabling fast accelerated training of custom brain architectures.
+The trainer for Dosidicus brains: it raises a squid with no tank to draw, on the
+same brain modules the game runs (`src/`), so what it trains is what the game plays.
 
+There is one trainer. Use it from the command line, or watch and steer it from a
+web page with `--serve`.
 
 ## Features
 
-- **Headless Operation**: No GUI required, runs purely on CPU
-- **Accelerated Time**: Runs 25,000-35,000+ ticks per second (vs ~1 tick/second in real-time)
-- **Custom Brain Loading**: Load brain architectures from JSON files
-- **Neurogenesis**: Automatic creation of new neurons based on stress/novelty/reward triggers
-- **Hebbian Learning**: Continuous weight updates based on co-activation
-- **Training Scenarios**: Predefined scenarios for different training goals
-- **Export Trained Brains**: Save trained brains back to JSON for use in the main game
+- **No window**: nothing is drawn, so it runs hundreds of ticks a second instead of the game's one
+- **The game's own brain**: propagation, learning, growth and action selection are imported from `src/`, not reimplemented
+- **Watch it live**: `--serve` shows the brain as it trains, in a browser
+- **Custom brains**: load a brain from a JSON file (Brain Designer, the Squid Breeder, or an earlier run)
+- **Growth for a reason**: a neuron grows only when the brain meets something it cannot represent, and records why
+- **Reproducible**: one `--seed` gives the same trained brain every time
+- **Training scenarios**: predefined conditions for different experiments
+- **Export**: the trained brain is saved as JSON the game opens
 
 ## Installation
 
-**No additional dependencies required** beyond Python 3.6+. The trainer is self-contained.
+Nothing beyond what the game itself needs: Python 3 and NumPy. No window system is needed.
+Run it from the repository, since it imports the game's `src/` modules.
 
 ```bash
 # Make executable (optional)
@@ -37,6 +42,35 @@ python headless_trainer.py --brain my_brain.json --scenario stress_test --output
 python headless_trainer.py --list-scenarios
 ```
 
+## Watch it train: `--serve`
+
+```bash
+python headless/headless_trainer.py --serve
+```
+
+It prints an address (`http://127.0.0.1:8765/`); open it in a web browser. The page shows
+the brain as it trains: every neuron glowing with its value, every connection, the squid's
+drives over the run, its little world, what it chose to do, and each neuron it grows with
+the reason the brain recorded for growing it. From the page you can:
+
+- run, pause, and step 1, 10, 100 or 1000 ticks;
+- set the speed, from one tick a second to as fast as it will go;
+- intervene from outside (feed, startle, clean). These are recorded as interventions and
+  drop any credit the squid's last action was waiting on, so it never learns your feeding
+  as something it earned;
+- start again from a seed, with a scenario, from a blank brain (the control), or with
+  learning off;
+- load a brain file and download the trained brain.
+
+`--serve 9000` picks another port; `--brain`, `--seed`, `--blank` and `--scenario` set how
+it starts. It listens only on this computer, and stops when you press Ctrl+C in its
+terminal. `headless/serve.py` is the server, `headless/trainer.html` the page; both use
+only the Python standard library and no outside scripts.
+
+This page replaces the old browser "step trainer" (`extras/StepTrainer.html`) and the
+command-builder launcher: those reimplemented or only described the trainer, and had
+fallen behind it. To study a squid that has already lived, use `extras/Laboratory.html`.
+
 ## Command Line Options
 
 | Option | Short | Description |
@@ -51,6 +85,9 @@ python headless_trainer.py --list-scenarios
 | `--learning-rate F` | | Override Hebbian learning rate |
 | `--neurogenesis BOOL` | | Enable/disable neurogenesis |
 | `--max-neurons N` | | Maximum neurons allowed |
+| `--seed N` | | Reproducible run: the same seed, brain and tick count give the same trained brain |
+| `--blank` | | Start from a blank 8-neuron brain with no wiring: the control condition |
+| `--serve [PORT]` | | Train while you watch, from a page on this computer (default port 8765) |
 
 ## Training Scenarios
 
@@ -77,7 +114,9 @@ Long-duration (50,000 ticks) training with varied conditions.
 
 ## Brain JSON Format
 
-Brains are stored as JSON files with the following structure:
+The trainer writes brains as `neurons` and `connections` (with everything the brain has
+learned alongside), the format the game and the browser tools read. It also still reads
+the older Brain Designer layout:
 
 ```json
 {
@@ -139,10 +178,9 @@ Use the "Load Brain" button in the [Network tab](https://github.com/ViciousSquid
 
 ## Performance
 
-On modern hardware, expect:
-- ~25,000-35,000 ticks/second
-- A 50,000 tick training session completes in ~2 seconds
-- A 1,000,000 tick session completes in ~30 seconds
+It runs the game's real brain code, so expect hundreds of ticks a second, not tens of
+thousands: roughly 500-1,000 on an ordinary computer, a little less while a page is
+watching. A 50,000 tick run takes about a minute.
 
 
 ## Integration with Dosidicus-2

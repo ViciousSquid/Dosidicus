@@ -53,6 +53,9 @@ def open_menu(app):
 
     box.add_widget(_btn("New game", lambda *_: (close(), _confirm_new_game(app)),
                         color=(0.5, 0.28, 0.72, 1)))
+    from .slots_screen import open_slots
+    box.add_widget(_btn("Save slots", lambda *_: (close(), open_slots(app)),
+                        color=(0.62, 0.42, 0.16, 1)))
     box.add_widget(_btn("Name & colour", lambda *_: (close(), _customise_squid(app)),
                         color=(.22, .40, .48, 1)))
     box.add_widget(_btn("Give medicine", lambda *_: (close(), _give_medicine(app)),
@@ -85,8 +88,8 @@ def open_menu(app):
 def _confirm_new_game(app):
     box = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(12))
     box.add_widget(Label(
-        text="Start a new game?\nYour current squid will be replaced.\n"
-             "Export it first if you want to keep it.",
+        text="Start a new game?\nThe squid in this slot will be replaced.\n"
+             "To keep it, open another slot from Save slots instead.",
         halign="center", valign="middle", font_size=sp(15)))
     p = Popup(title="New game", content=box, size_hint=(0.86, 0.5), title_size=sp(18))
     row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))

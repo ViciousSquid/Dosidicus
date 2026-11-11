@@ -680,6 +680,8 @@ class VisitorMind:
             related_neurons=self._active_social_neurons())
         if self.peer_ledger.record(record):
             self._log(f"Visit remembered: {record.describe()}")
+            self.peer_ledger.count_first_meeting(
+                getattr(getattr(self.logic, 'squid', None), 'statistics', None))
             self._learn_from(record)
             return record
         return None

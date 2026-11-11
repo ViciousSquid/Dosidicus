@@ -42,6 +42,7 @@ translations = {
     "statistics": "Statistiken",
     "brain_tool": "Gehirn-Werkzeug",
     "neuron_lab": "Neuronen-Labor",
+    "lab_page": "Lebensgeschichte (öffnet im Browser)",
     "task_manager": "Task-Manager",
 
     # ===== GESCHWINDIGKEIT-MENÜ =====
@@ -91,6 +92,18 @@ translations = {
     "startup": "Start",
     "show_tutorial_q": "Tutorial anzeigen?",
     "auto_decline": "(Automatische Ablehnung in {seconds}s)",
+    # Save slots (src/slot_chooser.py)
+    "save_slots": "Speicherplätze...",
+    "slot_choose": "Wähle einen Platz",
+    "slot_new_game": "Neues Spiel",
+    "slot_delete": "Löschen",
+    "slot_delete_which": "Welchen löschen?",
+    "slot_delete_confirm": "{name} löschen?",
+    "slot_back": "Zurück",
+    "slot_playing": "aktiv",
+    "slot_unnamed": "Tintenfisch",
+    "slot_stage_dead": "tot",
+    "slot_stage_parent": "Elternteil",
     "tutorial_title": "Tutorial",
     "tutorial_query": "Möchten Sie das Tutorial sehen?",
 

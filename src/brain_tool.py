@@ -54,6 +54,32 @@ except ImportError:
     _HAS_BRAIN_BRIDGE = False
     print("Warning: brain_state_bridge not found in brain_tool")
 
+def split_connections(weights, neuron_positions, state):
+    """A brain's connections, sorted for saving.
+
+    Returns (between neurons, from a state, leading nowhere): the first two
+    as [source, target, weight] lists, the third as "a -> b" names. A
+    connection is "from a state" when its target is a neuron the brain has
+    and its source is something the squid's state carries without a neuron
+    for it (is_sick, is_eating...).
+    """
+    known = set(neuron_positions or ())
+    carried = set(state or ())
+    between, from_state, nowhere = [], [], []
+    for key, value in (weights or {}).items():
+        if not (isinstance(key, tuple) and len(key) == 2):
+            print(f"Warning: Skipping non-standard weight key: {key}")
+            continue
+        source, target = key
+        if source in known and target in known:
+            between.append([source, target, value])
+        elif target in known and source in carried:
+            from_state.append([source, target, value])
+        else:
+            nowhere.append(f"{source} -> {target}")
+    return between, from_state, nowhere
+
+
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic, debug_mode=False, config=None, show_decorations_callback=None):
         # Force language sync before any tabs are created
@@ -855,31 +881,26 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         Only non-core state (booleans, direction, position) and neurogenesis data are saved.
         """
         # Convert weights to a list for safe JSON serialization
-        # A connection is saved only if both its ends are neurons this brain
-        # has. Learning can leave one to a state that has no neuron of its
-        # own (is_sick -> cleanliness, after a sickness): the save format
-        # refuses a connection to a neuron it was not given, and one such
-        # connection used to stop the whole save - and, from the autosave
-        # timer, the game.
-        known = set(self.brain_widget.neuron_positions)
-        weights_list, strays = [], []
-        for k, v in self.brain_widget.weights.items():
-            if isinstance(k, tuple) and len(k) == 2:
-                if k[0] in known and k[1] in known:
-                    weights_list.append([k[0], k[1], v])
-                else:
-                    strays.append(f"{k[0]} -> {k[1]}")
-            else:
-                 print(f"Warning: Skipping non-standard weight key: {k}")
+        # A connection between two neurons this brain has goes in the brain's
+        # own list. One FROM a state the squid has but no neuron for - the
+        # sickness reflex wires is_sick -> cleanliness, and it does move the
+        # squid's physiology (propagation.compute_neural_modulation) - is kept
+        # beside it in 'state_connections': the brain format refuses a
+        # connection to a neuron it was not given, and one such connection
+        # used to stop the whole save and, from the autosave timer, the game.
+        # Anything else that leads nowhere is left out and said so.
+        weights_list, state_connections, strays = split_connections(
+            self.brain_widget.weights, self.brain_widget.neuron_positions,
+            self.brain_widget.state)
         if strays and strays != getattr(self, '_reported_stray_connections', None):
             self._reported_stray_connections = strays
             print(f"Not saved: {len(strays)} connection(s) to something that is not a "
                   f"neuron in this brain ({', '.join(strays[:5])})")
 
         # Core neurons whose values come from squid (single source of truth)
-        core_stat_neurons = {'hunger', 'happiness', 'cleanliness', 'sleepiness', 
+        core_stat_neurons = {'hunger', 'happiness', 'cleanliness', 'sleepiness',
                             'satisfaction', 'anxiety', 'curiosity'}
-        
+
         # Save only non-core neuron states (booleans, direction, position, new neurons)
         # Core stat values will be synced from squid on load
         non_core_states = {}
@@ -920,6 +941,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         return desktop_brain_state({
             **getattr(self.brain_widget, '_brain_document', {}),
             'weights_list': weights_list,
+            'state_connections': state_connections,
             'clock': {'kind': 'wall', 'now': self.brain_widget.plasticity.clock()},
             'growth_clock': {'last_growth_at': self.brain_widget.enhanced_neurogenesis._last_growth_at,
                              'first_real_tick': self.brain_widget.enhanced_neurogenesis._first_real_tick},
@@ -974,6 +996,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             for item in state['weights_list']:
                 if isinstance(item, list) and len(item) == 3:
                     weights[(item[0], item[1])] = item[2]
+            # What the squid learned from a state it has no neuron for
+            # (get_brain_state): back where propagation reads it.
+            for item in state.get('state_connections') or []:
+                if isinstance(item, (list, tuple)) and len(item) == 3 \
+                        and isinstance(item[2], (int, float)):
+                    weights[(str(item[0]), str(item[1]))] = float(item[2])
             self.brain_widget.weights = weights
         elif 'weights' in state:  # Fallback for old format (acknowledging its bug)
             print("Warning: Loading old 'weights' format. May cause issues with new neurons.")

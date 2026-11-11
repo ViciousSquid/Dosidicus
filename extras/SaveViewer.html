@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dosidicus Save Viewer</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="vendor/jszip.min.js"></script>
+    <script src="vendor/dosidicus_data.js"></script>
     <style>
         :root {
             --bg-dark: #1a1a1a;
@@ -314,7 +315,7 @@
 <body>
 
 <header>
-    <h1>Save Viewer v2.1.3</h1>
+    <h1>Save Viewer v2.2.0</h1>
     
     <button class="open-save-btn" onclick="document.getElementById('file-input').click()">
         📂 Open Save File (.zip)
@@ -333,7 +334,7 @@
 <div id="content-area">
     <div id="welcome-screen">
         <div class="icon">🦑</div>
-        <h2>Dosidicus Save Viewer v2.1.3</h2>
+        <h2>Dosidicus Save Viewer v2.2.0</h2>
         <p>https://github.com/ViciousSquid/Dosidicus</p>
         <p>Use the pink button to load a squid</p>
     </div>
@@ -577,6 +578,192 @@
         return bio;
     }
 
+    // ---------------------------------------------------------------
+    // What the game knows that this page has to agree with it about
+    // (vendor/dosidicus_data.js, written from the game's own modules).
+    // ---------------------------------------------------------------
+    const GAME = window.DOSIDICUS || {};
+    const signed = n => (n > 0 ? '+' : '') + (Math.round(n * 10) / 10);
+
+    // A memory's value in words. Most memories the game writes now hold a
+    // record, not a sentence - an encounter, a fight, a belief, a neuron
+    // grown - and printed as they were they all read "[object Object]".
+    function describeMemory(mem) {
+        const v = mem ? mem.value : null;
+        if (v === null || v === undefined) return '';
+        if (typeof v !== 'object') return String(v);
+        const key = String(mem.key || '');
+        const d = (v.detail && typeof v.detail === 'object') ? v.detail : {};
+        if (key.startsWith('fight:')) {
+            const cost = d.consequences ? Object.entries(d.consequences)
+                .filter(([, n]) => n).map(([k, n]) => `${k} ${signed(n)}`).join(', ') : '';
+            return (v.summary || `A fight with ${v.opponent || 'another squid'}`)
+                + (v.opponent ? `\nAgainst ${v.opponent}.` : '')
+                + (cost ? ` What it cost: ${cost}.` : '');
+        }
+        if (key.startsWith('peer:')) {
+            const bits = [];
+            if (typeof v.valence === 'number') bits.push(`felt ${signed(v.valence)}`);
+            if (d.first_meeting) bits.push('their first meeting');
+            if (d.fights_won) bits.push(`fights won ${d.fights_won}`);
+            if (d.fights_lost) bits.push(`fights lost ${d.fights_lost}`);
+            if (d.items_taken) bits.push(`took ${d.items_taken}`);
+            if (d.items_lost) bits.push(`lost ${d.items_lost}`);
+            if (d.mating_id) bits.push('they mated');
+            if (d.duration) bits.push(`${Math.round(d.duration)}s`);
+            const outcome = String(v.outcome || 'an').replace(/^./, c => c.toUpperCase());
+            return `${outcome} encounter with ${v.peer_name || 'another squid'}`
+                + (v.peer_personality ? ` (${v.peer_personality})` : '')
+                + (bits.length ? ` - ${bits.join(', ')}` : '');
+        }
+        if (v.summary) return String(v.summary);
+        if (v.description) return String(v.description) + (v.neuron_name ? `: ${v.neuron_name}` : '');
+        if (v.statement) return String(v.statement);
+        try { return JSON.stringify(v); } catch (e) { return String(v); }
+    }
+
+    function allMemories() {
+        return [...(Array.isArray(saveData.LongTerm) ? saveData.LongTerm : []),
+                ...(Array.isArray(saveData.ShortTerm) ? saveData.ShortTerm : [])];
+    }
+
+    // The other squid this one remembers, from its encounter memories -
+    // the same reading the game makes (src/social_knowledge.py). An encounter
+    // it has forgotten is not counted, here or in the game.
+    function acquaintances() {
+        const people = {};
+        for (const mem of allMemories()) {
+            const key = String(mem.key || '');
+            const v = (mem.value && typeof mem.value === 'object') ? mem.value : null;
+            if (!v || !key.startsWith('peer:')) continue;
+            const d = (v.detail && typeof v.detail === 'object') ? v.detail : {};
+            const uuid = key.slice(5).split(':')[0];
+            const row = people[uuid] = people[uuid] || {name: 'a squid', personality: '',
+                encounters: 0, good: 0, bad: 0, won: 0, lost: 0, matings: 0, last: '', seen: 0};
+            if (v.peer_name) row.name = v.peer_name;
+            if (v.peer_personality) row.personality = v.peer_personality;
+            row.encounters += Math.max(1, d.encounters || 1);
+            const valence = Number(v.valence) || 0;
+            if (valence >= 0) row.good += valence; else row.bad -= valence;
+            row.won += d.fights_won || 0;
+            row.lost += d.fights_lost || 0;
+            if (d.mating_id) row.matings += 1;
+            if ((mem.timestamp || 0) >= row.seen) { row.seen = mem.timestamp || 0; row.last = v.outcome || row.last; }
+        }
+        return Object.values(people);
+    }
+
+    function renderLifeAndOthers(container) {
+        const game = saveData.game_state || {};
+        const squid = game.squid || {};
+        const life = game.lifecycle || null;
+        const stats = saveData.statistics || {};
+        const brain = saveData.brain_state || {};
+        const state = brain.neuron_states || brain.state || {};
+
+        // ---- its life -------------------------------------------------
+        const lifeDiv = document.createElement('div');
+        if (life) {
+            const stage = {living: 'Living', parent: 'A parent - it has laid an egg and no longer eats',
+                           dead: 'Dead'}[life.stage] || String(life.stage);
+            lifeDiv.appendChild(createKVRow('Stage of life', stage));
+            const mated = life.reproduction;
+            if (mated) {
+                lifeDiv.appendChild(createKVRow('Mated with', mated.mate_name || mated.mate_uuid || 'another squid'));
+                if (mated.mating_id) lifeDiv.appendChild(createKVRow('Mating', mated.mating_id));
+            }
+            if (life.egg) {
+                lifeDiv.appendChild(createKVRow('Egg', life.egg.state || 'laid'));
+                const genes = life.egg.genes || {};
+                const from = Object.keys(genes);
+                if (from.length) lifeDiv.appendChild(createKVRow('Weights the egg carries',
+                    from.map(p => `${p}: ${Object.keys(genes[p] || {}).length} synapses`).join('; ')));
+            }
+            if (life.death) lifeDiv.appendChild(createKVRow('Died of', life.death.cause || 'unknown'));
+            if (life.neglected_seconds) lifeDiv.appendChild(createKVRow('Left at its hungriest for', formatAge(life.neglected_seconds)));
+            if (life.sick_seconds) lifeDiv.appendChild(createKVRow('Sick without medicine for', formatAge(life.sick_seconds)));
+        } else {
+            lifeDiv.appendChild(createKVRow('Stage of life', 'not recorded (a save from before 3.2)'));
+        }
+        const tint = squid.tint_color;
+        if (Array.isArray(tint) && tint.length >= 3) {
+            const row = createKVRow('Colour', `rgb(${tint[0]}, ${tint[1]}, ${tint[2]})`);
+            const chip = document.createElement('span');
+            chip.style.cssText = `display:inline-block;width:14px;height:14px;margin-left:8px;border:1px solid #888;vertical-align:middle;background:rgb(${tint[0]},${tint[1]},${tint[2]})`;
+            row.appendChild(chip);
+            lifeDiv.appendChild(row);
+        } else {
+            lifeDiv.appendChild(createKVRow('Colour', 'as it hatched'));
+        }
+        if (game.tamagotchi_logic && game.tamagotchi_logic.points !== undefined)
+            lifeDiv.appendChild(createKVRow('Score', game.tamagotchi_logic.points));
+        const stones = (game.decorations || []).filter(d => d && (d.deceased || /headstone/i.test(d.filename || '')));
+        stones.forEach(stone => {
+            const bits = [];
+            if (stone.age_seconds) bits.push(`lived ${formatAge(stone.age_seconds)}`);
+            if (stone.died_of) bits.push(`died of ${stone.died_of}`);
+            if (stone.fights_won !== undefined) bits.push(`fights won ${stone.fights_won}, lost ${stone.fights_lost || 0}`);
+            lifeDiv.appendChild(createKVRow(`🪦 ${stone.deceased || 'A squid'}`, bits.join(', ') || 'a headstone in the tank'));
+        });
+        container.appendChild(createCollapsible('🧬 Its Life', lifeDiv));
+
+        // ---- other squid ----------------------------------------------
+        const socialDiv = document.createElement('div');
+        const aggro = GAME.aggression_neuron || 'aggression';
+        const positions = brain.neuron_positions || {};
+        if (aggro in positions) {
+            const level = Number(state[aggro]) || 0;
+            const limit = GAME.aggression_threshold || 50;
+            socialDiv.appendChild(createKVRow('Aggression', `${Math.round(level)} of 100 - it goes for another squid past ${limit}`));
+        } else {
+            socialDiv.appendChild(createKVRow('Aggression', 'it has never grown the neuron, so it starts no fights'));
+        }
+        socialDiv.appendChild(createKVRow('Fights', `won ${stats.fights_won || 0}, lost ${stats.fights_lost || 0}`));
+        const social = [...(GAME.social_senses || []), ...(GAME.social_neurons || [])].filter(n => n in positions);
+        socialDiv.appendChild(createKVRow('Grown for other squid', social.length ? social.join(', ') : 'nothing yet'));
+        const known = acquaintances();
+        if (known.length) {
+            const table = document.createElement('table');
+            table.className = 'neuro-table';
+            table.innerHTML = '<thead><tr><th>Squid</th><th>Encounters remembered</th><th>Good</th><th>Bad</th><th>Fights won</th><th>Fights lost</th><th>Last time</th></tr></thead><tbody></tbody>';
+            known.forEach(p => {
+                const tr = document.createElement('tr');
+                [`${p.name}${p.personality ? ' (' + p.personality + ')' : ''}`, p.encounters,
+                 signed(p.good), signed(-p.bad), p.won, p.lost, p.last || '-'].forEach(text => {
+                    const td = document.createElement('td');
+                    td.textContent = text;
+                    tr.appendChild(td);
+                });
+                table.querySelector('tbody').appendChild(tr);
+            });
+            socialDiv.appendChild(table);
+            const note = document.createElement('p');
+            note.style.cssText = 'color:#888;font-size:0.85em';
+            note.textContent = 'Counted from the encounters it still remembers; one it has forgotten is not here.';
+            socialDiv.appendChild(note);
+        }
+        const fought = allMemories().filter(m => String(m.key || '').startsWith('fight:'));
+        fought.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).forEach((m, i) => {
+            socialDiv.appendChild(createKVRow(`Fight ${i + 1}`, describeMemory(m).split('\n')[0]));
+        });
+        container.appendChild(createCollapsible('🤝 Other Squid', socialDiv));
+
+        // ---- what it believes ------------------------------------------
+        const beliefs = allMemories().filter(m => m.category === 'belief' && m.value && typeof m.value === 'object');
+        if (beliefs.length) {
+            const held = {}, dropped = {};
+            beliefs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).forEach(m => {
+                const what = m.value.statement || describeMemory(m);
+                if (m.value.changed_mind || String(m.key).startsWith('revised:')) { dropped[what] = true; delete held[what]; }
+                else { held[what] = true; }
+            });
+            const beliefDiv = document.createElement('div');
+            beliefDiv.appendChild(createKVRow('Believes now', Object.keys(held).join('; ') || 'nothing in particular'));
+            beliefDiv.appendChild(createKVRow('Believed, and gave up', Object.keys(dropped).join('; ') || 'nothing'));
+            container.appendChild(createCollapsible('💡 What It Believes', beliefDiv));
+        }
+    }
+
     function renderOverview() {
         const container = document.createElement('div');
         container.appendChild(createBiography());
@@ -599,6 +786,8 @@
         });
         container.appendChild(createCollapsible('🧠 Core Neuron Values', neuronDiv));
 
+        renderLifeAndOthers(container);
+
         const brain = saveData.brain_state || {};
         const enhanced = brain.enhanced_neurogenesis || {};
         const funcNeurons = enhanced.functional_neurons || {};
@@ -608,11 +797,28 @@
         if (Object.keys(funcNeurons).length > 0) {
             const table = document.createElement('table');
             table.className = 'neuro-table';
-            table.innerHTML = `<thead><tr><th>Name</th><th>Type</th><th>Utility</th><th>Connections</th></tr></thead><tbody></tbody>`;
+            // A neuron's connections are in the brain's own list, not on the
+            // neuron's record ("connections" there never existed, so this
+            // column read "-" for every neuron); and why it grew is recorded,
+            // which is the most interesting thing about it.
+            table.innerHTML = `<thead><tr><th>Name</th><th>Kind</th><th>Why it grew</th><th>Times active</th><th>Connections</th></tr></thead><tbody></tbody>`;
             const tbody = table.querySelector('tbody');
+            const edges = brain.weights_list || brain.connections || [];
+            const touches = name => edges.filter(e => Array.isArray(e)
+                ? (e[0] === name || e[1] === name)
+                : (e && (e.source === name || e.target === name))).length;
             for (const [name, data] of Object.entries(funcNeurons)) {
+                const kind = (GAME.social_senses || []).includes(name) ? 'sense for other squid'
+                           : (GAME.social_neurons || []).includes(name) ? 'grown from meeting squid'
+                           : (data.neuron_type || 'unknown');
+                const why = (data.origin_deficit && data.origin_deficit.summary) || '';
                 const row = document.createElement('tr');
-                row.innerHTML = `<td><span style="color:#4CAF50">🧬 ${name}</span></td><td>${data.neuron_type || 'unknown'}</td><td>${(data.utility_score || 0).toFixed(2)}</td><td>${data.connections ? Object.keys(data.connections).length : '—'}</td>`;
+                [`🧬 ${name}`, kind, why, data.activation_count ?? '', touches(name)].forEach((text, i) => {
+                    const td = document.createElement('td');
+                    td.textContent = text;
+                    if (i === 0) td.style.color = '#4CAF50';
+                    row.appendChild(td);
+                });
                 tbody.appendChild(row);
             }
             neuroContainer.appendChild(table);
@@ -629,7 +835,8 @@
         const groups = {
             "📊 General": ['total_age_seconds', 'squid_age_minutes', 'distance_swam'],
             "🍣 Food & Consumption": ['cheese_eaten', 'sushi_eaten', 'poops_created', 'poops_thrown', 'max_poops_cleaned'],
-            "🤝 Interactions": ['startles_experienced', 'ink_clouds_created', 'rocks_thrown', 'plants_interacted', 'times_colour_changed', 'total_env_interactions', 'other_squids_encountered'],
+            "🤝 Interactions": ['startles_experienced', 'ink_clouds_created', 'rocks_thrown', 'plants_interacted', 'times_colour_changed', 'total_env_interactions'],
+            "⚔️ Other Squid": ['other_squids_encountered', 'fights_won', 'fights_lost'],
             "🧠 Neural": ['current_neurons', 'max_neurons_reached', 'novelty_neurons_created', 'stress_neurons_created', 'reward_neurons_created'],
             "🧬 Peaks": ['peak_novelty', 'peak_stress', 'peak_reward', 'highest_anxiety', 'highest_satisfaction', 'lowest_happiness'],
             "🧾 Memory": ['total_memories_formed', 'max_short_term_memories', 'max_long_term_memories'],
@@ -998,7 +1205,7 @@
         function renderMemoryList(targetDiv, memArray, filterText = '', catFilter = '') {
             targetDiv.innerHTML = '';
             const filtered = memArray.filter(m => {
-                const matchText = (m.key || '') + (m.value || '') + (m.category || '');
+                const matchText = (m.key || '') + describeMemory(m) + (m.category || '');
                 return (!filterText || matchText.toLowerCase().includes(filterText.toLowerCase())) &&
                        (!catFilter || (m.category || 'UNK') === catFilter);
             });
@@ -1038,7 +1245,8 @@
                 card.appendChild(header);
 
                 const val = document.createElement('div');
-                val.textContent = mem.value;
+                val.textContent = describeMemory(mem);
+                val.style.whiteSpace = 'pre-wrap';
                 val.style.marginBottom = '6px';
                 card.appendChild(val);
 
@@ -1126,7 +1334,15 @@
         container.appendChild(createKVRow('UUID', uuid));
         container.appendChild(createKVRow('Loaded JSON files', Object.keys(saveData).filter(k => k !== 'uuid_txt').length));
         container.appendChild(createKVRow('Total Neurons', (saveData.brain_state?.neuron_positions ? Object.keys(saveData.brain_state.neuron_positions).length : 0)));
-        container.appendChild(createKVRow('File version (inferred)', saveData.game_state?.version || '2.6+'));
+        // A save does not say which game wrote it; what it contains does.
+        const b = saveData.brain_state || {};
+        const made = saveData.game_state?.version
+            || ('state_connections' in b ? '3.5 or later'
+                : saveData.game_state?.lifecycle ? '3.2 or later (it records a stage of life)'
+                : b.causal_learning ? '3.1 or later'
+                : 'before 3.1');
+        container.appendChild(createKVRow('Written by (inferred)', made));
+        if (GAME.game_version) container.appendChild(createKVRow('This viewer matches game', GAME.game_version));
         const stats = saveData.statistics || {};
         container.appendChild(createKVRow('Total playtime', formatAge(stats.total_playtime_seconds || stats.total_age_seconds || 0)));
 

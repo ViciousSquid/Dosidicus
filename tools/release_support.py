@@ -9,8 +9,10 @@ import re
 import shutil
 
 VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?')
+#: extras: the laboratory tools (Laboratory, Save Viewer, Squid Breeder),
+#: which the game opens in a browser from View > Life History.
 RUNTIME = ('images', 'plugins', 'src', 'translations', 'custom_brains',
-           'example_squids', 'config.ini', 'version', 'LICENSE', 'README.md',
+           'example_squids', 'extras', 'config.ini', 'version', 'LICENSE', 'README.md',
            'release-info.json')
 
 
@@ -53,6 +55,13 @@ def copy_runtime(root, target):
     for name in ('images', 'plugins', 'src', 'config.ini', 'version'):
         if not (target / name).exists():
             raise ValueError(f'Missing runtime data: {name}')
+    # A build made from a tree that has the laboratory tools must carry them
+    # whole: the pages, and the scripts they load from beside themselves.
+    if (root / 'extras').is_dir():
+        for name in ('Laboratory.html', 'SaveViewer.html', 'SquidBreeder.html', 'README.md',
+                     'vendor/lab.js', 'vendor/jszip.min.js', 'vendor/dosidicus_data.js'):
+            if not (target / 'extras' / name).is_file():
+                raise ValueError(f'Missing runtime data: extras/{name}')
 
 
 def collect_artifacts(source, target, version):

@@ -6,6 +6,7 @@ from datetime import datetime
 from uuid import UUID
 
 from .save_archive import DateTimeEncoder, write_save_archive
+from .save_slots import SaveSlots
 
 class SaveManager:
     def __init__(self, save_directory="saves"):
@@ -15,6 +16,11 @@ class SaveManager:
         self.autosave_path = os.path.join(save_directory, "autosave.zip")
         self.manual_path = os.path.join(save_directory, "save_data.zip")  # This will be updated dynamically
         self.backup_path = os.path.join(save_directory, "autosave_backup.zip")
+        # Three slots, each a tank with its own squid (save_slots.py). This
+        # manager speaks for the slot being played: "is there a save", "the
+        # latest save" and "delete the save" all mean that slot's squid, so
+        # nothing done in one slot can touch another's.
+        self.slots = SaveSlots(save_directory)
 
     # --------------------------------------------------
     # Public helpers
@@ -50,18 +56,14 @@ class SaveManager:
         return None
 
     def _get_manual_save_path(self):
-        """Find the most recent manual save file (UUID-based)"""
+        """The newest save of the squid in the slot being played, or None.
+
+        This used to be the newest zip in the folder, whoever's it was. With
+        more than one squid kept, that would load - or delete - the wrong one.
+        """
         try:
-            # Look for any .zip files in save directory that aren't autosave or backup
-            save_files = [f for f in os.listdir(self.save_directory) 
-                         if f.endswith('.zip') and f not in ['autosave.zip', 'autosave_backup.zip']]
-            
-            if save_files:
-                # Return the most recently modified one
-                save_files = [os.path.join(self.save_directory, f) for f in save_files]
-                return max(save_files, key=os.path.getmtime)
-            return None
-        except (FileNotFoundError, ValueError):
+            return self.slots.path_for()
+        except (OSError, ValueError):
             return None
 
     def _get_save_path_for_uuid(self, uuid_str, is_autosave=False):
@@ -140,6 +142,10 @@ class SaveManager:
                     pass
 
             print(f"[SaveManager] Save successful → {target_path}")
+            try:
+                self.slots.record_save(squid_uuid)      # this squid is in a slot
+            except (OSError, ValueError) as problem:
+                print(f"[SaveManager] Could not record the save slot: {problem}")
             return target_path
 
         except Exception as e:
@@ -304,7 +310,16 @@ class SaveManager:
             path = self._get_save_path_for_uuid(uuid_str, is_autosave=is_autosave)
             candidates.extend([path, path + ".backup", path + ".old", path + ".tmp"])
         candidates.append(self.autosave_path)     # the pre-uuid autosave name
-        for path in candidates:
+        # And any save of this squid kept under another name - one dropped
+        # into the folder, or written beside it by a tool - or the squid
+        # would be found again and given a slot after it was gone.
+        try:
+            from .save_slots import normal
+            for path in self.slots.squids_on_disk().get(normal(uuid_str), []):
+                candidates.extend([path, path + ".backup", path + ".old", path + ".tmp"])
+        except (OSError, ValueError):
+            pass
+        for path in dict.fromkeys(candidates):
             try:
                 if os.path.exists(path):
                     os.remove(path)

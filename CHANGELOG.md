@@ -48,6 +48,63 @@ whether to go. The steps are in `plugins/multiplayer/README`.
 - **One journey view** through a squid's life, with going online marked as the
   choice it is.
 
+### Three save slots
+
+- **Choose a slot** when the game starts, after choosing your language: three
+  tanks, each with its own squid. An empty slot is green and says *New game*;
+  a slot in use is orange and carries its squid's name. *File > Save slots*
+  opens the same chooser while you play.
+- **Each slot is its own tank,** with its own decorations, headstones and
+  achievements. Opening another slot saves the squid you leave, exactly where
+  it is.
+- **Death, eggs and New Game stay in their slot.** An heir hatches in its
+  parent's slot; *New game* replaces only the squid in the slot being played.
+- **A slot is named after its squid.** Rename the squid and its slot is
+  renamed with it; the save file keeps the squid's uuid as its name.
+- **Delete** removes one slot's squid, after asking twice. The squid being
+  played cannot be deleted from the chooser.
+- **On the phone too:** *Menu > Save slots* is the same chooser. A phone's
+  existing squid becomes the squid in slot 1.
+- **Saves are the files they always were:** a zip named after the squid's
+  uuid in the saves folder. Saves from earlier versions, and hatchlings from
+  the Squid Breeder dropped into that folder, take a free slot by themselves.
+- **Fixed:** a game that started from a save was never autosaved; only a
+  newly hatched one was.
+- **Fixed:** a hatchling forgot who its parents were the first time its save
+  was loaded.
+
+### The laboratory: studying squid from their saves
+
+- **Every save now carries the squid's life in order** (`timeline.json`):
+  each neuron it grew and why, each connection it formed and how, what it came
+  to believe and gave up believing, every squid it met, every fight, its
+  mating, its egg and its death.
+- **`extras/Laboratory.html`** reads one save or many, in a web browser, with
+  nothing installed and nothing sent anywhere:
+  - *History*: a ribbon through the squid's life with a slider that steps
+    through every event and redraws the brain as it was at that moment.
+  - *Strata*: the same life as layers, oldest at the bottom.
+  - *Why*: why each neuron and each connection is as it is.
+  - *Family*, *Compare* (two or more squid side by side) and *Session*.
+- **The Squid Breeder breeds as the game does** and can save the child as a
+  hatchling the game opens, with its parents and every inherited synapse on
+  record.
+- **One trainer.** `python headless/headless_trainer.py --serve` shows the
+  headless trainer working, in a browser: the brain as it trains, each neuron
+  it grows and why, with pause, step and speed. The old browser step trainer
+  is gone; it had its own copy of the brain and had fallen behind.
+- **The Save Viewer** shows everything a save now holds, and all the browser
+  tools work with no internet connection.
+- The Neuron Laboratory inside the game (double-click a neuron) is unchanged:
+  it studies one living neuron and can change it. The two name each other.
+
+- **The tools come with the game.** Every build ships the `extras` folder,
+  and *View > Life History* opens the Laboratory page in your web browser.
+  (The menu entry is not called a laboratory, so it is not mistaken for the
+  Neuron Laboratory beside it.)
+
+`extras/README.md` says what each tool is for.
+
 ### The tank
 
 - **Every score change floats up out of the squid:** gains in green, losses in
@@ -57,7 +114,8 @@ whether to go. The steps are in `plugins/multiplayer/README`.
 - **Feed, Clean and Medicine** span the window, are a little taller, and are
   pastel green, blue and red.
 - **The message banner** sits flush with the bottom of the window.
-- **Headstones** can be moved but never resized or removed.
+- **Headstones** can be moved but never resized or removed. The squid is
+  always drawn in front of them and can push them about like any decoration.
 - **The squid, food and decorations scale with the tank,** so the squid is the
   same share of the tank on every screen.
 

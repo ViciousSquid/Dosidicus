@@ -73,6 +73,11 @@ class Simulation:
         #: This tank's place on the network, while multiplayer is on
         #: (engine/tank_link.py). Not saved: a link is made, never loaded.
         self.tank_link = None
+        # Headstones the squid has pushed and that are still sliding
+        # (id -> where to), and its rest between pushes.
+        self._stone_slides = {}
+        self._push_rest = 0.0
+        self._push_look = 0.0
         from types import SimpleNamespace
         self.brain_window = SimpleNamespace(brain_widget=self.squid.brain)
         self.squid.statistics = self.stats
@@ -937,6 +942,59 @@ class Simulation:
                     s.curiosity = min(100.0, s.curiosity + 2.5 * dt)
         self._near_plants = near_now
 
+    # A headstone is a permanent toy: a curious squid near one gives it a
+    # push, as the desktop squid pushes a decoration (Squid.push_decoration,
+    # TamagotchiLogic.curious_interaction) - the same chances, the same
+    # distance, and the same lift it gets from doing it.
+    PUSH_REACH = 100.0          # how near the squid has to be
+    PUSH_DISTANCE = 80.0        # how far a push sends the stone
+    PUSH_CHANCE = 0.6 * 0.75    # looked at each second while curious and near
+    PUSH_REST = 5.0             # seconds before it pushes again
+    PUSH_SPEED = 270.0          # the stone slides there, it does not jump
+    CURIOUS_ABOVE = 72.0
+
+    def _play_with_headstones(self, dt):
+        squid = self.squid
+        for stone_id, target in list(self._stone_slides.items()):
+            stone = self._deco_by_id(stone_id)
+            if stone is None:
+                del self._stone_slides[stone_id]
+                continue
+            step = self.PUSH_SPEED * dt
+            if abs(target - stone["x"]) <= step:
+                stone["x"] = target
+                del self._stone_slides[stone_id]
+            else:
+                stone["x"] += step if target > stone["x"] else -step
+        self._push_rest = max(0.0, self._push_rest - dt)
+        self._push_look += dt
+        if self._push_look < 1.0:
+            return
+        self._push_look = 0.0
+        if (self._push_rest > 0.0 or squid.is_sleeping or squid.lifecycle.is_dead
+                or squid.curiosity <= self.CURIOUS_ABOVE):
+            return
+        near = [d for d in self.decorations if d.get("category") == "headstone"
+                and d["id"] not in self._stone_slides
+                and math.hypot(squid.x - d["x"], squid.y - d["y"]) <= self.PUSH_REACH]
+        if not near or random.random() >= self.PUSH_CHANCE:
+            return
+        self.push_headstone(random.choice(near), random.choice((-1, 1)))
+
+    def push_headstone(self, stone, direction):
+        """The squid pushes a headstone left (-1) or right (1). Returns where
+        it is going."""
+        width = self.tank_size[0]
+        target = min(max(stone["x"] + self.PUSH_DISTANCE * direction, 30.0), width - 30.0)
+        self._stone_slides[stone["id"]] = target
+        self._push_rest = self.PUSH_REST
+        squid = self.squid
+        squid.happiness = min(100.0, squid.happiness + 5.0)
+        squid.curiosity = min(100.0, squid.curiosity + 10.0)
+        squid.anxiety = max(0.0, squid.anxiety - 6.0)
+        squid.status = "pushing a headstone"
+        return target
+
     def _settle_food(self, dt):
         floor = self.tank_size[1] - 40
         for f in self.food_items:
@@ -1370,6 +1428,7 @@ class Simulation:
         self._update_rock_play(dt)
         self._update_sweep(dt)
         self._decoration_effects(dt)
+        self._play_with_headstones(dt)
         self._settle_food(dt)
         self._settle_poop(dt)
         if self._try_eat():

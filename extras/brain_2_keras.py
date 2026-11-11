@@ -185,17 +185,28 @@ def parse_design(data):
         import os as _os, sys as _sys
         _sys.path.insert(0, _os.path.dirname(_os.path.dirname(
             _os.path.abspath(__file__))))
-        from src.brain_constants import DEFAULT_INPUT_SENSORS
-        known_inputs = list(DEFAULT_INPUT_SENSORS)
+        from src.brain_constants import (ACTION_NEURONS, CORE_STAT_NEURONS,
+                                         DEFAULT_INPUT_SENSORS, SOCIAL_SENSORS)
+        # The senses a squid grows for other squid and other tanks are inputs
+        # too: the world sets them, the network does not.
+        known_inputs = list(DEFAULT_INPUT_SENSORS) + list(SOCIAL_SENSORS)
+        known_outputs = set(ACTION_NEURONS) | set(CORE_STAT_NEURONS)
     except Exception:
         known_inputs = [
             'external_stimulus', 'can_see_plant', 'threat_level',
             'pursuing_food', 'is_sick', 'is_fleeing', 'is_eating',
-            'is_sleeping', 'is_startled', 'can_see_food'
+            'is_sleeping', 'is_startled', 'can_see_food',
+            'can_see_squid', 'squid_nearby', 'recognises_squid',
+            'remembers_good_encounter', 'remembers_bad_encounter', 'aquarium_nearby',
         ]
+        known_outputs = {
+            'hunger', 'happiness', 'cleanliness', 'sleepiness', 'satisfaction',
+            'anxiety', 'curiosity', 'act_collapse', 'act_eat', 'act_flee', 'act_ink',
+            'act_move', 'act_play', 'act_rest', 'act_shelter',
+        }
     
     for name, props in neurons.items():
-        n_type = props.get('type', props.get('neuron_type', 'hidden')).lower()
+        n_type = str(props.get('type', props.get('neuron_type', 'hidden'))).lower()
         
         # Determine if it's an input source or a stateful neuron
         if n_type == 'sensor' or name in known_inputs:
@@ -226,7 +237,9 @@ def parse_design(data):
         return (None, -1)
 
     # Parse Connections
-    connections = data.get('connections', [])
+    # The Designer and the game's brain files write `connections`; a game
+    # save's brain_state.json also has `weights_list`.
+    connections = data.get('connections') or data.get('weights_list') or []
     
     # Normalize connection format (list of dicts vs dict of strings)
     conn_list = []
@@ -238,7 +251,11 @@ def parse_design(data):
             conn_list.append((s, t, w))
     else:
         for c in connections:
-            conn_list.append((c['source'], c['target'], c['weight']))
+            if isinstance(c, (list, tuple)) and len(c) == 3:      # [source, target, weight]
+                conn_list.append((c[0], c[1], c[2]))
+            elif isinstance(c, dict):
+                conn_list.append((c.get('source', c.get('from')),
+                                  c.get('target', c.get('to')), c.get('weight', 0.0)))
             
     for source, target, weight in conn_list:
         # We only care about connections going TO a state neuron.
@@ -266,10 +283,15 @@ def parse_design(data):
         props = neurons[name]
         
         # Default logic based on type if explicit activation not found
+        # A Designer file names an activation FUNCTION here. A game brain
+        # keeps the neuron's activation LEVEL under the same name - a number,
+        # which used to be taken for a function called 100.0.
         act = props.get('activation')
+        if not isinstance(act, str):
+            act = None
         if not act:
-            n_type = props.get('type', props.get('neuron_type', 'hidden')).lower()
-            if n_type == 'output': act = 'sigmoid'
+            n_type = str(props.get('type', props.get('neuron_type', 'hidden'))).lower()
+            if n_type == 'output' or name.startswith('act_'): act = 'sigmoid'
             elif n_type == 'core': act = 'relu'
             elif props.get('is_binary'): act = 'step' # approximate step with sigmoid*100 or tanh
             else: act = 'relu'
@@ -284,8 +306,10 @@ def parse_design(data):
     # By default, treat 'output' type or 'core' type as model outputs
     output_indices = []
     for name in state_names:
-        n_type = neurons[name].get('type', neurons[name].get('neuron_type', '')).lower()
-        if n_type in ['output', 'core']:
+        n_type = str(neurons[name].get('type', neurons[name].get('neuron_type', ''))).lower()
+        # A game brain does not label its neurons by type: its outputs are
+        # the drives and the action neurons, by name.
+        if n_type in ['output', 'core'] or name in known_outputs:
             output_indices.append(state_map[name])
             
     return n_in, n_state, W_in, W_rec, act_map, output_indices, input_names, state_names

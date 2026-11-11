@@ -248,6 +248,8 @@ jobs:
           fi
 
           python tools/release_support.py runtime --target "$TARGET_DIR"
+          # The laboratory tools (extras/) go out with every build.
+          test -f "$TARGET_DIR/extras/Laboratory.html"
 
       - name: Validate macOS Qt plugin bundle
         if: runner.os == 'macOS'
@@ -399,6 +401,10 @@ jobs:
               if [ "$READY" -ge 15 ]; then
                 test -f "$DOSIDICUS_DATA_DIR/config.ini"
                 test -L "$DOSIDICUS_DATA_DIR/images"
+                # The laboratory tools ship in the app and are reachable
+                # from where it works (View > Life History opens this file).
+                test -f "$DOSIDICUS_DATA_DIR/extras/Laboratory.html"
+                test -f "$DOSIDICUS_DATA_DIR/extras/vendor/lab.js"
                 # Running it must not have changed it: the DMG is made from
                 # this bundle next, and its signature has to still hold.
                 codesign --verify --deep --strict "$GITHUB_WORKSPACE/release/Dosidicus.app"
