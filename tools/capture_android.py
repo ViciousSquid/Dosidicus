@@ -279,6 +279,14 @@ def device(role, output):
                     if visitors and later('aggro', 10.0):
                         nudge("Pip's aggression raised to 85 so the two scuffle")
                         sim.squid.brain.state['aggression'] = 85.
+                        # A fight needs the two in contact, and Pip now keeps
+                        # away from a visitor of its own accord: left to
+                        # itself it fled for the whole capture.
+                        nudge('Pip kept from fleeing, hiding and sleeping so the two come into '
+                              'contact (act_flee/act_shelter/act_rest 0, rested)')
+                        for name in ('act_flee', 'act_shelter', 'act_rest'):
+                            sim.squid.brain.state[name] = 0.
+                        sim.squid.sleepiness = 10.
                         if sim.fight and sim.fight.get('phase') == 'fighting' and later('fighting', .8):
                             shot('fight', caption='A scuffle on Android: one cloud over the pair')
                             state['notes']['fight'] = dict(sim.fight, why=sim.fight.get('why'))

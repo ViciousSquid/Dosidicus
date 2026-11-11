@@ -120,6 +120,30 @@ Want the full conceptual philosophy behind Dosidicus? Read the [Cognitive Sandbo
 
 ---
 
+## The laboratory: a toolkit for studying digital organisms
+
+A squid's save carries its whole life in order: every neuron it grew and why,
+every connection it formed and how, what it came to believe, every squid it
+met and fought, its mating, its egg and its death. The tools in
+[`extras/`](extras/README.md) read saves in a web browser, offline, with
+nothing to install:
+
+- **[Laboratory](extras/README.md#laboratoryhtml)**: slide through every
+  event of a squid's life and watch its brain as it was at that moment; see
+  the same life as layers, oldest at the bottom; ask why each neuron and
+  connection exists; trace its family; compare several squid side by side.
+- **Save Viewer**: everything inside one save.
+- **Squid Breeder**: breed two squid as the game does and hatch the child in
+  the game.
+- **Trainer**: `python headless/headless_trainer.py --serve` shows the headless
+  trainer working, tick by tick.
+
+Inside the game, the **Neuron Laboratory** (double-click a neuron) studies one
+living neuron and lets you change it. The game keeps **three save slots**, so
+there is room for more than one squid to study.
+
+---
+
 ## [Share Your Squid](https://github.com/ViciousSquid/Dosidicus/tree/SQUID-EXCHANGE)
 
 No two squids are wired the same.
@@ -218,7 +242,7 @@ Saves and settings are stored in `~/Library/Application Support/Dosidicus`.
 ### Key Project Components
 - **Plugin System:** Extensible architecture with built-in plugins for achievements (tracking milestones) and multiplayer (networked interactions).
 - **Save System:** Persistent saves in `saves/` for pet states, autosaves, and achievement logs.
-- **Headless Mode:** Standalone training and simulation in `headless/` for GUI-less operation, ideal for background training or server environments (experimental)
+- **Headless Mode:** Standalone training and simulation in `headless/` for GUI-less operation, ideal for background training or server environments; `--serve` shows it working in a web browser
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.

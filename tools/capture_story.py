@@ -246,6 +246,13 @@ def worker(role, output):
                 state['notes']['fight'] = {'won': stats.fights_won, 'lost': stats.fights_lost}
                 state['notes']['fight_thoughts'] = thoughts()
                 nudge('Mating chance (2% per visit) made certain after the fight')
+                # Only a grown squid breeds: old enough, and having learned
+                # from its own life. Inky is minutes old. Without this the
+                # capture waited at the courtship for a mating that the game
+                # (rightly) never allowed.
+                nudge('Inky counted as grown for the scene (a squid must be old enough and have '
+                      'learned from its own life before it can breed; Inky is minutes old)')
+                squid.is_mature = lambda: True
                 actor.mating_rolled, actor.contact_since = False, None
                 plugin.host_body.mating_chance = 1.0
                 state['stage'] = 'court'
