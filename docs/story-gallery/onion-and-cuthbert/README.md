@@ -99,10 +99,6 @@ an empty tank, and the visitor came home with a history.
   fields, archive SHA-256, and JSON locations are in
   [evidence.json](evidence.json). The full save is not published here.
 
-Lifetime totals in Cuthbert's save include 24 rocks thrown; that is **not** a
-count of rocks thrown at Onion. Memories can be updated and record different
-windows; their timestamps do not establish a complete event sequence. No
-causal claim is made that Onion's bad memory prevented another visit, or
-that these rock throws created a permanent aggression floor.
+
 
 [Back to the story gallery](../README.md)
