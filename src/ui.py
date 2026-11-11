@@ -191,6 +191,9 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         return super().boundingRect()
 
     def wheelEvent(self, event):
+        if self.is_headstone:
+            event.accept()      # a headstone is moved, never resized
+            return
         if self.filename and ('rock01' in self.filename.lower() or 'rock02' in self.filename.lower()):
             return super().wheelEvent(event)
         if self.isSelected() and self.original_pixmap:
@@ -250,7 +253,8 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
 
     def mouseMoveEvent(self, event):
         current_pos = event.pos()
-        if self.resize_mode and self.original_pixmap and self.last_mouse_pos:
+        if self.resize_mode and not self.is_headstone and self.original_pixmap \
+                and self.last_mouse_pos:
             delta_x = current_pos.x() - self.last_mouse_pos.x()
             delta_y = current_pos.y() - self.last_mouse_pos.y()
             current_width = self.pixmap().width()

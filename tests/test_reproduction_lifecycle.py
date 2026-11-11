@@ -1346,6 +1346,47 @@ class HeadstoneDecorationTests(unittest.TestCase):
             self.assertFalse(image.isNull(), name)
             self.assertEqual(image.pixelColor(0, 0).alpha(), 0, name)
 
+    def test_it_can_be_moved_but_never_resized(self):
+        """A headstone is a decoration the player may put where they like -
+        and that is all: the wheel and the resize drag leave its size alone."""
+        flags = self.stone.flags()
+        self.assertTrue(flags & QtWidgets.QGraphicsItem.ItemIsMovable)
+        self.stone.setPos(40.0, 60.0)
+        self.assertEqual((self.stone.pos().x(), self.stone.pos().y()), (40.0, 60.0))
+
+        size = self.stone.pixmap().size()
+        self.stone.setSelected(True)
+        for turn in (120, -120):
+            wheel = SimpleNamespace(angleDelta=lambda turn=turn: QtCore.QPoint(0, turn),
+                                    accept=lambda: None)
+            self.stone.wheelEvent(wheel)
+        self.assertEqual(self.stone.pixmap().size(), size)
+
+        self.stone.resize_mode = True            # a drag on its corner
+        self.stone.last_mouse_pos = QtCore.QPointF(0, 0)
+        scaled = []
+        original = self.stone.original_pixmap
+        self.stone.original_pixmap = SimpleNamespace(
+            scaled=lambda *a, **k: scaled.append(a) or original)
+        try:
+            self.stone.mouseMoveEvent(SimpleNamespace(pos=lambda: QtCore.QPointF(30, 30)))
+        except TypeError:
+            pass          # the plain move that follows wants a real Qt event
+        finally:
+            self.stone.original_pixmap = original
+        self.assertEqual(scaled, [])
+        self.assertEqual(self.stone.pixmap().size(), size)
+
+    def test_a_plant_can_still_be_resized(self):
+        path = os.path.join(_REPO_ROOT, 'images', 'decoration', 'plant01.png')
+        plant = ResizablePixmapItem(QtGui.QPixmap(path), path)
+        self.scene.addItem(plant)
+        plant.setSelected(True)
+        before = plant.pixmap().width()
+        plant.wheelEvent(SimpleNamespace(angleDelta=lambda: QtCore.QPoint(0, 120),
+                                         accept=lambda: None))
+        self.assertGreater(plant.pixmap().width(), before)
+
     def test_it_cannot_be_deleted_but_a_plant_can(self):
         from src.ui import Ui
         plant = ResizablePixmapItem(QtGui.QPixmap(10, 10), 'images/decoration/plant01.png')

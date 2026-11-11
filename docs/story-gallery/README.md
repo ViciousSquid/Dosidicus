@@ -6,10 +6,10 @@
 
 | Squid | Personality | Colour | Home address | Seen from outside as | Friend code |
 |---|---|---|---|---|---|
-| Ziggy | adventurous | as it hatched | `192.168.1.2:10000` | `100.64.1.2:10000` | `00B48-00G49-RGX7G-YA081` |
-| Inky | timid | rgb(120,170,255) | `192.168.1.2:10000` | `100.64.2.2:10000` | `00B48-01049-RGCQX-ARJ0X` |
-| Pesto | greedy | rgb(255,105,180) | `192.168.1.2:10000` | `100.64.3.2:10000` | `00B48-01G49-RGBF0-YR36H` |
-| Bolt | energetic | rgb(120,220,140) | `192.168.1.2:10000` | `100.64.4.2:10000` | `00B48-02049-RG3QA-1J6C1` |
+| Ziggy | adventurous | as it hatched | `192.168.1.2:10000` | `100.64.1.2:10000` | `K4800-G49RG-3S817` |
+| Inky | timid | rgb(120,170,255) | `192.168.1.2:10000` | `100.64.2.2:10000` | `K4801-049RG-NB28H` |
+| Pesto | greedy | rgb(255,105,180) | `192.168.1.2:10000` | `100.64.3.2:10000` | `K4801-G49RG-3V0CG` |
+| Bolt | energetic | rgb(120,220,140) | `192.168.1.2:10000` | `100.64.4.2:10000` | `K4802-049RG-868SK` |
 
 ## Apart, then linked
 

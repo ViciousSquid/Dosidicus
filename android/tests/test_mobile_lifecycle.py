@@ -266,3 +266,24 @@ def test_a_mobile_resident_recognises_a_visitor_it_remembers_badly():
     sim.visitors.clear()                            # gone: nobody in view
     sim.update(.1)
     assert seen['squid_familiar'] == 0 and seen['squid_recalled_bad'] == 0
+
+
+def test_a_headstone_can_be_moved_but_never_resized_or_removed():
+    sim = Simulation()
+    old = sim.squid
+    old.name = 'Inky'
+    for _ in range(int(sim.lifecycle_config['neglect_seconds']) + 1):
+        old.hunger = 100.
+        sim.update(1.)
+    [stone] = headstones(sim)
+    size = stone.get('scale', 1.0)
+    sim.update_decoration(stone['id'], x=123., y=234., scale=3.0)
+    assert (stone['x'], stone['y']) == (123., 234.)           # moved
+    assert stone.get('scale', 1.0) == size                    # not resized
+    sim.remove_decoration(stone['id'])
+    assert headstones(sim) == [stone]                         # not removed
+    plant = sim.add_decoration('plant01.png', 'plant', 300., 400.)
+    sim.update_decoration(plant['id'], scale=2.0)
+    assert plant['scale'] == 2.0
+    sim.remove_decoration(plant['id'])
+    assert plant not in sim.decorations

@@ -9,7 +9,7 @@
    "colour": null,
    "private_address": "192.168.1.2:10000",
    "seen_from_outside_as": "100.64.1.2:10000",
-   "friend_code": "00B48-00G49-RGX7G-YA081",
+   "friend_code": "K4800-G49RG-3S817",
    "tanks_heard_before_any_code": 0
   },
   {
@@ -23,7 +23,7 @@
    ],
    "private_address": "192.168.1.2:10000",
    "seen_from_outside_as": "100.64.2.2:10000",
-   "friend_code": "00B48-01049-RGCQX-ARJ0X",
+   "friend_code": "K4801-049RG-NB28H",
    "tanks_heard_before_any_code": 0
   },
   {
@@ -37,7 +37,7 @@
    ],
    "private_address": "192.168.1.2:10000",
    "seen_from_outside_as": "100.64.3.2:10000",
-   "friend_code": "00B48-01G49-RGBF0-YR36H",
+   "friend_code": "K4801-G49RG-3V0CG",
    "tanks_heard_before_any_code": 0
   },
   {
@@ -51,7 +51,7 @@
    ],
    "private_address": "192.168.1.2:10000",
    "seen_from_outside_as": "100.64.4.2:10000",
-   "friend_code": "00B48-02049-RG3QA-1J6C1",
+   "friend_code": "K4802-049RG-868SK",
    "tanks_heard_before_any_code": 0
   }
  ],
@@ -295,120 +295,120 @@
    "home": 4,
    "who": "Bolt",
    "kind": "entered",
-   "text": "entered Ziggy's friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Ziggy's friend code K4800-G49RG-3S817: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Bolt   entered Ziggy's friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Bolt   entered Ziggy's friend code K4800-G49RG-3S817: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9873292,
    "home": 4,
    "who": "Bolt",
    "kind": "entered",
-   "text": "entered Inky's friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Inky's friend code K4801-049RG-NB28H: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Bolt   entered Inky's friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Bolt   entered Inky's friend code K4801-049RG-NB28H: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9882317,
    "home": 1,
    "who": "Ziggy",
    "kind": "entered",
-   "text": "entered Inky's friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Inky's friend code K4801-049RG-NB28H: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Ziggy  entered Inky's friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Ziggy  entered Inky's friend code K4801-049RG-NB28H: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9882836,
    "home": 4,
    "who": "Bolt",
    "kind": "entered",
-   "text": "entered Pesto's friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Pesto's friend code K4801-G49RG-3V0CG: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Bolt   entered Pesto's friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Bolt   entered Pesto's friend code K4801-G49RG-3V0CG: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9887784,
    "home": 1,
    "who": "Ziggy",
    "kind": "entered",
-   "text": "entered Pesto's friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Pesto's friend code K4801-G49RG-3V0CG: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Ziggy  entered Pesto's friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Ziggy  entered Pesto's friend code K4801-G49RG-3V0CG: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9897823,
    "home": 1,
    "who": "Ziggy",
    "kind": "entered",
-   "text": "entered Bolt's friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Bolt's friend code K4802-049RG-868SK: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Ziggy  entered Bolt's friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Ziggy  entered Bolt's friend code K4802-049RG-868SK: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9942238,
    "home": 3,
    "who": "Pesto",
    "kind": "entered",
-   "text": "entered Ziggy's friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Ziggy's friend code K4800-G49RG-3S817: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Pesto  entered Ziggy's friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Pesto  entered Ziggy's friend code K4800-G49RG-3S817: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9948657,
    "home": 2,
    "who": "Inky",
    "kind": "entered",
-   "text": "entered Ziggy's friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Ziggy's friend code K4800-G49RG-3S817: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Inky   entered Ziggy's friend code 00B48-00G49-RGX7G-YA081: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Inky   entered Ziggy's friend code K4800-G49RG-3S817: Linked to 100.64.1.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9955904,
    "home": 2,
    "who": "Inky",
    "kind": "entered",
-   "text": "entered Pesto's friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Pesto's friend code K4801-G49RG-3V0CG: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Inky   entered Pesto's friend code 00B48-01G49-RGBF0-YR36H: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Inky   entered Pesto's friend code K4801-G49RG-3V0CG: Linked to 100.64.3.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349232.9965951,
    "home": 2,
    "who": "Inky",
    "kind": "entered",
-   "text": "entered Bolt's friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Bolt's friend code K4802-049RG-868SK: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Inky   entered Bolt's friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Inky   entered Bolt's friend code K4802-049RG-868SK: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349233.0063307,
    "home": 3,
    "who": "Pesto",
    "kind": "entered",
-   "text": "entered Inky's friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Inky's friend code K4801-049RG-NB28H: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Pesto  entered Inky's friend code 00B48-01049-RGCQX-ARJ0X: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Pesto  entered Inky's friend code K4801-049RG-NB28H: Linked to 100.64.2.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349233.0072453,
    "home": 3,
    "who": "Pesto",
    "kind": "entered",
-   "text": "entered Bolt's friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.",
+   "text": "entered Bolt's friend code K4802-049RG-868SK: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too.",
    "ok": true,
    "clock": "0:00",
-   "line": " 0:00  Pesto  entered Bolt's friend code 00B48-02049-RG3QA-1J6C1: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too."
+   "line": " 0:00  Pesto  entered Bolt's friend code K4802-049RG-868SK: Linked to 100.64.4.2:10000. If their tank does not answer, ask them to enter your code too."
   },
   {
    "at": 1794349233.2321992,

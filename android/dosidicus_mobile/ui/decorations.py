@@ -76,8 +76,11 @@ def _aspect(deco):
 
 class _DecoScatter(Scatter):
     def __init__(self, layer, deco, **kwargs):
+        # A headstone is dragged like anything else, but never pinched to
+        # another size (and never removed: on_touch_down).
         super().__init__(
-            do_rotation=False, do_translation=True, do_scale=True,
+            do_rotation=False, do_translation=True,
+            do_scale=deco.get("category") != "headstone",
             scale_min=0.3, scale_max=3.5, size_hint=(None, None), **kwargs)
         self.layer = layer
         self.deco = deco

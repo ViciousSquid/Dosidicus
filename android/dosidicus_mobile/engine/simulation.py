@@ -175,13 +175,16 @@ class Simulation:
                     d["x"] = float(x)
                 if y is not None:
                     d["y"] = float(y)
-                if scale is not None:
-                    d["scale"] = float(scale)
+                if scale is not None and d.get("category") != "headstone":
+                    d["scale"] = float(scale)      # a headstone keeps its size
                 return d
         return None
 
     def remove_decoration(self, deco_id):
-        self.decorations = [d for d in self.decorations if d["id"] != deco_id]
+        """Take a decoration out of the tank. A headstone stays: it can be
+        moved, but never resized or removed."""
+        self.decorations = [d for d in self.decorations
+                            if d["id"] != deco_id or d.get("category") == "headstone"]
 
     # --------------------------------------------------------- rock play
     def _rock_decorations(self):
