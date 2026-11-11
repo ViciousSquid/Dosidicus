@@ -88,9 +88,56 @@ def collect_artifacts(source, target, version):
     (target / 'SHA256SUMS').write_text(''.join(hashes))
 
 
+def plan_build(environ, root=Path('.'), tag_exists_elsewhere=None):
+    """What a run of the build is, from how it was started.
+
+    Returns {'version', 'tag', 'prerelease', 'release'} as the strings the
+    workflow reads. Called by the release workflow, it builds at the version
+    given and publishes nothing (that workflow does). Run by hand, it is a
+    release: of the tag asked for, or of vVERSION-build.RUN - the game's
+    version from the `version` file and this run's number, always a
+    prerelease. A push just builds.
+    """
+    called_with = environ.get('CALLED_WITH_VERSION', '')
+    if called_with:
+        validate_version(called_with)
+        return {'version': called_with, 'tag': '', 'prerelease': 'false', 'release': 'false'}
+    if environ.get('BY_HAND') != 'true':
+        return {'version': '', 'tag': '', 'prerelease': 'false', 'release': 'false'}
+    tag = environ.get('REQUESTED_TAG', '').strip()
+    if not tag:
+        current = re.search(r'^dosidicus:\s*(\S+)', (root / 'version').read_text(), flags=re.M)
+        if not current:
+            raise ValueError('The version file has no "dosidicus:" line')
+        base = '.'.join((current.group(1).split('-')[0].split('.') + ['0', '0'])[:3])
+        tag = f"v{base}-build.{environ.get('GITHUB_RUN_NUMBER', '0')}"
+    if not tag.startswith('v'):
+        raise ValueError('Release tags must start with v')
+    version = tag[1:]
+    validate_version(version)
+    if tag_exists_elsewhere and tag_exists_elsewhere(tag):
+        raise ValueError(f'{tag} already exists at a different commit; choose another tag')
+    if environ.get('HAS_KEYSTORE') != 'true':
+        raise ValueError(
+            'A release includes the Android APK, and it has to be signed. Set the '
+            'repository secrets ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD '
+            '(Settings > Secrets and variables > Actions; docs/RELEASING.md) and run '
+            'the build again. Nothing was built.')
+    prerelease = environ.get('REQUESTED_PRERELEASE') == 'true' or '-' in version
+    return {'version': version, 'tag': tag, 'prerelease': str(prerelease).lower(),
+            'release': 'true'}
+
+
+def _tag_is_elsewhere(tag):
+    import subprocess
+    found = subprocess.run(['git', 'rev-parse', '--verify', f'refs/tags/{tag}^{{commit}}'],
+                           capture_output=True, text=True)
+    return found.returncode == 0 and found.stdout.strip() != os.environ.get('GITHUB_SHA', '')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('version', 'runtime', 'collect'))
+    parser.add_argument('action', choices=('version', 'runtime', 'collect', 'plan'))
     parser.add_argument('--root', type=Path, default=Path('.'))
     parser.add_argument('--version')
     parser.add_argument('--source', type=Path)
@@ -100,6 +147,13 @@ def main():
         set_version(args.root, args.version)
     elif args.action == 'runtime':
         copy_runtime(args.root, args.target)
+    elif args.action == 'plan':
+        try:
+            planned = plan_build(os.environ, args.root, _tag_is_elsewhere)
+        except ValueError as problem:
+            raise SystemExit(f'::error::{problem}')
+        for name, value in planned.items():
+            print(f'{name}={value}')
     else:
         collect_artifacts(args.source, args.target, args.version)
 

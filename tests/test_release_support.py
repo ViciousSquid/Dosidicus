@@ -89,3 +89,64 @@ def test_unsigned_android_output_cannot_satisfy_a_release(tmp_path):
     with pytest.raises(ValueError, match='release.apk'):
         collect_artifacts(source, tmp_path/'release', '3.2.7')
 
+
+
+# ---- a build run by hand is a release ---------------------------------------
+from tools.release_support import plan_build      # noqa: E402
+
+BY_HAND = {'BY_HAND': 'true', 'HAS_KEYSTORE': 'true', 'GITHUB_RUN_NUMBER': '74'}
+
+
+def _root(tmp_path, version='3.2.0'):
+    (tmp_path / 'version').write_text(f'dosidicus: {version}\nbrain_tool: 20.10.26\n')
+    return tmp_path
+
+
+def test_a_build_run_by_hand_is_a_prerelease_named_after_the_version_and_the_run(tmp_path):
+    assert plan_build(BY_HAND, _root(tmp_path)) == {
+        'version': '3.2.0-build.74', 'tag': 'v3.2.0-build.74',
+        'prerelease': 'true', 'release': 'true'}
+    # A four-part version file still gives a version Android can take.
+    assert plan_build(BY_HAND, _root(tmp_path, '3.2.0.0'))['tag'] == 'v3.2.0-build.74'
+
+
+def test_a_tag_typed_in_is_used_and_is_stable_unless_asked_otherwise(tmp_path):
+    root = _root(tmp_path)
+    assert plan_build(dict(BY_HAND, REQUESTED_TAG='v3.2.1'), root) == {
+        'version': '3.2.1', 'tag': 'v3.2.1', 'prerelease': 'false', 'release': 'true'}
+    assert plan_build(dict(BY_HAND, REQUESTED_TAG='v3.2.1', REQUESTED_PRERELEASE='true'),
+                      root)['prerelease'] == 'true'
+    for bad in ('3.2.1', 'vlatest', 'v3.2'):
+        with pytest.raises(ValueError):
+            plan_build(dict(BY_HAND, REQUESTED_TAG=bad), root)
+    with pytest.raises(ValueError, match='already exists'):
+        plan_build(dict(BY_HAND, REQUESTED_TAG='v3.2.1'), root, lambda tag: tag == 'v3.2.1')
+
+
+def test_without_the_signing_key_nothing_is_built_and_the_reason_is_given(tmp_path):
+    with pytest.raises(ValueError, match='ANDROID_KEYSTORE_BASE64'):
+        plan_build(dict(BY_HAND, HAS_KEYSTORE='false'), _root(tmp_path))
+
+
+def test_a_push_only_builds_and_a_called_build_leaves_publishing_to_its_caller(tmp_path):
+    root = _root(tmp_path)
+    assert plan_build({'BY_HAND': 'false'}, root) == {
+        'version': '', 'tag': '', 'prerelease': 'false', 'release': 'false'}
+    assert plan_build({'CALLED_WITH_VERSION': '3.1.3-canary.1', 'BY_HAND': 'false'}, root) == {
+        'version': '3.1.3-canary.1', 'tag': '', 'prerelease': 'false', 'release': 'false'}
+
+
+def test_the_build_workflow_publishes_only_after_every_build_and_shares_the_publish_step():
+    import yaml
+    root = Path(__file__).resolve().parents[1] / '.github' / 'workflows'
+    build = yaml.safe_load((root / 'build-nuitka.yml').read_text())
+    jobs = build['jobs']
+    assert set(jobs['release']['needs']) == {'plan', 'build', 'macos-universal-intel',
+                                             'windows-arm64', 'android'}
+    for name in ('windows-arm64', 'android', 'release'):
+        assert jobs[name]['if'] == "needs.plan.outputs.release == 'true'"
+    assert jobs['release']['uses'] == './.github/workflows/publish-release.yml'
+    assert jobs['android']['uses'] == './.github/workflows/android-release.yml'
+    assert jobs['release']['permissions'] == {'contents': 'write'}
+    release = yaml.safe_load((root / 'release.yml').read_text())
+    assert release['jobs']['publish']['uses'] == jobs['release']['uses']

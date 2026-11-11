@@ -16,6 +16,23 @@ commit into these six installable distributions:
 A release also includes `SHA256SUMS` and `release-info.json` with the source
 commit and workflow run. Linux archives preserve executable permissions.
 
+## The quick way: run the build
+
+Running **Actions → Build (Nuitka) → Run workflow** on a branch is a release.
+It builds everything in the table above - the desktop builds, the native
+Windows ARM64 build and the signed Android APK - and, only once every one of
+them has succeeded, publishes them all as one new GitHub release.
+
+- Leave **tag** blank and the release is a prerelease named
+  `vVERSION-build.RUN` (the game's version from the `version` file and the
+  run's number, e.g. `v3.2.0-build.74`).
+- Type a tag such as `v3.2.1` for a proper release; tick **prerelease** if it
+  is one.
+- The Android signing secrets below must be set. If they are not, the run
+  stops in its first minute and says so, before anything is built.
+
+A build started by a push (to the packaging files) only builds: no release.
+
 ## Signing configuration
 
 Set repository secrets in **Settings → Secrets and variables → Actions**:

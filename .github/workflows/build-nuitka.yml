@@ -7,7 +7,21 @@ on:
         type: string
         required: false
         default: ""
+  # Run by hand, a build is a release: everything it builds - and a native
+  # Windows ARM64 build and the signed Android APK, built alongside - is
+  # published as one new GitHub release (jobs plan, windows-arm64, android
+  # and release, below).
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v3.2.1. Blank: vVERSION-build.RUN, from the version file"
+        type: string
+        required: false
+        default: ""
+      prerelease:
+        description: "Publish as a prerelease (an automatic tag always is)"
+        type: boolean
+        default: false
   # Also produce a downloadable diagnostic artifact when packaging changes.
   push:
     branches:
@@ -29,7 +43,37 @@ on:
       - "tools/subset_emoji_font.py"
 
 jobs:
+  # What this run is. Called by "Release all platforms": build at the version
+  # it was given; that workflow publishes. Run by hand: choose the tag, check
+  # the APK can be signed, build, and publish here. On a push: just build.
+  plan:
+    name: Decide the version, and whether this run publishes a release
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      release: ${{ steps.plan.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Plan
+        id: plan
+        env:
+          CALLED_WITH_VERSION: ${{ inputs.release_version }}
+          BY_HAND: ${{ github.event_name == 'workflow_dispatch' && inputs.release_version == '' }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          REQUESTED_PRERELEASE: ${{ inputs.prerelease }}
+          HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+        run: python tools/release_support.py plan >> "$GITHUB_OUTPUT"
+
   build:
+    needs: plan
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
     timeout-minutes: 120
@@ -70,9 +114,9 @@ jobs:
           cache: pip
 
       - name: Apply release version
-        if: inputs.release_version != ''
+        if: needs.plan.outputs.version != ''
         env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
         run: python tools/release_support.py version --version "$RELEASE_VERSION"
         shell: bash
 
@@ -547,3 +591,37 @@ jobs:
           path: smoke-macos.log
           if-no-files-found: ignore
 
+  # ---- run by hand: the rest of a release --------------------------------
+  windows-arm64:
+    name: Native Windows ARM64
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    uses: ./.github/workflows/build-windows-arm64.yml
+    with:
+      release_version: ${{ needs.plan.outputs.version }}
+
+  android:
+    name: Signed Android ARM64 APK
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    uses: ./.github/workflows/android-release.yml
+    with:
+      version_override: ${{ needs.plan.outputs.version }}
+    secrets:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+  # Only once every build above has succeeded, the universal DMG included.
+  release:
+    name: Publish everything as one new release
+    needs: [plan, build, macos-universal-intel, windows-arm64, android]
+    if: needs.plan.outputs.release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-release.yml
+    with:
+      tag: ${{ needs.plan.outputs.tag }}
+      version: ${{ needs.plan.outputs.version }}
+      prerelease: ${{ needs.plan.outputs.prerelease }}

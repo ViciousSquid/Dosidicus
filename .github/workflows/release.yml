@@ -95,47 +95,10 @@ jobs:
   publish:
     name: Checksum and publish one tagged release
     needs: [prepare, desktop, windows-arm64, android]
-    runs-on: ubuntu-22.04
     permissions:
       contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-      IS_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-      - name: Require every platform and architecture and write checksums
-        run: python tools/release_support.py collect --source artifacts --target release-assets --version "$RELEASE_VERSION"
-      - name: Stage a draft release at the exact source commit
-        run: |
-          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
-            test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$GITHUB_SHA"
-          fi
-          gh release create "$RELEASE_TAG" release-assets/* \
-            --target "$GITHUB_SHA" --title "Dosidicus $RELEASE_TAG" \
-            --generate-notes --draft --prerelease="$IS_PRERELEASE"
-      - name: Verify uploaded assets before publishing
-        run: |
-          gh release view "$RELEASE_TAG" --json assets > uploaded-assets.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          expected = {p.name: p.stat().st_size for p in Path('release-assets').iterdir()}
-          actual = {a['name']: a['size'] for a in json.loads(Path('uploaded-assets.json').read_text())['assets']}
-          if actual != expected:
-              raise SystemExit('Uploaded assets do not match; the release remains a draft')
-          PY
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$IS_PRERELEASE"
-          echo "Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+    uses: ./.github/workflows/publish-release.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      version: ${{ needs.prepare.outputs.version }}
+      prerelease: ${{ needs.prepare.outputs.prerelease }}
