@@ -136,7 +136,7 @@ def test_a_squid_that_swims_out_takes_its_head_icon_with_it():
     squid.set_in_tank(True)                      # and come home
     assert squid.ng_icon.isVisible() and not curious.isVisible()
     # Both ways out of the tank, and both ways back, go through it.
-    for name in ('src/squid.py', 'plugins/multiplayer/visitor_mind.py',
+    for name in ('src/squid_movement.py', 'plugins/multiplayer/visitor_mind.py',
                  'plugins/multiplayer/mp_plugin_logic.py'):
         assert 'set_in_tank(' in (ROOT / name).read_text(encoding='utf-8'), name
 

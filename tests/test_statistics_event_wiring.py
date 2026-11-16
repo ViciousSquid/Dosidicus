@@ -164,7 +164,7 @@ class StatisticsEventWiringTests(unittest.TestCase):
         squid.start_poop_timer = Mock()
         logic.squid = squid
 
-        with patch("src.squid.QTimer.singleShot"):
+        with patch("src.squid_objects.QTimer.singleShot"):
             squid.eat(SimpleNamespace(is_sushi=False))
 
         self.assertEqual(logic.neurogenesis_triggers["positive_outcomes"], 5)
