@@ -36,9 +36,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 3.9 is the oldest Python the game supports. Newer runner images
-          # no longer provide it, so it is tested on the image that does.
-          - python-version: "3.9"
+          # 3.10 is the oldest Python the game runs on (it uses `X | None`
+          # annotations); tested on an image that is sure to provide it.
+          - python-version: "3.10"
             os: ubuntu-22.04
           - python-version: "3.11"
             os: ubuntu-latest

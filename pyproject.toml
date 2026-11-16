@@ -8,7 +8,7 @@ name = "dosidicus"
 description = "A digital pet squid with a transparent neural network you can watch thinking"
 readme = "README.md"
 license = { text = "GPL-2.0-only" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dynamic = ["version", "dependencies"]
 
 [project.urls]
@@ -20,7 +20,7 @@ testpaths = ["tests", "android/tests"]
 addopts = "-q"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 120
 extend-exclude = ["extras/vendor", "android/.buildozer"]
 

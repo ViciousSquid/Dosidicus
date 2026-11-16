@@ -7,7 +7,7 @@ _A transparent cognitive sandbox disguised as a digital pet squid with a neural 
 
 ### [Download for Windows, macOS, Linux and Android](https://github.com/ViciousSquid/Dosidicus/releases)
 
-Or run it from source (Python 3.9 or newer):
+Or run it from source (Python 3.10 or newer):
 
 ```bash
 git clone https://github.com/ViciousSquid/Dosidicus.git
@@ -232,7 +232,7 @@ require approval under **System Settings → Privacy & Security → Open Anyway*
 Saves and settings are stored in `~/Library/Application Support/Dosidicus`.
 
 - **Dependencies:**
-  - Python ^3.9
+  - Python ^3.10
   - PyQt5 ^5.15 (GUI framework)
   - numpy ^1.21 (neural network computations)
   - **OPTIONAL** onnxruntime or onnxruntime-directml ([more info](https://github.com/ViciousSquid/Dosidicus/wiki/AI-accelerator-support))

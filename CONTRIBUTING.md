@@ -47,7 +47,7 @@ python -m pytest        # everything, about two minutes; no display needed
 ruff check .            # undefined names, duplicate keys, unused imports
 ```
 
-Both run automatically on every pull request, on Python 3.9, 3.11 and 3.13.
+Both run automatically on every pull request, on Python 3.10, 3.11 and 3.13.
 A pull request is ready when:
 
 - **the tests pass and `ruff check .` is clean** - if a Qt test complains
