@@ -119,7 +119,10 @@ class SquidObjectsMixin:
             self.tamagotchi_logic.recent_positive_outcome = True
 
         self.status = "pushing decoration"
-        self.tamagotchi_logic.show_message("Squid pushed a decoration")
+        # The animation can finish after the game it belonged to has gone
+        # (and this runs inside a Qt slot, where an exception aborts the game).
+        if self.tamagotchi_logic is not None:
+            self.tamagotchi_logic.show_message("Squid pushed a decoration")
 
         # Clean up animation reference
         self.push_animation = None

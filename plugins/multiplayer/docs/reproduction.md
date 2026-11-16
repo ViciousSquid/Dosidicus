@@ -75,8 +75,8 @@ lives make of it.
 
 | What | Where |
 |---|---|
-| Mating | `plugins/multiplayer/host_body.py`: `_resolve_contact`; `mp_plugin_logic.record_mating` |
-| Parent, egg, death | `src/lifecycle.py`; `src/tamagotchi_logic.py`: `record_reproduction`, `begin_egg_hatching` |
+| Mating | `plugins/multiplayer/host_body.py`: `_resolve_contact`; `mp_social.record_mating` |
+| Parent, egg, death | `src/lifecycle.py`; `src/logic_lifecycle.py`: `record_reproduction`, `begin_egg_hatching` |
 | Inheritance | `src/inheritance.py`; `Lifecycle.add_genes`; `remote_protocol.Gamete`; `VisitorMind._send_gamete`; `MultiplayerPlugin.handle_gamete`; `main.py` `_begin_new_life` |
 | Android | `android/dosidicus_mobile/engine/simulation.py`, `peer_visit.py` (`_on_mating`, `_keep_gamete`) |
 | Specification | `tests/test_reproduction_lifecycle.py`, `tests/test_new_game_and_hatch.py`, `android/tests/test_mobile_lifecycle.py` |

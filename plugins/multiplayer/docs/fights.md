@@ -121,7 +121,7 @@ code ever inks.
 | What | Where |
 |---|---|
 | The model | `src/fighting.py` |
-| Host: who starts it, resolution, record | `plugins/multiplayer/mp_plugin_logic.py`: `_who_starts_a_fight`, `show_fight_cloud`, `resolve_fight` |
+| Host: who starts it, resolution, record | `plugins/multiplayer/mp_social.py`: `_who_starts_a_fight`, `show_fight_cloud`, `resolve_fight` |
 | Visitor's side | `plugins/multiplayer/visitor_mind.py`: `decide` (sends aggression/defence/fitness), `_live_through_fight` |
 | Mobile | `android/dosidicus_mobile/engine/simulation.py`: `_update_fight`, `_resolve_fight` |
 | Specification | `tests/test_fighting.py`, `tests/test_reproduction_lifecycle.py` (FightCloudTests), `tests/test_fight_statistics.py` |

@@ -23,7 +23,7 @@ def squid(name):
 
 @pytest.mark.parametrize('roll', [.1, .9])
 def test_host_resolves_once_and_guest_counts_duplicate_messages_once(roll, monkeypatch):
-    monkeypatch.setattr('plugins.multiplayer.mp_plugin_logic.random.random', lambda: roll)
+    monkeypatch.setattr('random.random', lambda: roll)
     host, guest = squid('Host'), squid('Guest')
     logic = SimpleNamespace(squid=host)
     plugin = MultiplayerPlugin()
