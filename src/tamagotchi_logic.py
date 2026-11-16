@@ -1986,51 +1986,6 @@ class TamagotchiLogic:
         # that depended on whether the brain window happened to be open.
 
 
-    def _normalize_action_name(self, status: str) -> str:
-        """
-        Normalize squid status string to a standard action name for tracking.
-        
-        Args:
-            status: Raw status string from squid
-            
-        Returns:
-            Normalized action name
-        """
-        if not status:
-            return 'idle'
-        
-        status_lower = status.lower()
-        
-        # Map various status strings to standard actions
-        if 'eat' in status_lower:
-            return 'eating'
-        elif 'sleep' in status_lower:
-            return 'sleeping'
-        elif 'flee' in status_lower or 'escap' in status_lower:
-            return 'fleeing'
-        elif 'startle' in status_lower:
-            return 'startled'
-        elif 'curious' in status_lower or 'investigat' in status_lower:
-            return 'curious'
-        elif 'rock' in status_lower:
-            if 'throw' in status_lower:
-                return 'throwing_rock'
-            elif 'carry' in status_lower:
-                return 'carrying_rock'
-            elif 'approach' in status_lower:
-                return 'approaching_rock'
-            return 'rock_interaction'
-        elif 'plant' in status_lower:
-            return 'near_plant'
-        elif 'sick' in status_lower or 'ill' in status_lower:
-            return 'sick'
-        elif 'roam' in status_lower or 'explor' in status_lower:
-            return 'roaming'
-        elif 'idle' in status_lower or 'rest' in status_lower:
-            return 'idle'
-        else:
-            return 'roaming'  # Default
-    
     def check_for_curiosity(self):
         if self.curious_cooldown > 0:
             self.curious_cooldown -= 1
