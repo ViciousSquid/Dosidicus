@@ -1,0 +1,8 @@
+# Everything needed to run the tests and the linter.
+#   pip install -r requirements-dev.txt
+-r requirements.txt
+pytest>=7
+Pillow>=9
+platformdirs>=3
+pyyaml>=6
+ruff>=0.6

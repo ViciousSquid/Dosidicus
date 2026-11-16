@@ -1,0 +1,43 @@
+# Dosidicus is run from a checkout (python main.py) or from a frozen build, not
+# installed as a package, so this file carries project metadata and tool
+# configuration only. Runtime dependencies stay in requirements.txt, which the
+# build workflows read; test and lint dependencies are in requirements-dev.txt.
+
+[project]
+name = "dosidicus"
+description = "A digital pet squid with a transparent neural network you can watch thinking"
+readme = "README.md"
+license = { text = "GPL-2.0-only" }
+requires-python = ">=3.9"
+dynamic = ["version", "dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/ViciousSquid/Dosidicus"
+Documentation = "https://github.com/ViciousSquid/Dosidicus/wiki"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "android/tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+extend-exclude = ["extras/vendor", "android/.buildozer"]
+
+[tool.ruff.lint]
+# Correctness only: syntax errors, undefined names, shadowed definitions,
+# duplicate dictionary keys, unused imports. Style rules are deliberately off;
+# turning them on would bury these under thousands of cosmetic findings.
+select = ["E9", "F"]
+ignore = [
+    "F841",  # assigned-but-unused locals: many are kept for readability
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+# The trainer module is also the public import surface for studying the brain
+# (`from headless_trainer import ...`), so its imports are re-exports.
+"headless/headless_trainer.py" = ["F401"]
+# pytest fixtures are imported by name and then requested as arguments.
+"tests/**" = ["F811"]
+"android/tests/**" = ["F811"]

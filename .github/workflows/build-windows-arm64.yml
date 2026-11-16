@@ -10,7 +10,9 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 3.1_LatestVersion
+      # Release-line branches are named after their version (3.5.0, 3.6.0 ...);
+      # the pattern keeps matching when the default branch is renamed.
+      - "[0-9]*"
     paths:
       - .github/workflows/build-windows-arm64.yml
       - requirements.txt
