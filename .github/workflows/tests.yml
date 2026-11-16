@@ -29,12 +29,21 @@ jobs:
       - run: ruff check .
 
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.11", "3.13"]
+        include:
+          # 3.9 is the oldest Python the game supports. Newer runner images
+          # no longer provide it, so it is tested on the image that does.
+          - python-version: "3.9"
+            os: ubuntu-22.04
+          - python-version: "3.11"
+            os: ubuntu-latest
+          - python-version: "3.13"
+            os: ubuntu-latest
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
