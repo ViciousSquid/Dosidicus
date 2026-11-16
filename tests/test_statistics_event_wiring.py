@@ -845,7 +845,7 @@ class StatisticsEventWiringTests(unittest.TestCase):
         poop_item = SimpleNamespace(setPos=Mock())
 
         with patch(
-            "src.tamagotchi_logic.ResizablePixmapItem",
+            "src.logic_care.ResizablePixmapItem",
             return_value=poop_item,
         ):
             created = logic.spawn_poop(100, 200)
