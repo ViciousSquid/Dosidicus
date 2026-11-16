@@ -1,5 +1,8 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtGui import QPixmap
 import random
 import os
 import time
@@ -8,13 +11,12 @@ import json
 import math
 from .statistics_window import StatisticsWindow
 from .save_manager import SaveManager
-from .squid import Personality, Squid
+from .squid import Personality
 from .ui import ResizablePixmapItem
-from .brain_tool import SquidBrainWindow
 from .learning import HebbianLearning
 from .tint import rgb_of
 from .interactions import RockInteractionManager
-from .interactions2 import PoopInteractionManager
+from .poop_interactions import PoopInteractionManager
 from .config_manager import ConfigManager
 from .lifecycle import (Lifecycle, EGG_HATCHING, CAUSE_STARVED,
                         CAUSE_NEGLECTED, CAUSE_SICKNESS, CAUSE_INJURED)
@@ -27,8 +29,7 @@ from .image_cache import ImageCache
 from .custom_brain_loader import (
     get_custom_brain_save_data, 
     restore_custom_brain_from_save,
-    show_custom_brain_load_warning,
-    has_custom_brain
+    show_custom_brain_load_warning
 )
 
 # Performance tracking for Task Manager
@@ -192,6 +193,7 @@ class TamagotchiLogic:
                     plugin_data['is_setup'] = True
                     print(f"✓ Setup plugin: {plugin_name}")
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Error setting up plugin {plugin_name}: {e}")
 
         # Update status bar with plugin information
@@ -384,6 +386,7 @@ class TamagotchiLogic:
                     plugin_data['is_setup'] = True
                     print(f"✓ Setup plugin: {plugin_name}")
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Error setting up plugin {plugin_name}: {e}")
 
         # Update status bar with plugin information
@@ -471,6 +474,7 @@ class TamagotchiLogic:
             try:
                 bw.apply_personality_bias(personality)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Personality] could not tilt innate reflexes: {e}")
 
     def set_brain_window(self, brain_window):
@@ -654,14 +658,6 @@ class TamagotchiLogic:
                 # Update Q-table
                 de.ql.update(de.last_state, de.last_action, reward, next_state)
 
-    def get_active_memories(self):
-        # Get raw memory objects instead of display strings
-        memories = self.squid.memory_manager.get_all_short_term_memories(raw=True)[:3]
-        return [f"{m['category']}: {m['value']}" for m in memories]
-
-    def get_available_actions(self):
-        return ["search_for_food", "explore", "sleep", "move_randomly", "interact_object"]
-
     def get_recent_learning(self):
         """Get last 3 significant weight changes"""
         if hasattr(self.squid, 'hebbian_learning') and self.squid.hebbian_learning:
@@ -827,27 +823,6 @@ class TamagotchiLogic:
         Call this when decorations are added/removed to force cache rebuild.
         """
         self._decoration_cache_time = 0
-    
-    def investigate_object(self):
-        if self.detected_object_position:
-            self.move_towards(self.detected_object_position[0], self.detected_object_position[1])
-            
-            # Add thoughts
-            self.brain_window.add_thought("Investigating unknown object")
-            
-            if self.distance_to(self.detected_object_position[0], self.detected_object_position[1]) < 20:
-                object_item = self.tamagotchi_logic.get_item_at_position(self.detected_object_position[0], self.detected_object_position[1])
-                if object_item:
-                    if isinstance(object_item, Food):
-                        self.brain_window.add_thought("Unknown object appears to be food")
-                        self.eat() 
-                        self.brain_window.add_thought("Ate the food!")
-                    elif isinstance(object_item, Decoration):
-                        self.brain_window.add_thought("Unknown object appears to be a decoration")
-                        self.interact_with_decoration(object_item)
-
-                self.object_visible = False
-                self.detected_object_position = None
     
     def check_collision_with_cheese(self, cheese_item):
         if self.squid.personality == Personality.STUBBORN:
@@ -1314,6 +1289,7 @@ class TamagotchiLogic:
                                     lambda: self.end_fleeing(previous_status))
 
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error during startle: {str(e)}")
             self.show_message("The squid panicked!")
 
@@ -1369,6 +1345,7 @@ class TamagotchiLogic:
                 try:
                     discovery.acted('inking', brain.state)
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"[ActionDiscovery] ink not noted: {type(e).__name__}: {e}")
         from .display_scaling import DisplayScaling
         ink_cloud_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "inkcloud.png")))
@@ -1563,6 +1540,7 @@ class TamagotchiLogic:
                     if not pix.isNull() and hasattr(self.squid, 'squid_item'):
                         self.squid.squid_item.setPixmap(pix)
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Sleep animation error: {e}")
 
                 # Sleep physiology is driven by elapsed simulation time.
@@ -1671,6 +1649,7 @@ class TamagotchiLogic:
                             causal.on_action(action_to_track,
                                              self.brain_window.brain_widget.state)
                     except Exception as e:
+                        _LOG.warning('Handled exception', exc_info=True)
                         print(f"[CausalLearning] could not open episode: {e}")
                 
                 environment = {
@@ -1708,6 +1687,7 @@ class TamagotchiLogic:
                                        asleep=getattr(self.squid, 'is_sleeping', False)
                                        or getattr(self.squid, 'is_transitioning', False))
                     except Exception as e:
+                        _LOG.warning('Handled exception', exc_info=True)
                         print(f"[ActionDiscovery] tick failed: {type(e).__name__}: {e}")
                 neuro = getattr(bw, 'enhanced_neurogenesis', None)
                 if neuro is not None and hasattr(neuro, 'update_neuron_activations'):
@@ -2186,6 +2166,7 @@ class TamagotchiLogic:
                     manager.trigger_hook('on_journey_milestone', key=milestone.key,
                                          title=milestone.title, squid=self.squid)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Journey] could not be read: {type(e).__name__}: {e}")
 
     def _note_learned_action(self, bw) -> bool:
@@ -2325,6 +2306,7 @@ class TamagotchiLogic:
             try:
                 self.hebbian_learning.learn_from_curiosity()
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Reflex] learn_from_curiosity failed: {type(e).__name__}: {e}")
 
         # Schedule the end of the curious state
@@ -2357,26 +2339,6 @@ class TamagotchiLogic:
                     self.brain_window.add_thought("I am curious about a decoration item...")
                 
                 self.curious_interaction_cooldown = self.curious_interaction_cooldown_max
-
-    def update_curiosity(self):
-        # Update curiosity based on satisfaction and anxiety
-        if self.squid.satisfaction > 70 and self.squid.anxiety < 30:
-            curiosity_change = 0.2 * self.simulation_speed
-        else:
-            curiosity_change = -0.1 * self.simulation_speed
-
-        # Adjust curiosity change based on personality
-        if self.squid.personality == Personality.TIMID:
-            curiosity_change *= 0.5  # Timid squids are less curious
-        elif self.squid.personality == Personality.ADVENTUROUS:
-            curiosity_change *= 1.5  # Adventurous squids are more curious
-
-        self.squid.curiosity += curiosity_change
-        self.squid.curiosity = max(0, min(100, self.squid.curiosity))
-
-        # Check if the squid should enter the curious state
-        if self.squid.curiosity > 80 and self.mental_states_enabled:
-            self.check_for_curiosity()
 
     def move_objects(self):
         self.move_foods()
@@ -2418,10 +2380,6 @@ class TamagotchiLogic:
         # Start the movement
         step_movement()
 
-    def start_rps_game(self):
-        self.rps_game = RPSGame(self)
-        self.rps_game.start_game()
-
     def _set_sickness_state(self, is_sick):
         """Keep squid state, mental-state visuals, and transition stats aligned."""
         if self.squid is None:
@@ -2439,6 +2397,7 @@ class TamagotchiLogic:
             try:
                 self.hebbian_learning.learn_from_sickness()
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Reflex] learn_from_sickness failed: {type(e).__name__}: {e}")
 
         statistics = getattr(self.squid, 'statistics', None)
@@ -2960,6 +2919,7 @@ class TamagotchiLogic:
                 try:
                     self.hebbian_learning.learn_from_organization()
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"[Reflex] learn_from_organization failed: "
                           f"{type(e).__name__}: {e}")
 
@@ -3161,6 +3121,7 @@ class TamagotchiLogic:
                 squid.lifecycle.add_genes(mating_id, squid.name, gamete(weights))
             except Exception as e:
                 # The egg is laid regardless; it hatches from what it carries.
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Lifecycle] could not take this parent's genes: {e}")
         self._place_egg()
         try:
@@ -3168,6 +3129,7 @@ class TamagotchiLogic:
         except Exception as e:
             # The record is still held in memory and goes out with the next
             # save; the event is not undone because a write failed.
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Lifecycle] could not save the mating immediately: {e}")
         self.show_message(f"{squid.name} and {mate_name} produced an egg. "
                           f"{squid.name} has stopped eating.")
@@ -3233,6 +3195,7 @@ class TamagotchiLogic:
         try:
             self.save_game()
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Lifecycle] could not save the mate's genes immediately: {e}")
         return True
 
@@ -3374,6 +3337,7 @@ class TamagotchiLogic:
                 plugin_manager.trigger_hook("on_squid_died", tamagotchi_logic=self,
                                             squid=squid)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Lifecycle] on_squid_died hook failed: {e}")
         self._lay_to_rest()
         self._place_headstone()
@@ -3383,6 +3347,7 @@ class TamagotchiLogic:
         try:
             self.save_game()
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Lifecycle] could not save the death: {e}")
         QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.continue_after_death)
 
@@ -3417,6 +3382,7 @@ class TamagotchiLogic:
             try:
                 self.save_game()
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Lifecycle] could not save the hatching egg: {e}")
         elif lifecycle.egg_state != EGG_HATCHING:
             return False
@@ -3588,7 +3554,7 @@ class TamagotchiLogic:
                     if brain_def:
                         self.neuron_output_monitor.load_bindings_from_brain(brain_def)
                         custom_brain_loaded = True
-                        print(f"     + Synced custom output bindings to monitor")
+                        print("     + Synced custom output bindings to monitor")
 
             # Load brain state (Standard)
             brain_state = data.get('brain_state', {})
@@ -3600,7 +3566,7 @@ class TamagotchiLogic:
                 # This handles standard saves where bindings are stored in 'brain_state'
                 if not custom_brain_loaded and hasattr(self, 'neuron_output_monitor'):
                     self.neuron_output_monitor.load_bindings_from_brain(brain_state)
-                    print(f"     + Synced standard output bindings to monitor")
+                    print("     + Synced standard output bindings to monitor")
 
             # Load memories
             self.squid.memory_manager.short_term_memory = data.get('ShortTerm', [])
@@ -3651,7 +3617,6 @@ class TamagotchiLogic:
         import hashlib
         import json
         import uuid
-        import time
         
         # Collect squid state
         squid_data = {
@@ -3711,6 +3676,7 @@ class TamagotchiLogic:
                         achievements_data = instance.get_save_data()
         except Exception as e:
             # If plugin method fails, log warning and continue without achievements
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Warning] Could not collect achievement data: {e}")
             achievements_data = None
 
@@ -3747,6 +3713,7 @@ class TamagotchiLogic:
                 chapters = None
             save_data['timeline'] = build_timeline(save_data, journey=chapters)
         except Exception as problem:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Warning] Could not write the life timeline: {problem}")
 
         # Add achievements data if available (will be saved as achievements.json in the ZIP)
@@ -3755,7 +3722,6 @@ class TamagotchiLogic:
             
         # === DUPLICATE DETECTION LOGIC ===
         # Create hash of save data to detect duplicates
-        import time
         
         # Add timestamp for duplicate detection (not saved to file)
         save_data_for_hash = save_data.copy()
@@ -3779,10 +3745,10 @@ class TamagotchiLogic:
         if hasattr(self, 'last_save_hash') and save_hash == self.last_save_hash:
             # Only skip for autosaves, allow manual saves even if identical
             if is_autosave:
-                print(f"     Autosave skipped: identical to previous save")
+                print("     Autosave skipped: identical to previous save")
                 return False
             else:
-                print(f"     Manual save detected as identical to previous save, but saving anyway")
+                print("     Manual save detected as identical to previous save, but saving anyway")
         
         # Update last save hash
         self.last_save_hash = save_hash
@@ -3808,7 +3774,7 @@ class TamagotchiLogic:
                     
             return True
         else:
-            print(f"Failed to save game")
+            print("Failed to save game")
             return False
         
     def _restore_achievements_data(self, achievements_data):
@@ -3824,6 +3790,7 @@ class TamagotchiLogic:
                     unlocked_count = len(achievements_data.get('unlocked', {}))
                     print(f"✓ Restored {unlocked_count} achievements")
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Warning] Could not restore achievements: {e}")
 
     def _apply_save_data(self, save_data):
@@ -4078,7 +4045,6 @@ class TamagotchiLogic:
 
     def setup_poop_interaction(self):
         """Initialize poop interaction manager"""
-        from .interactions2 import PoopInteractionManager
         
         # Check if config manager has poop config
         if not hasattr(self.config_manager, 'get_poop_config'):

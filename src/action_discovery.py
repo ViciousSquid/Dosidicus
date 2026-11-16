@@ -56,6 +56,11 @@ by curiosity, combinations, and persistence.
 """
 from __future__ import annotations
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import random
 from dataclasses import dataclass
 from typing import Dict, FrozenSet, Iterable, List, Optional, Tuple
@@ -65,7 +70,7 @@ from .brain_constants import (
     LEARNED_ACTIONS, PURE_INPUT_NEURONS,
 )
 from .causal_learning import VALENCE_WEIGHTS
-from .propagation import rests_at_zero, signal_of
+from .propagation import signal_of
 
 # Only voluntary, previously unwired motor neurons are explored.
 _EXPLORE_ACTIONS = tuple(x for x in LEARNED_ACTIONS if x in (
@@ -753,14 +758,14 @@ class ActionDiscovery:
             from .social_knowledge import think
             think(brain, thought)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         squid = getattr(getattr(brain, 'tamagotchi_logic', None), 'squid', None)
         memory = getattr(squid, 'memory_manager', None)
         if memory is not None and hasattr(memory, 'add_long_term_memory'):
             try:
                 memory.add_long_term_memory('belief', key, dict(value, valence=0.0))
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
     # ------------------------------------------------------------------
     # Combinations the brain has no neuron for

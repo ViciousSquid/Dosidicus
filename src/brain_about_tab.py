@@ -1,3 +1,7 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import random
 import os
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -283,6 +287,7 @@ class AboutTab(BrainBaseTab):
                 try:
                     self.tamagotchi_logic.save_game()
                 except Exception as problem:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"[Rename] Renamed, but could not save yet: {problem}")
 
     def show_certificate(self):
@@ -374,6 +379,7 @@ class AboutTab(BrainBaseTab):
                             if key in version_info:
                                 version_info[key] = value
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error reading version file: {e}")
 
         return version_info

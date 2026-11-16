@@ -1,9 +1,8 @@
-import sys
-import csv
-import os
-import time
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtGui import QPixmap, QFont
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+from PyQt5 import QtGui, QtWidgets
 
 class StimulateDialog(QtWidgets.QDialog):
     def __init__(self, brain_widget, parent=None):
@@ -288,6 +287,7 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
                 table.item(i, 2).setForeground(color)
                 
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Error processing connection: {conn_data}, Error: {e}")
                 continue
         

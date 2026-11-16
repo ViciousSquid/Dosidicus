@@ -25,7 +25,6 @@ CATEGORY_LABELS = {
 }
 
 # Share the actual desktop definitions, including future additions and targets.
-from . import shared
 from plugins.achievements.achievements_data import ACHIEVEMENT_DEFINITIONS, Achievement
 from src.localisation import loc
 

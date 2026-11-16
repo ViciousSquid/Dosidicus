@@ -60,7 +60,6 @@ def setUpModule():
 
 from src.brain_widget import BrainWidget           # noqa: E402
 from src.config_manager import ConfigManager       # noqa: E402
-from src.brain_constants import CORE_STAT_NEURONS, PURE_INPUT_NEURONS  # noqa: E402
 
 #: Every brain built by a test, kept alive and shut down at the end of the run.
 #: A BrainWidget owns a render thread; collecting one while that thread is

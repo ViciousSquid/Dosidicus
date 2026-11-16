@@ -1,4 +1,4 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtGui, QtWidgets
 from .display_scaling import DisplayScaling
 
 class BrainBaseTab(QtWidgets.QWidget):

@@ -7,7 +7,6 @@ only on a Mac, so here it is played by a small stand-in that knows the two
 things asked of it; the real one is exercised by the workflow, which then
 starts the result on both kinds of Mac.
 """
-import json
 import os
 import stat
 import sys

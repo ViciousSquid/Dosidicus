@@ -471,14 +471,14 @@ class HeadlessSimulation:
         self.stats['elapsed_seconds'] = elapsed
         self.stats['ticks_per_second'] = (self.tick + 1) / elapsed if elapsed > 0 else 0
         
-        print(f"\n✓ Training complete!")
+        print("\n✓ Training complete!")
         print(f"  Ticks: {self.stats['ticks_completed']}")
         print(f"  Time: {elapsed:.2f}s ({self.stats['ticks_per_second']:.1f} ticks/sec)")
         print(f"  Neurons created: {self.stats['neurons_created']}")
         print(f"  Hebbian updates: {self.stats['hebbian_updates']}")
         
         brain_stats = self.brain.get_statistics()
-        print(f"\n  Brain Statistics:")
+        print("\n  Brain Statistics:")
         print(f"    Total neurons: {brain_stats['total_neurons']}")
         print(f"    Connections: {brain_stats['total_connections']}")
         print(f"    Custom neurons: {brain_stats['custom_neurons']}")

@@ -1,7 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .brain_ui_utils import hold_position_on_prepend, reader_is_busy
-import random
 import time
 from collections import deque
 from .localisation import Localisation

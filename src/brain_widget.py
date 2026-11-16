@@ -1,40 +1,34 @@
-import sys
-import csv
-import os
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import re
 import time
 import math
 import random
-import numpy as np
-import json
 
 # This is the biggest, messiest and most shameful of all the files in this project
 # I express my condolences to future devs  that curse the mighty brain_widget on late nights as I do
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QSplitter
-from PyQt5.QtGui import QPixmap, QFont, QImage
+from PyQt5.QtGui import QImage
 from datetime import datetime
 
-from .brain_render_worker import BrainRenderWorker, create_render_state_from_widget, RenderState
+from .brain_render_worker import BrainRenderWorker, create_render_state_from_widget
 from .neural_provenance import RecordedSynapses
-from .propagation import ExternallyDriven, signal_of
-from .brain_worker import BrainWorker
+from .propagation import ExternallyDriven
 from .compute_backend import get_backend
-from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
+from .neurogenesis import EnhancedNeurogenesis
 from .brain_tooltips import EnhancedBrainTooltips
 from .brain_constants import (
-    CORE_NEURONS, INPUT_SENSORS, is_core_neuron,
     NEURON_RADIUS, NEURON_HIGHLIGHT_FACTOR, NEURON_HIT_FACTOR,
-    BINARY_NEURONS, PURE_INPUT_NEURONS, NON_PROPAGATED_NEURONS,
-    is_network_driven, normalise_activation,
+    BINARY_NEURONS, is_network_driven, normalise_activation,
     view_transform, VIEW_ZOOM_MIN, VIEW_ZOOM_MAX,
 )
-from .personality import Personality
 from .learning import LearningConfig
 from .laboratory import NeuronLaboratory
 from .localisation import Localisation
-from typing import Dict, Optional
+from typing import Optional
 
 # Brain state bridge for designer communication
 try:
@@ -48,7 +42,7 @@ except ImportError:
     try:
         # Try without relative import for standalone testing
         from brain_state_bridge import (
-            export_brain_state,
+            export_brain_state,  # noqa: F401
             set_game_running,
             update_brain_state_from_widget
         )
@@ -58,9 +52,8 @@ except ImportError:
         print("[BrainWidget] Warning: brain_state_bridge not found, designer sync disabled")
 
 from .animation_styles import (
-    AnimationStyle, VibrantStyle, SubtleStyle,
-    get_animation_style, get_available_styles, get_style_info,
-    ANIMATION_STYLES, DEFAULT_ANIMATION_STYLE
+    AnimationStyle, get_animation_style, get_available_styles, get_style_info,
+    DEFAULT_ANIMATION_STYLE
 )
 
 # Performance tracking for Task Manager
@@ -449,7 +442,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 self.brain_worker.state_update_result.disconnect(self._on_state_update_complete)
                 self.brain_worker.error_occurred.disconnect(self._on_worker_error)
             except:
-                pass  # Ignore if signals weren't connected
+                _LOG.debug('Ignored exception', exc_info=True)  # Ignore if signals weren't connected
         
         # Connect new signals
         self.brain_worker.neurogenesis_result.connect(self._on_neurogenesis_complete)
@@ -486,7 +479,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             update_brain_state_from_widget(self)
         except Exception as e:
             # Silent failure - don't spam console
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
     
     def cleanup_brain_bridge(self):
         """
@@ -498,7 +491,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 set_game_running(False)
                 print("🔗 Brain state bridge cleaned up")
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
     
     def closeEvent(self, event):
         """Handle widget close - stop workers and clear the designer bridge.
@@ -580,6 +573,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             self._render_worker.request_render(state)
             self._render_dirty = False
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error creating render state: {e}")
 
     def _on_render_complete(self, image: QImage, render_time: float):
@@ -1900,7 +1894,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             if parent and hasattr(parent, 'network_tab'):
                 parent.network_tab.update_metrics_display()
         except Exception as e:
-            pass  # Silently fail if we can't update - not critical
+            _LOG.debug('Ignored exception', exc_info=True)  # Silently fail if we can't update - not critical
     
     def finish_reveal_animation(self):
         """Called when the reveal animation completes - cleanup tracking attributes"""
@@ -2075,6 +2069,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             try:
                 monitor.evaluate()
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"⚠️ Capability evaluation failed: {e}")
 
         state_with_context = self.state.copy()
@@ -2366,14 +2361,14 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             try:
                 monitor.observe(self.state)
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
         causal = getattr(self, 'causal_learning', None)
         if causal is not None:
             try:
                 causal.on_tick(self.state)
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
         engine = getattr(self, 'plasticity', None)
         if engine is None:
@@ -2760,6 +2755,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                     # Always add the separator after an entry
                     f.write("\n-------------------------------\n\n")
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"\x1b[31mNeurogenesis logging failed: {str(e)}\x1b[0m")
 
     # In brain_widget.py
@@ -2993,7 +2989,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             try:
                 buffer.add_experience(context)
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
         # Pass the diagnosis through rather than letting the engine re-run it:
         # a second reading of a state that has moved on could disagree with the
@@ -4505,10 +4501,6 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         painter.restore()
 
 
-    def show_diagnostic_report(self):
-        if hasattr(self, 'brain_widget'): self.brain_widget.show_diagnostic_report()
-        else: print("Error: Brain widget not initialized")
-
     def _draw_polygon_neuron(self, painter, x, y, sides, radius, color, label, scale,
                             rotation=0, alpha=255):
         painter.save()
@@ -4702,9 +4694,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         super().mousePressEvent(event)
 
     def handle_neuron_clicked(self, neuron_name):
-        print(f"")
+        print("")
 
     def show_diagnostic_report(self):
+        from .brain_dialogs import DiagnosticReportDialog
         dialog = DiagnosticReportDialog(self, self.parent())
         dialog.exec_()
 
@@ -4984,7 +4977,6 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     # Qt property for animation
     tutorial_glow_opacity = QtCore.pyqtProperty(float, get_tutorial_glow_opacity, set_tutorial_glow_opacity)
 
-import time
 
 class PerformanceProfiler:
     """Lightweight profiler for identifying slow code paths."""

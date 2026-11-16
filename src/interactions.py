@@ -5,7 +5,7 @@ import math
 import time
 import random
 import uuid
-from PyQt5 import QtCore, QtWidgets, QtGui
+from PyQt5 import QtCore, QtWidgets
 
 def squids_in_view(scene, squid):
     """(name, x, y, recalled_bad) of every other squid in `squid`'s view

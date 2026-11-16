@@ -6,12 +6,11 @@ neurogenesis, provenance and sleep consolidation all execute shared src code.
 from __future__ import annotations
 
 import math
-import time
 from types import SimpleNamespace
 
 from .shared import HeadlessBrain, TrainingConfig
 from .personality import Personality
-from src.brain_constants import ACTION_NEURONS, REQUIRED_NEURONS, innate_bindings
+from src.brain_constants import innate_bindings
 from src.learning import HebbianLearning, LearningConfig
 from src.personality import Personality as CorePersonality
 from src.neuron_binding import NeuronOutputBinding, OutputTriggerMode

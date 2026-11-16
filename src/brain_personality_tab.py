@@ -1,8 +1,7 @@
 # brain_personality_tab.py
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .brain_ui_utils import set_plain_text
-from .personality import Personality
 from .localisation import Localisation
 
 class PersonalityTab(BrainBaseTab):

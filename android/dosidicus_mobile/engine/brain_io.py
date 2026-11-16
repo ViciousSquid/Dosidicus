@@ -1,8 +1,7 @@
 """Mobile file actions over the shared desktop brain interchange format."""
 import json
 from pathlib import Path
-from .shared import HeadlessBrain  # establishes the shared source path
-from src.brain_io import MAX_BRAIN_BYTES, read_brain_file
+from src.brain_io import read_brain_file
 from src.brain_io import normalise_brain as _normalise
 
 

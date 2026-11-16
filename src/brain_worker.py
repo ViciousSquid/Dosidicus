@@ -1,10 +1,5 @@
-import sys
-import time
-import random
 import traceback
-import math
 from queue import Queue, Empty
-from heapq import nlargest
 
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QWaitCondition
 

@@ -1,18 +1,20 @@
 # File: mp_plugin_logic.py
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import os
 # import sys # sys.path is handled in main.py
 import inspect # For _find_tamagotchi_logic
-import json
 import uuid
 import time
 # import socket # Network operations are in NetworkNode
 import threading
-import queue # For plugin's own internal queuing if different from NetworkNode's
 import random
-import traceback # For logging exceptions
 import math
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 # --- Local Imports ---
@@ -28,7 +30,8 @@ from src.lifecycle import MULTIPLAYER_RISK_NOTICE, MULTIPLAYER_RISK_TITLE
 from src.vision_cone import VIEW_CONE_ANGLE, in_view_cone
 from .remote_protocol import CONSEQUENCE_FIGHT, CONSEQUENCE_HIT
 from .identity import SquidIdentity
-from .consent import ConsentPolicy, ConsentDecision, MODE_OPEN, REASON_CLOSED
+from .consent import (ConsentPolicy, ConsentDecision, MODE_OPEN, REASON_CLOSED,
+                      REASON_ACCEPTED)
 from .peer_ledger import PeerLedger
 from .encounter import (EncounterSession, drive_snapshot, active_social_neurons,
                         perceive_recognition, remember_fight)
@@ -36,7 +39,7 @@ from .encounter_sensors import ConspecificView
 from .host_body import HostBody, DEFAULT_MATING_CHANCE, DEFAULT_MATING_CONTACT_SECONDS
 from .visitor_mind import VisitorMind
 from .remote_protocol import (
-    ActionIntent, PerceptionFrame, ProtocolError, VisitEnd,
+    ActionIntent, ProtocolError, VisitEnd,
     END_EJECTED, ROUND_TRIP_INTERVAL, new_visit_id,
 )
 
@@ -749,7 +752,7 @@ class MultiplayerPlugin:
         if payload.get('accepted'):
             host_identity = self.peer_identities.get(message.get('node_id'))
             self.visitor_mind.begin_visit(host_identity)
-            self.logger.info(f"Entry accepted; awaiting perception from the host.")
+            self.logger.info("Entry accepted; awaiting perception from the host.")
             return True
 
         self.logger.info(f"Entry refused ({payload.get('reason')}); coming home.")
@@ -2310,7 +2313,7 @@ class MultiplayerPlugin:
                     item_image_path = os.path.join("images", "rock.png") # Default fallback
                     if not (os.path.exists(item_image_path)
                             and is_inside_assets(item_image_path)):
-                        self.logger.error(f"Default fallback image 'images/rock.png' also not found. Cannot recreate item.")
+                        self.logger.error("Default fallback image 'images/rock.png' also not found. Cannot recreate item.")
                         continue # Skip this item
                     original_category = 'rock' # Override category if using fallback rock
 
@@ -2553,7 +2556,7 @@ class MultiplayerPlugin:
                 'node_id': self.network_node.node_id, 'status': 'alive',
                 'squid_pos': None})
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         if where.invitation:
             return True, (f"Linked to {where.ip}:{where.port}. If their tank "
                           f"does not answer, ask them to enter your code too.")

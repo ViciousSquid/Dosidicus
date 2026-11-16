@@ -1,5 +1,4 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
-from .brain_base_tab import BrainBaseTab
+from PyQt5 import QtCore, QtWidgets
 from .localisation import loc
 
 class VisionWindow(QtWidgets.QDialog):

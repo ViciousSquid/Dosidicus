@@ -1,11 +1,15 @@
 # POOP INTERACTIONS
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import math
 import time
 import random
-import os
 import uuid
-from PyQt5 import QtCore, QtWidgets, QtGui
+from PyQt5 import QtCore, QtWidgets
 
 class PoopInteractionManager:
     def __init__(self, squid, logic, scene, message_callback, config_manager):
@@ -292,6 +296,7 @@ class PoopInteractionManager:
             try:
                 self.multiplayer_plugin.throw_poop_network(poop, direction)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[PoopInteraction] Error broadcasting poop throw: {e}")
         
         self.throw_animation_timer.start(50)

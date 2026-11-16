@@ -1,27 +1,27 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import os
 import random
 import uuid
 import time
 from datetime import datetime
-from enum import Enum
 import math
+from typing import List, Optional, Tuple
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QTimer
 from .brain_about_tab import SQUID_NAMES
 from .mental_states import MentalStateManager
 from .memory_manager import MemoryManager
 from .personality import Personality
-from .decision_engine import DecisionEngine
 from .image_cache import ImageCache
-from .statistics_window import StatisticsWindow
 from .squid_statistics import SquidStatistics
 from .lifecycle import Lifecycle
 from .vision_worker import (
     VisionWorker, 
     VisionResult, 
-    SquidVisionState,
     SceneObject,
-    extract_scene_objects,
     create_squid_vision_state
 )
 
@@ -443,7 +443,7 @@ class Squid:
                         is_sushi=getattr(item, 'is_sushi', False)
                     ))
                 except:
-                    pass
+                    _LOG.debug('Ignored exception', exc_info=True)
             
             # Add decorations from scene
             if hasattr(self.ui, 'scene'):
@@ -461,7 +461,7 @@ class Squid:
                                 category=item.category
                             ))
                         except:
-                            pass
+                            _LOG.debug('Ignored exception', exc_info=True)
             
             # Send to vision worker
             self._vision_worker.update_scene_objects(objects)
@@ -469,6 +469,7 @@ class Squid:
             self._scene_objects_dirty = False
             
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error updating scene objects: {e}")
 
     def mark_scene_objects_dirty(self):
@@ -485,6 +486,7 @@ class Squid:
             squid_state = create_squid_vision_state(self)
             self._vision_worker.update_squid_state(squid_state)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error updating squid vision state: {e}")
         
         # FIX: Always update scene objects if food exists (because food moves constantly!)
@@ -993,6 +995,7 @@ class Squid:
                         # Attempt to set on tamagotchi_logic for future use
                         self.tamagotchi_logic.network_node = network_node
                 except Exception as plugin_error:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Error finding network node in plugin: {plugin_error}")
             
             # If still no network node, abort
@@ -1055,6 +1058,7 @@ class Squid:
                           f"explore it: I am leaving through the {exit_direction} side.")
                     return True
                 except Exception as broadcast_error:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Broadcast error: {broadcast_error}")
                     return False
             
@@ -1169,7 +1173,7 @@ class Squid:
                 print("[ERROR] Multiplayer plugin not enabled")
         
         except Exception as e:
-            print(f"[CRITICAL] Error in boundary exit notification:")
+            print("[CRITICAL] Error in boundary exit notification:")
             import traceback
             traceback.print_exc()
         
@@ -1302,6 +1306,7 @@ class Squid:
             self.push_animation.start()
 
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Tried to push decoration but failed: {e}")
             decoration.setPos(new_x, current_pos.y())
             self._on_push_complete(decoration)
@@ -2087,6 +2092,7 @@ class Squid:
             try:
                 reflex.learn_from_eating()
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Reflex] learn_from_eating failed: {type(e).__name__}: {e}")
 
         # Memory system
@@ -2285,6 +2291,7 @@ class Squid:
             QtCore.QTimer.singleShot(self.NOTICED_SQUID_ICON_MS,
                                      self.hide_noticed_squid_icon)
         except Exception as exc:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Squid] could not show the noticed-squid icon: {exc}")
 
     def hide_noticed_squid_icon(self):
@@ -2294,7 +2301,7 @@ class Squid:
         try:
             manager.set_state("noticed_squid", False)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
     def react_to_rock_throw(self, source_node_id, is_target=False):
         """
@@ -2436,35 +2443,6 @@ class Squid:
     def should_hoard_decorations(self):
         """Check if this personality type should hoard items"""
         return self.personality in [Personality.GREEDY, Personality.STUBBORN]
-
-    def organize_decorations(self):
-        target_corner = (50, 50)  # Top-left corner coordinates
-        
-        # Get nearby decorations (filter by rocks/plants if needed)
-        decorations = [
-            d for d in self.tamagotchi_logic.get_nearby_decorations(self.squid_x, self.squid_y) 
-            if getattr(d, 'category', None) in ['rock', 'plant']
-        ]
-        
-        if decorations:
-            closest = min(decorations, key=lambda d: self.distance_to(d.pos().x(), d.pos().y()))
-            
-            # Move toward the decoration
-            if self.distance_to(closest.pos().x(), closest.pos().y()) > 50:
-                self.move_towards(closest.pos().x(), closest.pos().y())
-                return "approaching_decoration"
-            
-            # Push toward hoard corner
-            push_direction = 1 if target_corner[0] > closest.pos().x() else -1
-            self.push_decoration(closest, push_direction)
-            
-            # Personality-specific effects
-            self.satisfaction = min(100, self.satisfaction + 10)
-            if self.personality == Personality.GREEDY:
-                self.tamagotchi_logic.show_message("Greedy squid hoards treasures!")
-            
-            return "hoarding"
-        return "nothing_to_hoard"
 
     def go_to_sleep(self):
         if not self.is_sleeping:
@@ -2674,7 +2652,7 @@ class Squid:
                     not self.is_sleeping and
                     distance < 50)
         
-        print(f"Can pick up rock check:")
+        print("Can pick up rock check:")
         print(f"- Rock center: ({rock_center.x():.1f}, {rock_center.y():.1f})")
         print(f"- Squid center: ({squid_center.x():.1f}, {squid_center.y():.1f})")
         print(f"- Distance: {distance:.1f}")
@@ -2847,7 +2825,7 @@ class Squid:
                 self.memory_manager.add_short_term_memory(
                     'interaction', 'poop_pickup', mem_details)
             else:
-                print(f"[DEBUG] Poop pickup failed")
+                print("[DEBUG] Poop pickup failed")
 
     def get_center(self):
         """Return the center position of the squid"""

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from src.brain_about_tab import AboutTab
 from src.brain_widget import BrainWidget
 from src.interactions import RockInteractionManager
-from src.interactions2 import PoopInteractionManager
+from src.poop_interactions import PoopInteractionManager
 from src.neurogenesis import EnhancedNeurogenesis
 from src.neural_provenance import CausalLedger, RecordedSynapses
 from src.squid import Squid

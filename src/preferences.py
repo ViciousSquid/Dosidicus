@@ -1,13 +1,14 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 
 import os
 import sys
-import glob
-import re
 from PyQt5 import QtWidgets, QtCore, QtGui
 from .config_manager import ConfigManager
 from .localisation import Localization
 from .display_scaling import DisplayScaling
-import zipfile
 
 # Define the path to the ZIP file - must match localisation.py - NEEDED FOR BACKWARDS COMPAT
 ZIP_FILENAME = "languages.zip"
@@ -241,6 +242,7 @@ class PreferencesWindow(QtWidgets.QDialog):
                 languages.append(f"{code} - {name}")
                 
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Preferences] Error getting languages from localisation: {e}")
             
             # Emergency fallback to hardcoded map

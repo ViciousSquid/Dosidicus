@@ -1,5 +1,10 @@
 # File: main.py (Plugin Entry Point)
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import os
 import sys
 import traceback 
@@ -40,6 +45,7 @@ try:
         sys.path.insert(0, current_file_dir)
 
 except Exception as e:
+    _LOG.warning('Handled exception', exc_info=True)
     print(f"Multiplayer Plugin (main.py): Error setting up sys.path: {e}")
 # --- End Python Path Setup ---
 

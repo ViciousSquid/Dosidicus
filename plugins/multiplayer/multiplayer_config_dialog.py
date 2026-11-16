@@ -1,7 +1,6 @@
 # multiplayer_config_dialog.py
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore, QtWidgets
 from plugins.multiplayer import mp_constants
-import os
 
 class MultiplayerConfigDialog(QtWidgets.QDialog):
     """

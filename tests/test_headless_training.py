@@ -33,9 +33,7 @@ files. If one fails, the mechanism it names has changed.
 """
 
 import json
-import math
 import os
-import random
 import sys
 import tempfile
 import unittest
@@ -404,7 +402,6 @@ class TrainerGameParityTests(unittest.TestCase):
     """A brain trained here has to behave the same way when the squid runs it."""
 
     def test_both_step_the_network_with_the_same_function(self):
-        import src.brain_widget as brain_widget
         import headless_trainer
         self.assertIs(headless_trainer.propagate, propagate)
         self.assertIn("from .propagation import propagate",

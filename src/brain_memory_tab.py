@@ -1,6 +1,10 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
-from .brain_ui_utils import UiUtils, set_html, preserve_scroll, reader_is_busy
+from .brain_ui_utils import set_html, preserve_scroll, reader_is_busy
 from .localisation import Localisation  # Import Localisation
 from datetime import datetime
 
@@ -138,11 +142,11 @@ class MemoryTab(BrainBaseTab):
         if tamagotchi_logic and hasattr(tamagotchi_logic, 'squid'):
             print(f"squid reference exists: {tamagotchi_logic.squid is not None}")
             if tamagotchi_logic.squid and hasattr(tamagotchi_logic.squid, 'memory_manager'):
-                print(f"memory_manager exists")
+                print("memory_manager exists")
             else:
-                print(f"memory_manager doesn't exist")
+                print("memory_manager doesn't exist")
         else:
-            print(f"squid reference doesn't exist")
+            print("squid reference doesn't exist")
         
         # Refresh the memory display if we have a valid reference chain
         if (tamagotchi_logic and 
@@ -719,7 +723,7 @@ class MemoryTab(BrainBaseTab):
                 from datetime import datetime
                 timestamp = datetime.fromisoformat(timestamp).strftime("%H:%M:%S")
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
         time_label = QtWidgets.QLabel(f"{self.loc.get('time_label')} {timestamp}")
         tfont = time_label.font()
@@ -775,6 +779,7 @@ class MemoryTab(BrainBaseTab):
             painter.end()
             item.setPixmap(tinted)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[MemoryTab] Could not tint plant: {e}")
 
     def _untint_scene_plant(self, filename):
@@ -787,6 +792,7 @@ class MemoryTab(BrainBaseTab):
             if original and not original.isNull():
                 item.setPixmap(original)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[MemoryTab] Could not restore plant: {e}")
 
     def _find_scene_decoration(self, filename):
@@ -797,7 +803,7 @@ class MemoryTab(BrainBaseTab):
                 if hasattr(item, 'filename') and item.filename == filename:
                     return item
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         return None
 
     def _get_memory_color(self, memory):
@@ -1013,6 +1019,7 @@ class MemoryTab(BrainBaseTab):
                 # Increment importance by 1
                 memory_manager.update_memory_importance(category, key, 1)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Error updating memory importance: {e}")
 
         # Check if memory meets transfer criteria
@@ -1022,6 +1029,7 @@ class MemoryTab(BrainBaseTab):
                 memory_manager.transfer_to_long_term_memory(category, key)
                 print(f"Memory transferred to long-term: {category}, {key}")
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Error transferring memory to long-term: {e}")
 
             # Update displays

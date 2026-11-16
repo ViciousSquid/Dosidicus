@@ -196,8 +196,7 @@ def test_the_brain_button_is_as_far_above_reset_as_reset_is_from_load():
 
 # ---- the decoration window opens in the bottom right, however it is opened ----
 def test_the_decoration_window_goes_bottom_right_each_time_it_is_shown(monkeypatch):
-    import os
-    from PyQt5 import QtCore, QtWidgets
+    from PyQt5 import QtWidgets
     from src import desktop_style
     from src.ui import DecorationWindow
     QtWidgets.QApplication.instance() or QtWidgets.QApplication([])

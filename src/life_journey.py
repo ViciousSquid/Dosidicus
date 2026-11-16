@@ -43,6 +43,11 @@ GOING ONLINE IS NOT BREEDING. Stated once so nobody has to guess:
 """
 from __future__ import annotations
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
@@ -93,7 +98,7 @@ def gather_facts(logic=None, brain=None, squid=None) -> Dict[str, Any]:
             try:
                 facts['age_seconds'] = float(statistics.get_total_age_seconds())
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
             facts['meals'] = int(getattr(statistics, 'sushi_consumed', 0)
                                  + getattr(statistics, 'cheese_consumed', 0))
             facts['fights_won'] = int(getattr(statistics, 'fights_won', 0) or 0)
@@ -122,7 +127,7 @@ def gather_facts(logic=None, brain=None, squid=None) -> Dict[str, Any]:
                 if key in lifecycle_config:
                     facts[key] = float(lifecycle_config[key])
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
     # ---- the brain ---------------------------------------------------------
     if brain is None:
@@ -143,7 +148,7 @@ def gather_facts(logic=None, brain=None, squid=None) -> Dict[str, Any]:
         try:
             facts['knows_consequences'] = len(causal.known_contingencies())
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
     facts['sees_plants'] = PLANT_SENSOR in positions
     facts['hears_aquarium'] = AQUARIUM_SENSE in positions

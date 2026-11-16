@@ -21,10 +21,15 @@ reach the Decisions tab as the squid's own thoughts, with their reasons.
 Qt-free: desktop and mobile share it.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import time
 from collections import deque
 from html import escape
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List
 
 from .brain_constants import (AGGRESSION_NEURON, SOCIAL_NEURONS, SOCIAL_SENSOR,
                               SOCIAL_SENSORS)
@@ -454,7 +459,7 @@ def think(owner, text: str) -> str:
         try:
             window.add_thought(text)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
     return text
 
 
@@ -471,7 +476,7 @@ def fight_thoughts(record: Dict[str, Any], me: str = 'first') -> List[str]:
     if mine.get('role') == 'attacker':
         why = (record.get('why') or {}).get('aggression', mine.get('commitment', 0))
         taken = (record.get('why') or {}).get('provoked_by')
-        over = (f"It had just eaten my food. " if taken == 'food' else
+        over = ("It had just eaten my food. " if taken == 'food' else
                 f"It had just taken my {str(taken).replace('_', ' ')}. " if taken else "")
         lines = [f"{over}I went for {opponent}: my aggression was {float(why or 0):.0f}, "
                  f"past the {AGGRESSION_THRESHOLD:.0f} it takes to start a fight."]

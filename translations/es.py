@@ -1,28 +1,11 @@
 LANGUAGE_HEADER = "es - Español"
 translations = {
     # Core continuous neurons
-    "hunger": "Hambre",
-    "happiness": "Felicidad",
-    "cleanliness": "Limpieza",
-    "sleepiness": "Somnolencia",
-    "satisfaction": "Satisfacción",
-    "anxiety": "Ansiedad",
     "aggression": "Agresividad",
-    "curiosity": "Curiosidad",
 
     # Binary/sensor neurons
-    "can_see_food": "Puede Ver Comida",
-    "is_eating": "Comiendo",
-    "is_sleeping": "Durmiendo",
-    "is_sick": "Enfermo",
-    "pursuing_food": "Persiguiendo Comida",
-    "is_startled": "Asustado",
-    "is_fleeing": "Huyendo",
 
     # Base keys for neurogenesis patterns
-    "novelty": "Novedad",
-    "stress": "Estrés",
-    "reward": "Recompensa",
 
     # ===== MENU PRINCIPAL =====
     "file": "Archivo",
@@ -39,6 +22,8 @@ translations = {
     # ===== MENU VER =====
     "brain_designer": "Disenador de Cerebro",
     "decorations": "Decoraciones",
+    "journey": "Trayectoria",
+    "journey_title": "El viaje de tu calamar",
     "statistics": "Estadisticas",
     "brain_tool": "Herramienta Cerebral",
     "neuron_lab": "Laboratorio de Neuronas",
@@ -313,8 +298,6 @@ translations = {
 
     # ===== BRAIN WIDGET LAYERS (NEW - SPANISH) =====
     "layer_name": "Capa",
-    "layer_input": "Entrada",
-    "layer_output": "Salida",
     "layer_hidden": "Oculta",
 
     # ===== NEUROGENESIS LOGS (NEW - SPANISH) =====

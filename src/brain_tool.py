@@ -1,22 +1,20 @@
-import sys
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import csv
 import os
 import time
 import json
 import random
-import numpy as np
 from datetime import datetime
-from PyQt5.QtWidgets import QSplitter
-from PyQt5.QtGui import QPixmap, QFont
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .config_manager import ConfigManager
 from .brain_widget import BrainWidget
 from .brain_worker import BrainWorker 
-from .brain_dialogs import StimulateDialog, RecentThoughtsDialog, LogWindow, DiagnosticReportDialog
+from .brain_dialogs import StimulateDialog
 from .brain_utils import ConsoleOutput
-from .personality import Personality
-from .learning import LearningConfig
 from .brain_network_tab import NetworkTab
 from .brain_about_tab import AboutTab
 from .brain_learning_tab import NeuralNetworkVisualizerTab
@@ -35,19 +33,21 @@ try:
     from .designer_window import BrainDesignerWindow
     _DESIGNER_AVAILABLE = True
 except Exception as e:
+    _LOG.warning('Handled exception', exc_info=True)
     print(f"Warning: BrainDesignerWindow could not be imported: {type(e).__name__}: {e}")
     try:
         from src.designer_window import BrainDesignerWindow
         _DESIGNER_AVAILABLE = True
     except Exception as e2:
+        _LOG.warning('Handled exception', exc_info=True)
         print(f"Warning: src fallback also failed: {type(e2).__name__}: {e2}")
 
 # 2.6.1.0 Define _HAS_BRAIN_BRIDGE variable
 _HAS_BRAIN_BRIDGE = False
 try:
     from .brain_state_bridge import (
-        is_game_running,
-        import_brain_state_for_designer
+        is_game_running,  # noqa: F401
+        import_brain_state_for_designer  # noqa: F401
     )
     _HAS_BRAIN_BRIDGE = True
 except ImportError:
@@ -300,6 +300,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         except ImportError:
             pass
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error applying external import: {e}")
 
     def setup_decorations_shortcut(self):
@@ -377,7 +378,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 self.brain_worker.state_update_result.disconnect(self._on_worker_activity)
                 self.brain_worker.error_occurred.disconnect(self._on_worker_error)
             except:
-                pass  # Ignore if signals weren't connected
+                _LOG.debug('Ignored exception', exc_info=True)  # Ignore if signals weren't connected
             
             self.brain_worker.stop()
             self.brain_worker.wait(3000)
@@ -463,31 +464,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
     def on_hebbian_countdown_finished(self):
         """Called when the Hebbian learning countdown reaches zero"""
         pass
-
-    def set_pause_state(self, is_paused):
-        """Set pause state for the brain window and worker thread"""
-        self.is_paused = is_paused
-        
-        # Set brain widget pause state
-        if hasattr(self, 'brain_widget'):
-            self.brain_widget.is_paused = is_paused
-        
-        # Control worker thread - CRITICAL for freezing everything
-        if hasattr(self, 'brain_worker') and self.brain_worker:
-            if is_paused:
-                self.brain_worker.pause()
-                print("⏸️ BrainWorker paused")
-            else:
-                self.brain_worker.resume()
-                print("▶️ BrainWorker resumed")
-
-        # Manage timers based on pause state
-        if is_paused:
-            if hasattr(self, 'hebbian_timer'):
-                self.hebbian_timer.stop()
-        else:
-            if hasattr(self, 'hebbian_timer'):
-                self.hebbian_timer.start(self.config.hebbian['learning_interval'])
 
     def switch_to_designer_mode(self):
         """
@@ -588,6 +564,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 # This calls converter which now sees our nice 'neurons' and 'connections' keys
                 loaded = self.designer_view.load_from_brain_widget_state(current_state)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Standard load failed: {e}")
         
         if not loaded:
@@ -599,6 +576,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 self.designer_view.refresh_all()
                 loaded = True
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Critical: Failed to load brain state into designer: {e}")
 
         # 6. Setup Return Signal & Layout
@@ -915,6 +893,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             try:
                 enhanced_neurogenesis_data = self.brain_widget.enhanced_neurogenesis.to_dict()
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Warning: Could not serialize EnhancedNeurogenesis: {e}")
 
         # Output bindings were absent from this payload, so every neuron ->
@@ -934,6 +913,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             try:
                 return owner.to_dict()
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Warning: could not serialize {attr}: {e}")
                 return {}
 
@@ -1094,6 +1074,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             try:
                 owner.from_dict(payload)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"⚠️  Could not restore {key}: {type(e).__name__}: {e}")
 
         for action, neuron in (state.get('action_representations') or {}).items():
@@ -1192,6 +1173,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             try:
                 restored_neurons[name] = FunctionalNeuron.from_dict(data)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Warning: Could not restore neuron {name}: {e}")
                 continue
         
@@ -2139,27 +2121,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.learning_data = []
         print("Learning data cleared.")
 
-    def update_learning_interval(self, seconds):
-        """Update the learning interval when spinbox value changes"""
-        # Convert seconds to milliseconds (QTimer uses ms)
-        interval_ms = seconds * 1000
-        
-        # Update config
-        if hasattr(self.config, 'hebbian'):
-            self.config.hebbian['learning_interval'] = interval_ms
-        else:
-            self.config.hebbian = {'learning_interval': interval_ms}
-        
-        # Restart timer with new interval
-        if hasattr(self, 'hebbian_timer'):
-            self.hebbian_timer.setInterval(interval_ms)
-            self.last_hebbian_time = time.time()  # Reset countdown
-        
-        if self.debug_mode:
-            print(f"Learning interval updated to {seconds} seconds ({interval_ms} ms)")
-
-    
-
     def deduce_weight_change_reason(self, pair, value1, value2, prev_weight, new_weight, weight_change):
         neuron1, neuron2 = pair
         threshold_high = 70
@@ -2246,24 +2207,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                         item.setForeground(QtGui.QColor("red"))
                 self.learning_data_table.setItem(row, col, item)
         self.learning_data_table.scrollToBottom()
-
-    def export_learning_data(self):
-        # Save the weight changes text to a file
-        with open("learningdata_reasons.txt", 'w') as file:
-            file.write(self.weight_changes_text.toPlainText())
-
-        # Save the learning data table to a CSV file
-        with open("learningdata_weights.csv", 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(["Timestamp", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
-            for row in range(self.learning_data_table.rowCount()):
-                row_data = []
-                for col in range(self.learning_data_table.columnCount()):
-                    item = self.learning_data_table.item(row, col)
-                    row_data.append(item.text() if item else "")
-                writer.writerow(row_data)
-
-        QtWidgets.QMessageBox.information(self, "Export Successful", "Learning data exported to 'weight_changes.txt' and 'learning_data.csv'")
 
     def export_learning_tab_contents(self):
         file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Learning Tab Contents", "", "Text Files (*.txt)")
@@ -3064,6 +3007,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self._draw_heatmap_legend(padding, len(neurons) * cell_size + padding + 20)
 
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Heatmap error: {str(e)}")
             error_text = self.heatmap_scene.addText("Heatmap unavailable")
             error_text.setPos(50, 50)

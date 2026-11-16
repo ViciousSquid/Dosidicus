@@ -20,6 +20,11 @@ shipped without it would be a squid that never consolidates anything.
 
 from __future__ import annotations
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -90,13 +95,14 @@ class ConsolidationManager:
                 try:
                     self.engine.harvest_memory(mm.get_all_short_term_memories(raw=True) or [])
                 except Exception:
-                    pass
+                    _LOG.debug('Ignored exception', exc_info=True)
             session = self.engine.build_session()
             self._replayed = 0
             self._pruned = 0
             self._cycles = 0
             return session
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Consolidation] could not start night: {type(e).__name__}: {e}")
             return None
 
@@ -183,6 +189,7 @@ class ConsolidationManager:
                            "replayed, so it never came to mean anything")
                 pruned.append(edge)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Consolidation] prune skipped: {type(e).__name__}: {e}")
 
         # Synaptic homeostasis: what survives pruning is still scaled back, so
@@ -200,12 +207,13 @@ class ConsolidationManager:
                         create=False, animate=False):
                     downscaled += 1
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Consolidation] downscale skipped: {type(e).__name__}: {e}")
 
         try:
             self.engine.finish_day(self._replayed, len(pruned), self._cycles)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
         self.nights_completed += 1
         self.last_summary = {
@@ -268,7 +276,7 @@ class ConsolidationManager:
         try:
             self.engine.tracker.clear()
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
     @property
     def is_replaying(self) -> bool:
@@ -283,7 +291,7 @@ class ConsolidationManager:
         try:
             stats.update(self.engine.get_stats())
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         return stats
 
     def to_dict(self) -> Dict:

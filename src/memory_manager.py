@@ -1,3 +1,7 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import json
 import os
 from datetime import datetime
@@ -47,18 +51,21 @@ class MemoryManager:
                             item['timestamp'] = 0 # Mark other invalid types
                 return memory_list
         except (json.JSONDecodeError, Exception) as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error processing memory file {file_path}: {e}")
             return []
 
     def save_memory(self, memory, file_path):
+        """Saves memory to JSON, converting float timestamps to ISO strings."""
         if not self.persistent:
             return
-        """Saves memory to JSON, converting float timestamps to ISO strings."""
+        # A new game has no memory folder yet, and clearing a memory (an
+        # empty list) has to be able to create it just as saving one does.
+        os.makedirs(os.path.dirname(file_path) or '.', exist_ok=True)
         if not memory:
             # To clear a file, we can write an empty list
             memory_to_save = []
         else:
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             serializable_memory = []
             for item in memory:
                 new_item = item.copy()
@@ -71,6 +78,7 @@ class MemoryManager:
             with open(file_path, 'w') as file:
                 json.dump(memory_to_save, file, indent=4)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error saving memory to {file_path}: {e}")
 
 

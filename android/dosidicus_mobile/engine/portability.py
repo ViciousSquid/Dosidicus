@@ -21,15 +21,12 @@ brain weights/positions and memories).
 from __future__ import annotations
 
 import gzip
-import io
 import json
 import zipfile
-from datetime import datetime
+import zlib
 
 from .simulation import Simulation
-from .squid import Squid
 from .personality import Personality
-from .memory import MemoryManager
 
 
 # --------------------------------------------------------------------- export
@@ -95,8 +92,17 @@ def snapshot_bytes(sim) -> bytes:
     return gzip.compress(raw, compresslevel=9)
 
 
+#: A received snapshot may not unpack to more than this. It comes from another
+#: player's phone; a small payload can be built to unpack to gigabytes.
+SNAPSHOT_MAX_UNPACKED_BYTES = 8 * 1024 * 1024
+
+
 def snapshot_dict(data: bytes) -> dict:
-    return json.loads(gzip.decompress(data).decode("utf-8"))
+    inflater = zlib.decompressobj(wbits=31)             # 31: gzip container
+    raw = inflater.decompress(data, SNAPSHOT_MAX_UNPACKED_BYTES)
+    if inflater.unconsumed_tail:
+        raise ValueError("snapshot too large")
+    return json.loads(raw.decode("utf-8"))
 
 
 def sim_from_snapshot(data: bytes, tank_size=(900, 500)) -> Simulation:

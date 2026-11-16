@@ -2,9 +2,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import os
 import time
 import math
-from typing import Dict, Any, Optional, List
+from typing import Any, Optional
 import logging
-import base64
 
 from .identity import SquidIdentity
 

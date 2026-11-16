@@ -11,12 +11,16 @@ When the squid runs this brain, neurons that exceed their threshold
 will trigger the bound behaviors (flee, seek food, ink, etc.)
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
     QPushButton, QLabel, QComboBox, QDoubleSpinBox, QCheckBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
-    QDialogButtonBox, QScrollArea, QFrame, QMessageBox, QSpinBox,
-    QColorDialog
+    QDialogButtonBox, QMessageBox, QColorDialog
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
@@ -543,6 +547,7 @@ class NeuronOutputsPanel(QWidget):
                 binding = NeuronOutputBinding.from_dict(data)
                 self.bindings.append(binding)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[OutputsPanel] Error loading binding: {e}")
         self.refresh()
     

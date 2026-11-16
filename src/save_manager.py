@@ -1,11 +1,13 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import json
 import os
 import zipfile
 import shutil
-from datetime import datetime
-from uuid import UUID
 
-from .save_archive import DateTimeEncoder, write_save_archive
+from .save_archive import write_save_archive
 from .save_slots import SaveSlots
 
 class SaveManager:
@@ -87,7 +89,6 @@ class SaveManager:
     def save_game(self, save_data: dict, is_autosave: bool = False) -> str | None:
         """Save game with proper UUID management."""
         try:
-            from PyQt5.QtWidgets import QMessageBox
             import uuid
 
             # === PRIORITY 1: Use the live squid's UUID if available (most reliable) ===
@@ -139,7 +140,7 @@ class SaveManager:
                 try:
                     os.remove(os.path.join(self.save_directory, old))
                 except:
-                    pass
+                    _LOG.debug('Ignored exception', exc_info=True)
 
             print(f"[SaveManager] Save successful → {target_path}")
             try:
@@ -174,6 +175,7 @@ class SaveManager:
             
             return cleaned1 == cleaned2
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[SaveManager] Error comparing saves: {e}")
             return False
 
@@ -189,6 +191,7 @@ class SaveManager:
                             data[key] = json.loads(f.read().decode('utf-8'))
             return data
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[SaveManager] Error loading save {path}: {e}")
             return None
         
@@ -254,6 +257,7 @@ class SaveManager:
                             unique_saves[file1] = content1
                             
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[SaveManager] Error cleaning duplicate saves: {e}")
 
     # --------------------------------------------------

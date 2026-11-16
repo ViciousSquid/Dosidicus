@@ -1,4 +1,3 @@
-from enum import Enum
 from .personality import Personality
 
 personality_traits = {}

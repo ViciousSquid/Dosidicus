@@ -6,7 +6,6 @@ from the main game process, optionally passing debug mode.
 """
 
 import sys
-import os
 
 
 def launch_brain_designer_process(debug_mode: bool = False):

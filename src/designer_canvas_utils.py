@@ -5,13 +5,12 @@ Additional visual feedback for wiring operations and activation display.
 """
 
 from PyQt5.QtWidgets import (
-    QGraphicsItem, QGraphicsEllipseItem, QGraphicsTextItem, 
-    QGraphicsRectItem, QGraphicsPathItem, QToolTip
+    QGraphicsItem, QGraphicsEllipseItem
 )
-from PyQt5.QtCore import Qt, QPointF, QRectF, QTimer
+from PyQt5.QtCore import Qt, QPointF, QRectF
 from PyQt5.QtGui import (
     QPainter, QPen, QBrush, QColor, QFont, QFontMetrics,
-    QPainterPath, QRadialGradient, QLinearGradient
+    QPainterPath, QRadialGradient
 )
 
 import math

@@ -26,8 +26,8 @@ Adapted for Dosidicus-2's timescales:
 import time
 import math
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional, Set
+from dataclasses import dataclass
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 # STDP is a core neural mechanism, so it must be usable everywhere the brain

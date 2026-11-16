@@ -9,12 +9,20 @@ The game writes its current brain state to a shared file, and the designer
 reads from it on startup.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import json
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
-from dataclasses import dataclass
+from typing import Dict, Tuple, Optional, Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .designer_core import BrainDesign
 
 
 # Shared state file location - in user's home directory
@@ -112,6 +120,7 @@ def export_brain_state(
         return True
         
     except Exception as e:
+        _LOG.warning('Handled exception', exc_info=True)
         print(f"[BrainBridge] Error exporting brain state: {e}")
         return False
 
@@ -137,13 +146,13 @@ def set_game_running(running: bool = True) -> None:
         try:
             lock_file.unlink(missing_ok=True)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         
         # Also remove state file
         try:
             get_state_file_path().unlink(missing_ok=True)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
 
 def update_brain_state_from_widget(brain_widget) -> bool:
@@ -169,6 +178,7 @@ def update_brain_state_from_widget(brain_widget) -> bool:
             output_bindings=list(getattr(brain_widget, 'output_bindings', []) or [])
         )
     except Exception as e:
+        _LOG.warning('Handled exception', exc_info=True)
         print(f"[BrainBridge] Error updating from widget: {e}")
         return False
 
@@ -239,6 +249,7 @@ def import_brain_state_for_designer() -> Optional[Dict]:
         return data
         
     except Exception as e:
+        _LOG.warning('Handled exception', exc_info=True)
         print(f"[BrainBridge] Error importing brain state: {e}")
         return None
 
@@ -387,6 +398,7 @@ def export_design_to_game(design_data: Dict) -> bool:
         temp_file.replace(import_file)
         return True
     except Exception as e:
+        _LOG.warning('Handled exception', exc_info=True)
         print(f"[BrainBridge] Error exporting to game: {e}")
         return False
 
@@ -412,10 +424,11 @@ def consume_pending_import() -> Optional[Dict]:
         try:
             import_file.unlink()
         except:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
             
         return data
     except Exception as e:
+        _LOG.warning('Handled exception', exc_info=True)
         print(f"[BrainBridge] Error reading pending import: {e}")
         return None
 

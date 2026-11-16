@@ -42,7 +42,7 @@ try:
 except Exception:      # plyer missing / unsupported (e.g. bare desktop)
     accelerometer = None
 
-from ..engine import Simulation, Squid, Personality
+from ..engine import Simulation, Squid
 from .tankview import TankView
 from .brain_screen import BrainScreen
 from .stats import StatsPanel

@@ -1,8 +1,7 @@
 from PyQt5.QtCore import Qt
-import time
 import threading
 from collections import deque
-from PyQt5.QtCore import QTimer, QMutex, QMutexLocker
+from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QGroupBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QCheckBox, QPushButton)

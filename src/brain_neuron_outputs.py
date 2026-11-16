@@ -10,11 +10,11 @@ OUTPUT (Actuators): Neuron Fires → Threshold Check → Hooks → Game Behavior
 
 import time
 import random
-from typing import Dict, List, Callable, Any, Optional
+from typing import Dict, List, Optional
 
 # Try importing PyQt5 for the floating console
 try:
-    from PyQt5 import QtWidgets, QtCore, QtGui
+    from PyQt5 import QtWidgets, QtCore, QtGui  # noqa: F401
     HAS_QT = True
 except ImportError:
     HAS_QT = False

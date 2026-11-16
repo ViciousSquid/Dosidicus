@@ -6,6 +6,11 @@ This module provides functions to merge built-in sensors from designer_constants
 with plugin-registered custom sensors from the plugin manager.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 from typing import Dict, Any, Optional
 
 # Try to import designer constants
@@ -47,7 +52,7 @@ def get_plugin_manager() -> Optional[Any]:
         if pm is not None and getattr(pm, '_initialized', False):
             return pm
     except Exception:
-        pass
+        _LOG.debug('Ignored exception', exc_info=True)
     return None
 
 
@@ -133,6 +138,7 @@ def get_plugin_sensors() -> Dict[str, Dict]:
                 'default_connections': metadata.get('default_connections', [])
             }
     except Exception as e:
+        _LOG.warning('Handled exception', exc_info=True)
         print(f"[Designer] Error getting plugin sensors: {e}")
         return {}
     

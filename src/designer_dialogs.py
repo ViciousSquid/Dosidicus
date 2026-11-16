@@ -6,8 +6,7 @@ Provides UI for generating random sparse networks with various presets.
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QPushButton,
-    QComboBox, QDoubleSpinBox, QCheckBox, QTextEdit, QFrame, QProgressBar,
-    QSizePolicy
+    QComboBox, QDoubleSpinBox, QCheckBox, QTextEdit, QFrame
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont

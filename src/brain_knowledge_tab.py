@@ -20,7 +20,7 @@ Four questions, four sub-tabs:
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .brain_base_tab import BrainBaseTab
-from .brain_ui_utils import set_html, set_plain_text, preserve_scroll
+from .brain_ui_utils import set_html, set_plain_text
 from .display_scaling import DisplayScaling
 from .neural_provenance import humanise
 

@@ -10,6 +10,11 @@ This file defines the canonical neuron categories used across:
 Import from here to ensure consistency.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 # =============================================================================
 # LAYOUT - the newborn brain is drawn as labelled rows, not a scatter
 # =============================================================================
@@ -386,6 +391,7 @@ def _notify_sensor_change(name: str, binary: bool, added: bool) -> None:
         try:
             callback(name, binary, added)
         except Exception as exc:      # a bad listener must not break the brain
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[brain_constants] sensor listener failed for '{name}': {exc}")
 
 

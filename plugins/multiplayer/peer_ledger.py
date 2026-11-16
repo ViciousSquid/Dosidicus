@@ -20,8 +20,13 @@ happened with this squid" would exist. The only thing kept here is an
 aggregate cache, which is derived and can always be rebuilt.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .identity import SquidIdentity, memory_key_for
 
@@ -270,6 +275,7 @@ class PeerLedger:
         try:
             memories = manager.get_memories_by_key_prefix(MEMORY_CATEGORY, 'peer:')
         except Exception as exc:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[PeerLedger] could not read encounter memories: {exc}")
             return
         for memory in memories:

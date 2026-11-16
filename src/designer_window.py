@@ -5,20 +5,24 @@ This module provides a visual editor for creating and editing squid brain config
 including neurons, connections, layers, sensors, and output bindings.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import sys
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QTabWidget, QStatusBar,
-    QAction, QToolBar, QLabel, QComboBox, QPushButton, QMessageBox, QFileDialog,
-    QDialog, QInputDialog, QFrame, QSizePolicy, QToolButton, QMenu, QSplitter, QApplication
+    QAction, QToolBar, QPushButton, QMessageBox, QFileDialog,
+    QDialog, QInputDialog, QFrame, QToolButton, QMenu, QSplitter, QApplication
 )
 from PyQt5.QtGui import (
-    QKeySequence, QIcon, QFont, QFontMetrics, QPainter, QColor, QPalette,
-    QTextDocument, QAbstractTextDocumentLayout
+    QPainter, QTextDocument
 )
 # [FIX] Added QRectF to imports
-from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QRectF, QSizeF, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QRectF, pyqtSignal
 
-from .designer_logging import get_logger, log_exceptions, safe_call, OperationLogger
+from .designer_logging import get_logger, OperationLogger
 from .designer_core import BrainDesign
 from .designer_canvas import BrainCanvas
 
@@ -38,7 +42,7 @@ from .designer_panels import (
     LayersPanel, SensorsPanel, NeuronPropertiesPanel, ConnectionsTable, AddNeuronDialog
 )
 from .designer_templates import TemplateManager
-from .designer_dialogs import SparseNetworkDialog, ActivationEditorDialog
+from .designer_dialogs import SparseNetworkDialog
 from .designer_network_generator import SparseNetworkGenerator
 
 # Import the new outputs panel
@@ -957,7 +961,7 @@ class BrainDesignerWindow(QMainWindow):
                     brect = scene_poly.boundingRect()
                     bounds = (brect.left(), brect.top(), brect.right(), brect.bottom())
                 except Exception:
-                    pass
+                    _LOG.debug('Ignored exception', exc_info=True)
 
             count, connections = generator.generate_for_design(
                 self.design,
@@ -1214,7 +1218,7 @@ class BrainDesignerWindow(QMainWindow):
                 self.logger.info(f"Exporting design to: {path}")
                 success, msg = self.design.export_dosidicus(path)
                 if success:
-                    self.logger.info(f"Design exported successfully")
+                    self.logger.info("Design exported successfully")
                     
                     # Add output binding info to message
                     if self.outputs_panel and self.outputs_panel.bindings:

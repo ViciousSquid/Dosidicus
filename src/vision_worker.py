@@ -14,11 +14,16 @@ Usage:
     4. Worker emits signals when visibility changes
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import time
 import math
-from typing import Dict, List, Tuple, Optional, Set, Any
+from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
-from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QWaitCondition, QPointF
+from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QWaitCondition
 
 try:
     from .vision_cone import in_view_cone  # noqa: F401 - re-exported
@@ -351,7 +356,7 @@ def extract_scene_objects(scene, food_items: List,
             ))
             obj_id += 1
         except:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
     
     # Extract decorations from scene if not provided
     if decorations is None:
@@ -400,7 +405,7 @@ def extract_scene_objects(scene, food_items: List,
             ))
             obj_id += 1
         except:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
     # Other squid: whatever the scene draws as one (category 'squid'), while
     # it is actually shown - a visitor is hidden while it is still arriving.
@@ -417,7 +422,7 @@ def extract_scene_objects(scene, food_items: List,
                                        obj_id=obj_id))
             obj_id += 1
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
     
     return objects
 

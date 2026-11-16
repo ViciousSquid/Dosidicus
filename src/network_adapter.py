@@ -20,19 +20,22 @@ Usage:
     # Now it can be used with BrainWidget, BrainWorker, etc.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import json
-import random
 import time
 from typing import Dict, List, Tuple, Set, Any, Optional, TYPE_CHECKING
-from dataclasses import dataclass, field
 
 from network_protocol import (
-    BrainProtocol, BrainConfig, NeuronData, ConnectionData, LayerDefinition
+    BrainConfig, NeuronData, ConnectionData, LayerDefinition
 )
 
 if TYPE_CHECKING:
     # Import Project 1's classes for type hints only
-    from core import Network, Neuron, Connection, Config
+    from core import Network
 
 
 class NetworkAdapter:
@@ -384,6 +387,7 @@ class NetworkAdapter:
                 json.dump(self.to_dict(), f, indent=2)
             return True
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error saving network: {e}")
             return False
     
@@ -395,6 +399,7 @@ class NetworkAdapter:
                 data = json.load(f)
             return cls.from_dict(data)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error loading network: {e}")
             return None
     

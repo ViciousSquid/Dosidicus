@@ -1,4 +1,4 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 class StatusBarComponent:
     def __init__(self, main_window):
@@ -59,7 +59,7 @@ class StatusBarComponent:
     def update_network_status(self, connected, node_id=None):
         """Update the network status indicator"""
         if connected:
-            self.network_label.setText(f"Network: Connected")
+            self.network_label.setText("Network: Connected")
             self.network_label.setStyleSheet("padding: 0 10px; color: green;")
             if node_id:
                 self.network_label.setToolTip(f"Connected as {node_id}")

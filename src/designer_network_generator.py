@@ -6,11 +6,9 @@ with random noise so no two generations are identical.
 """
 
 import random
-import math
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 
-from .designer_constants import CORE_NEURONS, REQUIRED_NEURON_NAMES
 
 
 @dataclass

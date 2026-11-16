@@ -32,10 +32,8 @@ from src.vision_cone import FACING_ANGLES, VIEW_CONE_ANGLE, in_view_cone, proxim
 
 from .identity import SquidIdentity
 from .remote_protocol import (
-    ActionIntent, Consequence, PerceptionFrame, ProtocolError,
-    CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_THROWN, HEADINGS, INTENT_LEASE,
-    LINK_TIMEOUT, OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT, mating_id_for,
+    ActionIntent, Consequence, PerceptionFrame, CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
+    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_THROWN, HEADINGS, LINK_TIMEOUT, OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT, mating_id_for,
 )
 
 #: How far a visitor moves per applied intent, in pixels. The visitor asks for
