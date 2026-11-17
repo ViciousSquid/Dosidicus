@@ -11,7 +11,6 @@ widget's size, as it always did.
 import os
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 ROOT = Path(__file__).resolve().parents[1]
@@ -167,5 +166,6 @@ def test_the_drawing_and_the_hit_testing_use_the_same_view():
     assert "getattr(state, 'bounds', None))" in worker               # what is drawn
     assert "state.bounds = shown() if callable(shown) else None" in worker
     assert "getattr(state, 'bounds', None)," in worker               # and its cache knows
-    widget_source = (ROOT / 'src' / 'brain_widget.py').read_text(encoding='utf-8')
+    # (the widget's view code lives in brain_widget_view.py)
+    widget_source = (ROOT / 'src' / 'brain_widget_view.py').read_text(encoding='utf-8')
     assert widget_source.count('self._view_bounds())') == 2          # what is clicked, and zoomed

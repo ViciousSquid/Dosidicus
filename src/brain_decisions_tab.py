@@ -20,7 +20,6 @@
 # (squid._decision_engine.get_decision_data()) and falls back to
 # TamagotchiLogic.get_decision_data() so it keeps working with older saves.
 
-import math
 from collections import deque
 
 from PyQt5 import QtCore, QtGui, QtWidgets

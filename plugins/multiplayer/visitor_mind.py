@@ -27,6 +27,11 @@ perception bypassed them would be a visit the squid could not learn anything
 from - which is exactly the state Stage 0 existed to get out of.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -35,10 +40,10 @@ from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, CONSEQUENCE_HIT,
+    CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, CONSEQUENCE_HIT,
     CONSEQUENCE_THROWN,
     END_DEPARTED, END_LINK_LOST, HEADINGS,
-    INTENT_LEASE, LINK_TIMEOUT, OBSERVABLE_SENSORS, new_visit_id,
+    INTENT_LEASE, LINK_TIMEOUT,
 )
 
 #: Built-in sensors whose value comes from the host while the squid is away.
@@ -301,8 +306,7 @@ class VisitorMind:
             return None
 
         from src.decision_engine import select_action, wants, action_activations
-        from src.brain_constants import (ACTION_BEHAVIOURS, FALLBACK_ACTION,
-                                         ACTION_THRESHOLDS)
+        from src.brain_constants import (ACTION_BEHAVIOURS, FALLBACK_ACTION)
 
         # Exhaustion is a reflex, outside the competition, and nothing resists
         # it: an exhausted squid goes home to sleep.
@@ -616,7 +620,7 @@ class VisitorMind:
                     else:
                         squid.squid_item.setVisible(False)
                 except Exception:
-                    pass
+                    _LOG.debug('Ignored exception', exc_info=True)
         return self.visit_id
 
     def go_home(self, action: str) -> None:
@@ -656,7 +660,7 @@ class VisitorMind:
                     else:
                         squid.squid_item.setVisible(True)
                 except Exception:
-                    pass
+                    _LOG.debug('Ignored exception', exc_info=True)
 
     def close_session(self) -> Optional[Any]:
         """Turn the visit into a memory of that individual.

@@ -1,5 +1,10 @@
 # UI Stuff
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import os
 import json
 import math
@@ -9,8 +14,6 @@ import base64
 import uuid
 import traceback
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtCore import QObject, pyqtProperty
-from PyQt5.QtWidgets import QGraphicsPixmapItem
 from .compute_backend import get_backend
 from .brain_tool import SquidBrainWindow
 from .statistics_window import StatisticsWindow
@@ -578,7 +581,7 @@ class Ui:
             print("Brain window not initialized")
             return
         if not hasattr(self, '_neurogenesis_debug_dialog'):
-            self._neurogenesis_debug_dialog = NeurogenesisDebugDialog(
+            self._neurogenesis_debug_dialog = NeuronLaboratory(
                 self.squid_brain_window.brain_widget, 
                 self.window
             )
@@ -1050,6 +1053,7 @@ class Ui:
                     try:
                         plugin_instance.register_menu_actions(self.window, plugin_submenu)
                     except Exception as e:
+                        _LOG.warning('Handled exception', exc_info=True)
                         print(f"Error calling register_menu_actions for {original_name}: {e}")
         print("Applied all plugin menu registrations")
 
@@ -1167,6 +1171,7 @@ class Ui:
                 try:
                     item.wheelEvent(event)
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Error in wheel event handling: {e}")
         event.accept()
 
@@ -1180,6 +1185,7 @@ class Ui:
             button_spacing = display_config['button_spacing']
             button_font_size = display_config['button_font_size']
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Warning: Could not load display config, using defaults: {e}")
             button_height = 60
             button_spacing = 20
@@ -1501,7 +1507,7 @@ class Ui:
             else:
                 bottom -= self.window.menuBar().sizeHint().height()
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         return max(0, int(bottom - text_height))
 
     def show_message(self, message):
@@ -1524,7 +1530,7 @@ class Ui:
                 except Exception:
                     continue
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
         message_item = QtWidgets.QGraphicsTextItem(message)
         message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))
@@ -1714,7 +1720,7 @@ class Ui:
                 if score_text.scene():
                     self.scene.removeItem(score_text)
             except:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
         opacity_animation.finished.connect(cleanup)
         score_text._pos_animation = pos_animation
         score_text._opacity_animation = opacity_animation
@@ -1991,12 +1997,6 @@ class Ui:
         self.tamagotchi_logic.rock_interaction.start_rock_test(nearest_rock)
         self.show_message("Rock test initiated")
 
-    def start_rps_game(self):
-        if hasattr(self, 'tamagotchi_logic'):
-            self.tamagotchi_logic.start_rps_game()
-        else:
-            print("TamagotchiLogic not initialized")
-
     def test_rock_interaction(self):
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             if not self.tamagotchi_logic.debug_mode:
@@ -2134,6 +2134,7 @@ class Ui:
                         decoration_dict.update(item.headstone)
                     decorations_data.append(decoration_dict)
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Error serializing decoration: {e}")
                     continue
         print(f"Saved {len(decorations_data)} decoration(s)")

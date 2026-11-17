@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from src.brain_about_tab import AboutTab
 from src.brain_widget import BrainWidget
 from src.interactions import RockInteractionManager
-from src.interactions2 import PoopInteractionManager
+from src.poop_interactions import PoopInteractionManager
 from src.neurogenesis import EnhancedNeurogenesis
 from src.neural_provenance import CausalLedger, RecordedSynapses
 from src.squid import Squid
@@ -164,7 +164,7 @@ class StatisticsEventWiringTests(unittest.TestCase):
         squid.start_poop_timer = Mock()
         logic.squid = squid
 
-        with patch("src.squid.QTimer.singleShot"):
+        with patch("src.squid_objects.QTimer.singleShot"):
             squid.eat(SimpleNamespace(is_sushi=False))
 
         self.assertEqual(logic.neurogenesis_triggers["positive_outcomes"], 5)
@@ -845,7 +845,7 @@ class StatisticsEventWiringTests(unittest.TestCase):
         poop_item = SimpleNamespace(setPos=Mock())
 
         with patch(
-            "src.tamagotchi_logic.ResizablePixmapItem",
+            "src.logic_care.ResizablePixmapItem",
             return_value=poop_item,
         ):
             created = logic.spawn_poop(100, 200)

@@ -17,6 +17,11 @@ action: the social neurons drive the squid's own action neurons, and the
 decision engine reads the winner.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import math
 import time
 from typing import Any, Callable, Dict, List, Optional
@@ -236,7 +241,7 @@ class ConspecificView:
             try:
                 listener(getattr(rival, 'uuid', ''))
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
     def provocation(self, peer_uuid: str, now: Optional[float] = None,
                     within: float = 30.0) -> Optional[Dict[str, Any]]:

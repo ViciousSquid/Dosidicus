@@ -1,28 +1,11 @@
 LANGUAGE_HEADER = "en - English"
 translations = {
     # Core continuous neurons
-    "hunger": "Hunger",
-    "happiness": "Happiness",
-    "cleanliness": "Cleanliness",
-    "sleepiness": "Sleepiness",
-    "satisfaction": "Satisfaction",
-    "anxiety": "Anxiety",
     "aggression": "Aggression",
-    "curiosity": "Curiosity",
 
     # Binary/sensor neurons
-    "can_see_food": "Can See Food",
-    "is_eating": "Eating",
-    "is_sleeping": "Sleeping",
-    "is_sick": "Sick",
-    "pursuing_food": "Pursuing Food",
-    "is_startled": "Startled",
-    "is_fleeing": "Fleeing",
 
     # Base keys for neurogenesis patterns
-    "novelty": "Novelty",
-    "stress": "Stress",
-    "reward": "Reward",
 
     # ===== MAIN MENU =====
     "file": "File",
@@ -288,8 +271,6 @@ translations = {
 
     # ===== BRAIN WIDGET LAYERS (NEW) =====
     "layer_name": "Layer",
-    "layer_input": "Input",
-    "layer_output": "Output",
     "layer_hidden": "Hidden",
 
     # ===== NEUROGENESIS LOGS (NEW) =====

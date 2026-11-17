@@ -1,8 +1,11 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import configparser
 import os
 import random
 import sys
-from ast import literal_eval
 
 class ConfigManager:
     """
@@ -728,6 +731,7 @@ class ConfigManager:
             with open(self.config_path, 'w') as f:
                 self.config.write(f)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"⚠️ Failed to save config: {e}")
 
     def get_language(self):

@@ -928,9 +928,9 @@ saved. What persists is what happened:
 | `LINK_TIMEOUT` | 4.0 s | `remote_protocol.py` | visitor with no frame comes home; host marks a silent body `stalled` |
 | `VISIT_ABANDON_TIMEOUT` | 12.0 s | `remote_protocol.py` | host ends a visit with no intent |
 | `SYNC_INTERVAL` | 1.0 s | `mp_constants.py` | `object_sync` cadence |
-| heartbeat interval | 8.0 s | `mp_plugin_logic.py` (`sync_game_state`, literal) | minimum gap between periodic heartbeats |
+| heartbeat interval | 8.0 s | `mp_sync.py` (`sync_game_state`, literal) | minimum gap between periodic heartbeats |
 | `HEARD_WITHIN` | 30.0 s | `src/venturing.py` | how long a heard peer counts as a nearby aquarium |
-| `EXIT_RETRY_SECONDS` | 3.0 s | `src/squid.py` | gap between `squid_exit` requests |
+| `EXIT_RETRY_SECONDS` | 3.0 s | `src/squid_movement.py` | gap between `squid_exit` requests |
 | `DECISION_TTL` | 30.0 s | `consent.py` | how long a consent decision is remembered (not used by admission) |
 | `_dedup_ttl` | 10.0 s | `mp_network_node.py` | how long a `(node_id, datagram digest)` key is remembered |
 | `connection_retry_interval` | 5.0 s | `mp_network_node.py` | minimum gap between socket reconnects |
@@ -938,8 +938,8 @@ saved. What persists is what happened:
 | socket timeout | 0.1 s | `mp_network_node.py` | listener's `recvfrom` timeout |
 | `MATED_ANNOUNCEMENTS` | 3 round trips | `host_body.py` | how many times `mated` is sent |
 | `mating_contact_seconds` | 2.0 s | `host_body.py` (`DEFAULT_MATING_CONTACT_SECONDS`), `config.ini [Lifecycle]` | contact before the one mating roll |
-| `FIGHT_COOLDOWN` | 25.0 s | `mp_plugin_logic.py` | per pair, between fights |
-| fight animation | 3.2 s | `mp_plugin_logic.py` (`show_fight_cloud`) | `body_busy_until`; `in_fight` is 100 meanwhile |
+| `FIGHT_COOLDOWN` | 25.0 s | `mp_social.py` | per pair, between fights |
+| fight animation | 3.2 s | `mp_social.py` (`show_fight_cloud`) | `body_busy_until`; `in_fight` is 100 meanwhile |
 
 The round-trip gate and the timer share the same 0.5 s, so a timer tick that
 fires slightly early skips a cycle; the effective cadence is 0.5 to 1.0 s.
@@ -1045,17 +1045,17 @@ and a test holds it to `FORBIDDEN_KEYS`. `heartbeat` carries its position.
 | zlib helpers, node-id helper | `plugins/multiplayer/network_utilities.py` |
 | Group, port, packet size, sync interval | `plugins/multiplayer/mp_constants.py` |
 | Hook registration (`on_network_<type>` → handler) | `mp_plugin_logic.py`, `MultiplayerPlugin._register_hooks` |
-| Heartbeat, world sync, round-trip timer | `mp_plugin_logic.py`, `sync_game_state`, `_get_squid_state`, `start_sync_timer`, `run_round_trip` |
-| Discovery and choosing a host | `mp_plugin_logic.py`, `handle_heartbeat`, `visit_destination`, `address_exit`, `_perceive_aquariums`; `src/venturing.py` |
-| Leaving the tank | `src/squid.py`, `is_venturing`, `check_boundary_exit`, `_exit_identity` |
-| Admission and consent | `mp_plugin_logic.py`, `handle_squid_exit_message`, `handle_visit_response`; `plugins/multiplayer/consent.py` |
+| Heartbeat, world sync, round-trip timer | `mp_sync.py`, `sync_game_state`, `_get_squid_state`, `start_sync_timer`; `mp_visits.py`, `run_round_trip` |
+| Discovery and choosing a host | `mp_sync.py`, `handle_heartbeat`; `mp_visits.py`, `visit_destination`, `address_exit`, `_perceive_aquariums`; `src/venturing.py` |
+| Leaving the tank | `src/squid_movement.py`, `is_venturing`, `check_boundary_exit`, `_exit_identity` |
+| Admission and consent | `mp_remote_squids.py`, `handle_squid_exit_message`; `mp_visits.py`, `handle_visit_response`; `plugins/multiplayer/consent.py` |
 | Identity and protocol version | `plugins/multiplayer/identity.py` |
 | Remote-mind message classes, limits, `FORBIDDEN_KEYS`, timings | `plugins/multiplayer/remote_protocol.py` |
 | Host side: frames, intents, consequences, timeouts, contact and mating roll | `plugins/multiplayer/host_body.py` (`HostBody`, `VisitorActor`) |
 | Visitor side: senses, decision, intents, consequences, going home, gamete | `plugins/multiplayer/visitor_mind.py` (`VisitorMind`, `RemotePerception`) |
-| Remote-mind handlers | `mp_plugin_logic.py`, `handle_perception_frame`, `handle_action_intent`, `handle_consequence`, `handle_visit_end`, `end_visit_as_host`, `handle_gamete` |
-| Fights | `mp_plugin_logic.py`, `show_fight_cloud`, `_who_starts_a_fight`, `resolve_fight`; `src/fighting.py` |
-| Rock and poop impacts | `mp_plugin_logic.py`, `handle_rock_hit`; `src/tamagotchi_logic.py`, `on_rock_hit`, `throw_visitor_rock`; `src/interactions.py`, `throw_from_visitor`; `src/throwing.py` |
+| Remote-mind handlers | `mp_visits.py`, `handle_perception_frame`, `handle_action_intent`, `handle_consequence`, `handle_visit_end`, `end_visit_as_host`; `mp_social.py`, `handle_gamete` |
+| Fights | `mp_social.py`, `show_fight_cloud`, `_who_starts_a_fight`, `resolve_fight`; `src/fighting.py` |
+| Rock and poop impacts | `mp_social.py`, `handle_rock_hit`; `src/logic_lifecycle.py`, `on_rock_hit`, `throw_visitor_rock`; `src/interactions.py`, `throw_from_visitor`; `src/throwing.py` |
 | Gamete contents | `src/inheritance.py` (`gamete`, `clean_gamete`); `src/lifecycle.py` (`is_valid_mating_id`, `Lifecycle.add_genes`) |
 | Packet allow-list (not wired in) | `plugins/multiplayer/packet_validator.py` |
 | Tests | `tests/test_peer_discovery.py`, `tests/test_encounter_stage0.py`, `tests/test_remote_mind_stage1.py`, `tests/test_reproduction_lifecycle.py`, `tests/test_rock_throwing.py`, `tests/test_protocol_hardening.py`; LAN harnesses in `tools/test_lan_round_trip.py`, `tools/test_rock_multiplayer.py`, `tools/test_venture_multiplayer.py` |

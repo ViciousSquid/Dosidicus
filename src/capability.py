@@ -52,6 +52,11 @@ Everything here is diagnosis. Growing the remedy is neurogenesis.py's job.
 
 from __future__ import annotations
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import math
 import time
 from collections import deque
@@ -59,7 +64,7 @@ from dataclasses import dataclass, field
 from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
 
 from .brain_constants import (CORE_STAT_NEURONS, PURE_INPUT_NEURONS,
-                              is_learning_target, is_network_driven)
+                              is_learning_target)
 from .propagation import signal_of
 
 DEFICIT_KINDS = ('representation', 'regulation', 'expression',
@@ -542,6 +547,7 @@ class CapabilityMonitor:
             try:
                 found.extend(detector())
             except Exception as exc:   # a broken detector must not stop the brain
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Capability] {detector.__name__} failed: "
                       f"{type(exc).__name__}: {exc}")
 

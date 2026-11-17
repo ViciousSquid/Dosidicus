@@ -35,12 +35,13 @@ on:
   # Also produce a downloadable diagnostic artifact when packaging changes.
   push:
     branches:
-      - 3.2.0_LatestVersion
+      # Release-line branches are named after their version (3.5.0, 3.6.0 ...);
+      # the pattern keeps matching when the default branch is renamed.
+      - "[0-9]*"
       - "claude/**"
     paths:
       - ".github/workflows/build-nuitka.yml"
       - "tools/macos_debug.command"
-      - "tools/MACOS_DEBUG_README.txt"
       - "tools/build_macos_dmg.sh"
       - "tools/merge_macos_universal.py"
       - "tools/macos_smoke_test.sh"
@@ -289,7 +290,6 @@ jobs:
           codesign --verify --deep --strict --verbose=2 debug-release/Dosidicus.app
 
           cp tools/macos_debug.command "debug-release/Run Dosidicus Debug.command"
-          cp tools/MACOS_DEBUG_README.txt debug-release/README-DEBUG.txt
           chmod +x "debug-release/Run Dosidicus Debug.command"
           bash -n "debug-release/Run Dosidicus Debug.command"
 

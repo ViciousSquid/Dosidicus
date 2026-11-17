@@ -28,7 +28,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from PyQt5 import QtWidgets, QtGui  # noqa: E402
+from PyQt5 import QtWidgets  # noqa: E402
 
 APP = None
 WINDOW = None
@@ -763,7 +763,6 @@ class BehaviourArbitrationTests(NeuralPipelineTestCase):
 
     def setUp(self):
         super().setUp()
-        import math
         self._prev_window = (SQUID.ui.window_width, SQUID.ui.window_height)
         SQUID.ui.window_width, SQUID.ui.window_height = 1280, 900
         self.addCleanup(lambda: setattr(SQUID.ui, "window_width", self._prev_window[0]))

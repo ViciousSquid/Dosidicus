@@ -1,11 +1,13 @@
-import os
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import json
-import shutil
 import time
 from pathlib import Path
 from typing import Optional, Dict
-from PyQt5 import QtWidgets, QtCore, QtGui
-from .brain_neuron_outputs import NeuronOutputBinding, OutputTriggerMode
+from PyQt5 import QtWidgets, QtCore
+from .brain_neuron_outputs import NeuronOutputBinding
 
 
 # Global tracker for the currently loaded custom brain
@@ -561,6 +563,7 @@ class BrainLoader:
                         monitor.bindings.append(binding)
                         loaded_count += 1
                     except Exception as e:
+                        _LOG.warning('Handled exception', exc_info=True)
                         print(f"[BrainLoader] Failed to load binding: {e}")
                 
                 print(f"[NeuronOutputMonitor] Loaded {loaded_count} neuron output bindings")
@@ -675,6 +678,7 @@ class BrainLoader:
                 print("✅ BrainWorker references updated")
                 
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"⚠️ Could not update BrainWorker: {e}")
             # Non-fatal - brain still loads, just learning might need restart
 

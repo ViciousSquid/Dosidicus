@@ -1,16 +1,16 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import json
 import time
-import subprocess
-import os
-import sys
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .brain_dialogs import StimulateDialog, DiagnosticReportDialog
 from .display_scaling import DisplayScaling
 from .laboratory import NeuronLaboratory
-from .animation_styles import get_available_styles, get_style_info
+from .animation_styles import get_style_info
 from .localisation import Localisation
-from .compute_backend import get_backend
 
 class NetworkTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None,
@@ -635,6 +635,7 @@ class NetworkTab(BrainBaseTab):
                 with open(file_name, 'w') as f:
                     json.dump(state_to_save, f, indent=4)
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Error saving brain state: {e}")
 
     def load_brain_state(self):
@@ -657,6 +658,7 @@ class NetworkTab(BrainBaseTab):
                 
                 self.update_metrics_display()
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"Error loading brain state: {e}")
 
     def show_diagnostic_report(self):

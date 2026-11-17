@@ -1,7 +1,7 @@
 """StatsPanel - the seven core need/emotion bars."""
 
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, Rectangle, Line
+from kivy.graphics import Color, Rectangle
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import sp
 

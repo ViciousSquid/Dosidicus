@@ -1,10 +1,8 @@
 """Android adapter regressions against the actual shared desktop core."""
 import json
-import os
 import random
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -13,10 +11,9 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from dosidicus_mobile.engine import Simulation, Squid, NeuralBrain, Personality
 from dosidicus_mobile.engine.brain_io import normalise_brain, import_brain, export_brain
 from dosidicus_mobile.engine.portability import export_squid, import_squid, _brain_state_desktop
-from src.portable_brain import HeadlessBrain, TrainingConfig
-from src.brain_constants import ACTION_NEURONS, INNATE_ACTION_WIRING, REQUIRED_NEURONS
+from src.portable_brain import HeadlessBrain
+from src.brain_constants import ACTION_NEURONS, REQUIRED_NEURONS
 from src.decision_engine import select_action
-from src.propagation import baseline_of
 
 
 def test_newborn_has_desktop_structure_and_directed_synapses():

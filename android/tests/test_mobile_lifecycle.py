@@ -173,7 +173,21 @@ def test_a_mating_on_a_mobile_host_lays_an_egg_carrying_both_parents_weights():
     assert lifecycle.egg_genes['Guest'] == genes
 
 
-def test_a_parent_does_not_eat_or_visit_and_its_egg_hatches_with_inherited_weights():
+@pytest.fixture
+def fixed_dice():
+    """Which synapses a parent passes on, and which mutate, is drawn at random."""
+    import random
+    state = random.getstate()
+    random.seed(1)
+    yield
+    random.setstate(state)
+
+
+def test_a_parent_does_not_eat_or_visit_and_its_egg_hatches_with_inherited_weights(fixed_dice):
+    # The dice are fixed because an inherited weight is recorded only where it
+    # differs from the one a newborn has anyway. These parents are almost
+    # newborn themselves, and about one draw in thirty passed on nothing that
+    # differed - an empty record, and a test that failed for no reason.
     p = Pair()
     p.cycle()
     p.touch()
@@ -228,13 +242,17 @@ def test_lifecycle_and_epitaph_round_trip_through_the_desktop_archive(tmp_path):
     assert restored.squid.lifecycle.egg['x'] == 100.
 
 
-def test_the_apk_carries_desktops_headstones():
-    shipped = sorted(p.name for p in (ROOT / 'android' / 'assets' / 'headstones').glob('*.png'))
+def test_the_apk_carries_desktops_headstones(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('prepare_apk', ROOT / 'android' / 'prepare_apk.py')
+    prepare_apk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(prepare_apk)
+    staged = prepare_apk.prepare(tmp_path) / 'assets' / 'headstones'
+    shipped = sorted(p.name for p in staged.glob('*.png'))
     desktop = sorted(p.name for p in (ROOT / 'images' / 'headstones').glob('*.png'))
     assert shipped == desktop == sorted(Simulation.HEADSTONES)
     for name in shipped:
-        assert ((ROOT / 'android' / 'assets' / 'headstones' / name).read_bytes()
-                == (ROOT / 'images' / 'headstones' / name).read_bytes())
+        assert (staged / name).read_bytes() == (ROOT / 'images' / 'headstones' / name).read_bytes()
 
 
 @pytest.mark.parametrize('stone, lines', [

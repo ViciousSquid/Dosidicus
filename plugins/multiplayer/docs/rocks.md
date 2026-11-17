@@ -111,7 +111,7 @@ A squid can throw poop at another squid exactly as it throws a rock: its play
 neuron decides throw or drop (not dice), it aims at a squid in its view cone
 (one it remembers badly first, else the nearest), as hard as play or
 aggression drives it, and the hit is swept and
-reported once (`src/interactions2.py`, sharing `squids_in_view` and
+reported once (`src/poop_interactions.py`, sharing `squids_in_view` and
 `first_struck` with rocks). What reaches the struck squid is the fact only:
 `{'what': 'poop', 'speed': ..., 'throw_id': ...}`.
 

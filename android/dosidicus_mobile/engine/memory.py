@@ -21,7 +21,6 @@ import time
 from datetime import datetime
 
 
-from . import shared
 from src.memory_manager import MemoryManager as DesktopMemoryManager
 
 

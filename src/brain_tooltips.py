@@ -1,4 +1,4 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore, QtWidgets
 from .display_scaling import DisplayScaling
 from .localisation import loc 
 import time
@@ -198,7 +198,7 @@ class EnhancedBrainTooltips:
         lbl_top_in = loc("tooltip_top_incoming")
         lbl_top_out = loc("tooltip_top_outgoing")
 
-        html = f"<div style='margin: 8px 0;'>"
+        html = "<div style='margin: 8px 0;'>"
         html += f"<div style='color: #666; font-size: {DisplayScaling.font_size(12)}px; margin-bottom: 4px;'>"
         html += f"<b>{lbl_conn_header}:</b> {conn_stats}</div>"
 

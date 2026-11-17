@@ -1,5 +1,9 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 from PyQt5 import QtCore
-from typing import Dict, Any, List, Optional, Callable
+from typing import Callable
 
 class MultiplayerEventDispatcher(QtCore.QObject):
     """Dispatches multiplayer events to registered handlers"""
@@ -67,4 +71,5 @@ class MultiplayerEventDispatcher(QtCore.QObject):
                 try:
                     handler(*args, **kwargs)
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Error in event handler for {event_type}: {e}")

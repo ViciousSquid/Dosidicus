@@ -3,18 +3,23 @@ Canvas implementation for Brain Designer.
 Handles visual representation and interaction.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import math
 import json
 import os
 from PyQt5.QtWidgets import (
     QGraphicsItem, QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, 
-    QGraphicsLineItem, QGraphicsTextItem, QGraphicsRectItem, QStyle, QToolTip,
+    QGraphicsLineItem, QGraphicsTextItem, QGraphicsRectItem, QToolTip,
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QDoubleSpinBox, QPushButton,
-    QCheckBox, QMessageBox
+    QCheckBox
 )
 from PyQt5.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, QTimer
 from PyQt5.QtGui import (
-    QPainter, QPen, QBrush, QColor, QFont, QFontMetrics, QPainterPath, 
+    QPainter, QPen, QBrush, QColor, QFont, QPainterPath, 
     QRadialGradient, QTransform, QCursor, QPainterPathStroker, QPolygonF
 )
 
@@ -311,14 +316,14 @@ class DesignerConfig:
             try:
                 with open(self.config_path, 'r') as f:
                     return json.load(f)
-            except: pass
+            except: _LOG.debug('Ignored exception', exc_info=True)
         return {'confirm_connection_delete': True}
     
     def save(self):
         try:
             with open(self.config_path, 'w') as f:
                 json.dump(self.config, f, indent=2)
-        except: pass
+        except: _LOG.debug('Ignored exception', exc_info=True)
     
     def get(self, key, default=None):
         return self.config.get(key, default)

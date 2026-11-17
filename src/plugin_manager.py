@@ -1,9 +1,8 @@
 import os
 import importlib.util
-import inspect
 import logging
 import sys
-from typing import Dict, List, Callable, Any
+from typing import Dict, List, Callable
 
 # ANSI escape codes for console colours
 class ANSI:
@@ -464,7 +463,7 @@ class PluginManager:
                      # This is the warning that replaces the previous hard error
                      self.logger.warning(f"Plugin '{plugin_name}': Instance was not explicitly set in manager's records by 'initialize'.")
                 elif plugin_name in self.plugins:
-                     self.logger.info(f"Success")
+                     self.logger.info("Success")
 
                 if plugin_name not in self.auto_load_blacklist \
                         and (not self._whitelist or plugin_name in self._whitelist):

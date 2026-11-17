@@ -1,5 +1,8 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 from PyQt5 import QtCore, QtGui, QtWidgets
-import os
 
 class PluginManagerDialog(QtWidgets.QDialog):
     def __init__(self, plugin_manager, parent=None):
@@ -283,6 +286,7 @@ class PluginManagerDialog(QtWidgets.QDialog):
                         try:
                             plugin_instance.disable()
                         except Exception as e:
+                            _LOG.warning('Handled exception', exc_info=True)
                             print(f"Error in plugin disable method: {e}")
                 
                 QtWidgets.QMessageBox.information(

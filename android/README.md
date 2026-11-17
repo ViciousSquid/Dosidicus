@@ -107,7 +107,8 @@ android/
 ├── main.py                      # Kivy entry point (python main.py)
 ├── buildozer.spec               # Android APK build config
 ├── requirements.txt             # desktop dev deps
-├── assets/                      # squid sprites, egg frames, icons, decorations
+├── assets/                      # presplash only; every other image is staged from ../images
+├── mobile_assets.txt            # which of ../images the phone app uses
 ├── java/org/vicioussquid/nearby # Java shim for Nearby Connections (P2P)
 ├── tests/test_engine.py         # engine unit tests (no GUI needed)
 └── dosidicus_mobile/

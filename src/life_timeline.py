@@ -32,6 +32,11 @@ the synapses formed by it.
 Qt-free. Never raises on a save it does not fully understand: a part that
 cannot be read is left out.
 """
+
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import time
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -374,7 +379,7 @@ def build(save: Dict[str, Any], journey: Any = None,
         try:
             result['journey'] = _journey(journey)
         except Exception:                               # noqa: BLE001
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
     return result
 
 

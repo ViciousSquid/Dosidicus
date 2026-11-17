@@ -3,20 +3,14 @@
 #  NEURON LABORATORY
 #  --------------------------------------------------------------
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5 import QtCore
-from PyQt5.QtGui import (
-    QFont, QPixmap, QColor, QPainter, QBrush, QPen, QDoubleValidator
-)
 from PyQt5.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFormLayout, QFrame,
-    QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar,
-    QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget, QTextEdit,
-    QVBoxLayout, QWidget, QMessageBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QSplitter, QToolButton
+    QApplication, QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QProgressBar,
+    QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget, QVBoxLayout, QWidget, QMessageBox, QToolButton
 )
 
-import json, math, time, random, datetime as dt
+import time
 from .localisation import loc  # Import localisation
 from .brain_ui_utils import preserve_scroll, reader_is_busy
 

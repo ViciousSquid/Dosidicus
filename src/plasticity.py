@@ -44,13 +44,18 @@ environment at all.
 
 from __future__ import annotations
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import math
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .brain_constants import (NON_PROPAGATED_NEURONS, is_learning_target,
+from .brain_constants import (is_learning_target,
                               is_motor_synapse)
 
 Pair = Tuple[str, str]
@@ -227,7 +232,7 @@ class PlasticityEngine:
                 # outcome the squid ever had.
                 self.stdp.lay_eligibility_traces(values, timestamp)
             except Exception:
-                pass  # spike tracking must never break the simulation tick
+                _LOG.debug('Ignored exception', exc_info=True)  # spike tracking must never break the simulation tick
 
         return len(names)
 
@@ -495,7 +500,7 @@ class PlasticityEngine:
             try:
                 stats['stdp'] = self.stdp.get_stats()
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
         return stats
 
     def to_dict(self) -> Dict:
@@ -513,7 +518,7 @@ class PlasticityEngine:
             try:
                 data['stdp'] = self.stdp.to_dict()
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
         return data
 
     def from_dict(self, data: Dict) -> None:
@@ -531,4 +536,4 @@ class PlasticityEngine:
             try:
                 self.stdp.from_dict(data['stdp'])
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)

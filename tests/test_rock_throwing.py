@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import pytest
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtGui, QtWidgets
 
 from src.throwing import plan_throw, throw_or_drop, swept_hit, flight_step
 from src.interactions import RockInteractionManager

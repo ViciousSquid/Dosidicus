@@ -6,7 +6,7 @@ Generate a certificate with top statistics
 
 
 import datetime
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 class SquidCertificateWindow(QtWidgets.QDialog):
     def __init__(self, parent=None, tamagotchi_logic=None):

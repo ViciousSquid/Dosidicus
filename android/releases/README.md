@@ -1,8 +1,15 @@
-# Android 3.1.2 CANARY
+# Android releases
 
-[Download the signed ARM64 release APK](dosidicus-3.1.2-arm64-release.apk?raw=true)
+[Download the signed ARM64 release APK from GitHub Releases](https://github.com/ViciousSquid/Dosidicus/releases)
 
-Android 7.0 or newer (API 24), ARM64. Package `org.vicioussquid.dosidicus`, version code 30102. This is a signed release build. [SHA-256 checksum](SHA256SUMS).
+APKs are published as release assets, each with its SHA-256 checksum, and are
+no longer committed to the repository: every copy stayed in every clone for
+good. The signing certificate is kept here as [`release-certificate.pem`](release-certificate.pem)
+so a download can be checked against it.
+
+## Notes for 3.1.2
+
+Android 7.0 or newer (API 24), ARM64. Package `org.vicioussquid.dosidicus`, version code 30102. This is a signed release build.
 
 Version 3.1.2 reduces the shared fight cloud by about 20%, keeping one cloud centred over both squid. The first sighting of another squid grows a persistent Social or Encounter neuron, with the provenance reason “Other squid encountered!” and an initial positive Anxiety connection. Timid squid never initiate fights. Desktop Brain Tool Statistics now records fights won and lost; these counters use the same save keys as mobile.
 

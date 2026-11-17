@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A new game could not save its (empty) memory: the `_memory` folder was only
+  created once there was a memory to write.
+- Several paths that raised as soon as they were reached: a repeated visit
+  request from a squid already in the tank, the neurogenesis debug shortcut,
+  and the brain widget's diagnostic report.
+- Received network data is never decompressed without a size limit, on the
+  desktop or the phone.
+- A decoration's push animation finishing after its game had gone no longer
+  aborts the program.
+
+### For players reporting a problem
+
+- The game keeps one log, `logs/dosidicus_log.txt`, with the traceback of
+  every error it caught and carried on from. `DOSIDICUS_LOG_LEVEL=DEBUG` adds
+  the ones it deliberately ignores.
+
+### For contributors
+
+- The whole test suite and a linter run on every pull request and push
+  (`pip install -r requirements-dev.txt`, `python -m pytest`, `ruff check .`).
+- The five largest files are split by subject into mixin modules
+  (`brain_widget_*`, `logic_*`, `squid_*`, `brain_tool_*`, and `mp_*` in the
+  multiplayer plugin). Methods moved unchanged; `interactions2.py` is now
+  `poop_interactions.py`.
+- `tests/test_translations.py` keeps every language file in step with English.
+- The phone app uses the desktop's `images/` instead of a second copy, and
+  release APKs are no longer committed to the repository.
+
 ## 3.5.0
 
 Everything since 3.2.0.

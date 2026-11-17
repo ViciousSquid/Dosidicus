@@ -15,7 +15,6 @@ import json
 import time
 from types import SimpleNamespace
 
-from . import shared  # locate src and the Qt-free multiplayer modules
 from plugins.multiplayer.encounter import EncounterSession, drive_snapshot
 from plugins.multiplayer.host_body import HostBody
 from plugins.multiplayer.identity import SquidIdentity, ENCOUNTER_PROTOCOL_VERSION

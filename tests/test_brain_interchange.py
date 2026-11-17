@@ -1,5 +1,4 @@
 """Exercise real file APIs across mobile, desktop, Designer and CLI training."""
-import copy
 import json
 from pathlib import Path
 import sys

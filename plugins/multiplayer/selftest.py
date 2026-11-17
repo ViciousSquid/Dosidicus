@@ -10,6 +10,11 @@ are opened on this machine and linked by a friend code, and one hears the
 other. Nothing leaves the machine. The release build runs it on Windows,
 macOS and Linux (.github/workflows/build-nuitka.yml).
 """
+
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import socket
 import sys
 import time
@@ -87,7 +92,7 @@ def checks():
             try:
                 tank.close()
             except Exception:                           # noqa: BLE001
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
 
 class _Both:

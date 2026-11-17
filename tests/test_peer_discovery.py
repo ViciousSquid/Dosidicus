@@ -29,7 +29,6 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from plugins.multiplayer import mp_constants                  # noqa: E402
 from plugins.multiplayer.mp_network_node import NetworkNode   # noqa: E402
 
 
@@ -141,7 +140,6 @@ class TheListenerIsStartedTests(unittest.TestCase):
 
     def test_a_dead_listener_is_restarted(self):
         """watchdog_check() existed and nothing called it."""
-        import ast
         import inspect
         from plugins.multiplayer import mp_plugin_logic
 

@@ -77,7 +77,7 @@ def test_the_ladder_unlocks_at_one_five_twenty_and_fifty_fights(achievements):
 
 
 def test_the_host_counts_a_fight_once(achievements, monkeypatch):
-    monkeypatch.setattr('plugins.multiplayer.mp_plugin_logic.random.random', lambda: .1)
+    monkeypatch.setattr('random.random', lambda: .1)
     host = squid('Host')
     plugin = MultiplayerPlugin()
     plugin.plugin_manager = PluginManager()

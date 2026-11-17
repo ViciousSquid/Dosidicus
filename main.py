@@ -1,6 +1,11 @@
 # Dosidicus - a digital pet with a neural network   |   2.1.2.0 March 2026
 # main.py Entrypoint 
-from PyQt5 import QtWidgets, QtCore, QtGui
+
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+from PyQt5 import QtWidgets, QtCore
 import sys
 import os
 
@@ -85,13 +90,10 @@ if __name__ == '__main__':
 
 import time
 import sys
-import json
 import os
 import shutil
-import traceback
 import multiprocessing
 import logging
-from PyQt5 import QtWidgets, QtCore
 import random
 import argparse
 from src.ui import Ui
@@ -100,10 +102,8 @@ from src.squid import Squid, Personality
 from src.splash_screen import SplashScreen
 from src.save_manager import SaveManager
 from src.brain_tool import SquidBrainWindow
-from src.display_scaling import DisplayScaling
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
-from src.brain_worker import BrainWorker
 from src.config_manager import ConfigManager
 from src.localisation import Localisation
 
@@ -113,15 +113,10 @@ def launch_brain_designer_process():
     _launch()
 
 def setup_logging_configuration():
-    """Initialize logging configuration"""
+    """Send every module's log to logs/dosidicus_log.txt (src/app_logging.py)."""
     os.environ['QT_LOGGING_RULES'] = QT_LOGGING_RULES
-    os.makedirs('logs', exist_ok=True)
-
-    logging.basicConfig(
-        filename='logs/dosidicus_log.txt',
-        level=logging.ERROR,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+    from src.app_logging import setup_logging
+    setup_logging()
 
 def perform_cleanup_and_exit():
     """Recursively delete __pycache__ and logs directories."""
@@ -142,16 +137,17 @@ def perform_cleanup_and_exit():
                     dirs.remove(name)  # Prevent os.walk from trying to enter this dir
                     deleted_count += 1
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"   ❌ Failed to delete {path}: {e}")
                     
     print(f"✨ Cleanup complete. Removed {deleted_count} directories.")
 
 def global_exception_handler(exctype, value, tb):
-    """Global exception handler to log unhandled exceptions"""
-    error_message = ''.join(traceback.format_exception(exctype, value, tb))
-    logging.error("Unhandled exception:\n%s", error_message)
-    QtWidgets.QMessageBox.critical(None, "Error", 
-                                 "An unexpected error occurred. Please check dosidicus_log.txt for details.")
+    """Tell the player an unhandled exception happened. The exception itself
+    has already been written to the log (src/app_logging.py)."""
+    from src.app_logging import log_path
+    QtWidgets.QMessageBox.critical(None, "Error",
+                                 "An unexpected error occurred. Details were written to:\n" + log_path())
 
 
 class TeeStream:
@@ -379,7 +375,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._on_top_timer.timeout.connect(self.stop_staying_on_top)
         
         if self.debug_mode:
-            print(f"DEBUG MODE ENABLED: Console output is being logged to console.txt")
+            print("DEBUG MODE ENABLED: Console output is being logged to console.txt")
 
         self.setup_facts_timer()
 
@@ -481,6 +477,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print(f"[Facts] DISPLAYED: {fact[:80]}...")  # helpful console confirmation
 
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Facts] Error showing fact: {e}")
 
     def initialize_game(self):
@@ -624,6 +621,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     instance.setup(self.plugin_manager, self.tamagotchi_logic)
                     plugin_data['is_setup'] = True
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"Error setting up plugin {plugin_name}: {e}")
 
     def _achievements_save_data(self):
@@ -635,6 +633,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             return instance.get_save_data()
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Warning] Could not collect achievements: {e}")
             return None
 
@@ -665,9 +664,9 @@ class MainWindow(QtWidgets.QMainWindow):
             neuro_cooldown=self.neuro_cooldown
         )
         
-        print(f"    ")
+        print("    ")
         print(f">> Generated squid personality: {self.squid.personality.value}")
-        print(f"    ")
+        print("    ")
         if self.neuro_cooldown:
             print(f"\x1b[43m Neurogenesis cooldown:\033[0m {self.neuro_cooldown}")
         
@@ -776,6 +775,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             self.tamagotchi_logic.save_game()
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Hatch] could not save the hatchling yet: {e}")
         return True
 
@@ -958,6 +958,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if saved and 'achievements' in saved:
                 self._restore_achievements_data(saved['achievements'])
         except Exception as problem:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Warning] Could not restore achievements: {problem}")
         logic = self.tamagotchi_logic
         if hasattr(logic, 'statistics_window'):
@@ -1001,6 +1002,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     unlocked_count = len(achievements_data.get('unlocked', {}))
                     print(f"✓ Restored {unlocked_count} achievements")
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Warning] Could not restore achievements: {e}")
 
     #: How long the aquarium stays above the other windows after it opens.
@@ -1267,7 +1269,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     if (hasattr(item, 'pixmap') and item.pixmap() and main_squid_item.pixmap() and
                         item.pixmap().width() == main_squid_item.pixmap().width() and
                         item.pixmap().height() == main_squid_item.pixmap().height()):
-                        print(f"Found potential duplicate squid item - removing")
+                        print("Found potential duplicate squid item - removing")
                         self.user_interface.scene.removeItem(item)
                         found_count += 1
             
@@ -1277,6 +1279,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.user_interface.scene.update()
         
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error during cleanup: {str(e)}")
 
     def initialize_multiplayer_manually(self):
@@ -1327,7 +1330,8 @@ def main():
     # CRITICAL for PyInstaller + multiprocessing on Windows
     multiprocessing.freeze_support()
     
-    sys.excepthook = global_exception_handler
+    from src.app_logging import log_uncaught_exceptions
+    log_uncaught_exceptions(also_call=global_exception_handler)
 
     parser = argparse.ArgumentParser(description="Dosidicus digital squid with a neural network")
     parser.add_argument('-p', '--personality', type=str, 
@@ -1366,6 +1370,7 @@ def main():
             print(f"Error: Could not import brain_designer module: {e}")
             sys.exit(1)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error launching designer: {e}")
             sys.exit(1)
         return  # Exit after designer closes

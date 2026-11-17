@@ -308,7 +308,13 @@ autopilot, so it cannot enter.
 | File | What it owns |
 |------|--------------|
 | `main.py` | plugin entry point: registers `MultiplayerPlugin` with the plugin manager |
-| `mp_plugin_logic.py` | the plugin itself: lifecycle, timers, message handlers, wiring |
+| `mp_plugin_logic.py` | the plugin itself: lifecycle, timers, hook registration, wiring |
+| `mp_visits.py` | a visit, message by message: the remote-mind round trip |
+| `mp_social.py` | rocks that land, fights and mating |
+| `mp_sync.py` | the presence broadcast and what is done with those received |
+| `mp_remote_squids.py` | other players' squid in this tank: arriving, drawn, going home |
+| `mp_friends.py` | friends over the internet: codes, remembering, the dialog |
+| `mp_interface.py` | dashboard, status bar, settings, connection lines, gifts |
 | `mp_network_node.py` | the multicast socket, the listener thread, peer discovery |
 | `mp_constants.py` | group, port, cadence, plugin metadata |
 | `network_utilities.py` | message compression and node-id helpers |

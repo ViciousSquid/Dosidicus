@@ -3,6 +3,11 @@
 The cognitive algorithms live in the same src modules used by BrainWidget.
 This class supplies their data surface without a Qt or Kivy dependency.
 """
+
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import json
 import time
 from dataclasses import dataclass
@@ -433,6 +438,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
             return True
             
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"✗ Error loading brain: {e}")
             return False
             
@@ -442,6 +448,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
             from .brain_io import read_brain_file
             return self.load_brain(read_brain_file(filepath))
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"✗ Error loading brain file: {e}")
             return False
             
@@ -533,6 +540,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
             try:
                 out[key] = owner.to_dict()
             except Exception as exc:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"⚠️  Could not export {key}: {type(exc).__name__}: {exc}")
         return out
 
@@ -546,6 +554,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
             try:
                 owner.from_dict(payload)
             except Exception as exc:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"⚠️  Could not restore {key}: {type(exc).__name__}: {exc}")
         
     def save_brain(self, filepath: str) -> bool:
@@ -557,6 +566,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
             print(f"✓ Saved brain to {filepath}")
             return True
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"✗ Error saving brain: {e}")
             return False
             
@@ -624,11 +634,11 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         try:
             self.capability.observe(self.state)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         try:
             self.causal_learning.on_tick(self.state)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         candidates = self.plasticity.eligible_neurons(
             self.positions.keys(), self.excluded_neurons,
             self._connector_neuron_names())
@@ -696,6 +706,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         try:
             self.capability.evaluate()
         except Exception as exc:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Capability] evaluation failed: {type(exc).__name__}: {exc}")
             return None
 

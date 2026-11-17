@@ -1,28 +1,11 @@
 LANGUAGE_HEADER = "ml - Millennial"
 translations = {
     # Core continuous neurons
-    "hunger": "Hangry Level",
-    "happiness": "Vibes",
-    "cleanliness": "Aesthetic",
-    "sleepiness": "Nap Cravings",
-    "satisfaction": "Dopamine",
-    "anxiety": "Existential Dread",
     "aggression": "ആക്രമണോത്സുകത",
-    "curiosity": "FOMO",
 
     # Binary/sensor neurons
-    "can_see_food": "Spotted Snacks",
-    "is_eating": "Nomming",
-    "is_sleeping": "Zonked Out",
-    "is_sick": "Not A Vibe",
-    "pursuing_food": "Chasing Snaccs",
-    "is_startled": "Shook",
-    "is_fleeing": "Nope-ing Out",
 
     # Base keys for neurogenesis patterns
-    "novelty": "New Shiny Thing",
-    "stress": "Panic",
-    "reward": "Treat Yo Self",
 
     # ===== MAIN MENU =====
     "file": "Stuff",
@@ -286,8 +269,6 @@ translations = {
 
     # ===== BRAIN WIDGET LAYERS (NEW) =====
     "layer_name": "Layer",
-    "layer_input": "Input",
-    "layer_output": "Output",
     "layer_hidden": "Hidden",
 
     # ===== NEUROGENESIS LOGS (NEW) =====

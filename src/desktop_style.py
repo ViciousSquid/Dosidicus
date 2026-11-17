@@ -27,6 +27,11 @@ the Control key there, not Command.
 prepare_qt() must run before the QApplication is made; install_style() right
 after.
 """
+
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import os
 import sys
 from pathlib import Path
@@ -286,7 +291,7 @@ class LayoutRules(QtCore.QObject):
             try:
                 spell_out_shortcuts(obj)
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
             return False
         if not isinstance(obj, QtWidgets.QMessageBox):
             return False
@@ -422,7 +427,7 @@ class MacGameStyle(GameStyle):
                 self._metrics[key] = metrics
             option.fontMetrics = metrics
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         return option
 
     def sizeFromContents(self, kind, option, size, widget=None):

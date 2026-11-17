@@ -1,10 +1,12 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import random
 import math
-import sys
 import time
 import os
-import threading
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtWidgets
 
 class RemoteSquidController:
     """Controls behavior of squids away from their home instance"""
@@ -29,6 +31,7 @@ class RemoteSquidController:
                 with open(self.log_file_name, 'w', encoding='utf-8') as f:
                     f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Log for remote squid {self.node_id} (controller instance) started.\n")
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[AutoPilotSetup] Error clearing/creating log file {self.log_file_name}: {e}")
 
         self.entry_time = squid_data.get('entry_time', time.time())
@@ -52,7 +55,7 @@ class RemoteSquidController:
             if not self.home_direction:
                  # If still None, defer final determination to when return_home is called.
                  # For __init__, it's okay if it's None here, as determine_home_direction() will be called.
-                 self._log_decision(f"__init__: home_direction not determined yet (entry_direction_on_this_screen missing). Will determine later.")
+                 self._log_decision("__init__: home_direction not determined yet (entry_direction_on_this_screen missing). Will determine later.")
 
 
         self.state = "exploring"
@@ -97,6 +100,7 @@ class RemoteSquidController:
             with open(self.log_file_name, 'a', encoding='utf-8') as f:
                 f.write(log_entry)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[AutoPilotDecisionFileError] Could not write to {self.log_file_name} for SquidID {self.node_id}: {e}")
             print(f"[AutoPilotDecisionFallbackLog] {log_entry.strip()}")
 
@@ -184,7 +188,7 @@ class RemoteSquidController:
         
         if self.squid_data.get('status') != "exploring": # Ensure status matches state
             self.squid_data['status'] = "exploring"
-            self._log_decision(f"Explore: (Status corrected to 'exploring')")
+            self._log_decision("Explore: (Status corrected to 'exploring')")
 
         # This check is now also in update(), but keeping it here as a safeguard for explore's logic
         if self.time_away > self.max_time_away:
@@ -254,7 +258,7 @@ class RemoteSquidController:
 
         if self.squid_data.get('status') != "heading to food":
             self.squid_data['status'] = "heading to food"
-            self._log_decision(f"SeekFood: (Status corrected to 'heading to food')")
+            self._log_decision("SeekFood: (Status corrected to 'heading to food')")
             
         target_pos = self.get_object_position(self.target_object)
         self.move_toward(target_pos[0], target_pos[1])
@@ -289,7 +293,7 @@ class RemoteSquidController:
         current_status = self.squid_data.get('status', '')
         if current_status != "checking item" and not self.stealing_phase: # Only set if not already in a carrying/stealing related status
             self.squid_data['status'] = "checking item"
-            self._log_decision(f"Interact: (Status set to 'checking item')")
+            self._log_decision("Interact: (Status set to 'checking item')")
 
         target_pos = self.get_object_position(self.target_object)
         self.move_toward(target_pos[0], target_pos[1])
@@ -315,7 +319,7 @@ class RemoteSquidController:
                     self.stealing_phase = True 
 
                     item_type_stolen = item_data_to_carry.get('original_category', 'item')
-                    item_name_stolen = os.path.basename(item_data_to_carry.get('original_filename', f'UnknownItem'))
+                    item_name_stolen = os.path.basename(item_data_to_carry.get('original_filename', 'UnknownItem'))
                     
                     self.squid_data['status'] = f"carrying {item_type_stolen.lower()}"
                     self._log_decision(f"Interact: SUCCEEDED steal of {item_type_stolen} '{item_name_stolen}'. Status: {self.squid_data['status']}. Carrying {self.rocks_stolen}/{self.max_rocks_to_steal}.")
@@ -351,7 +355,7 @@ class RemoteSquidController:
     def return_home(self):
         if self.squid_data.get('status') != "returning home" and not self.squid_data.get('status', '').startswith("returning home"): # Check variants
             self.squid_data['status'] = "returning home"
-            self._log_decision(f"ReturnHome: (Status set to 'returning home')")
+            self._log_decision("ReturnHome: (Status set to 'returning home')")
 
         if not self.home_direction: # Should have been set by __init__ or explore timeout
             self.determine_home_direction() # Recalculate if somehow lost
@@ -371,7 +375,7 @@ class RemoteSquidController:
 
             self.state = "exited" 
             self.squid_data['status'] = "exited" # Final status for this controller instance
-            self._log_decision(f"ReturnHome: State set to 'exited'.")
+            self._log_decision("ReturnHome: State set to 'exited'.")
 
 
     def move_in_direction(self, direction):

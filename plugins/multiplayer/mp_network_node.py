@@ -1,5 +1,10 @@
 # File: mp_network_node.py
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import hashlib
 import uuid
 import time
@@ -7,13 +12,26 @@ import socket
 import queue
 import zlib
 import json
-import traceback
 import threading
 import logging
 
 from .mp_constants import (MULTICAST_GROUP, MULTICAST_PORT, MAX_PACKET_SIZE,
                            RECEIVE_BUFFER_SIZE, MAX_MESSAGE_BYTES)
 from . import friend_link
+
+
+def _bounded_inflate(data, limit=MAX_MESSAGE_BYTES):
+    """zlib-decompress received `data`, never producing more than `limit` bytes.
+
+    Raises zlib.error if it is not zlib data, ValueError if it would exceed
+    the limit (a "zip bomb": kilobytes on the wire, hundreds of megabytes in
+    memory, and anyone on the network can send one).
+    """
+    inflater = zlib.decompressobj()
+    inflated = inflater.decompress(data, limit)
+    if inflater.unconsumed_tail:
+        raise ValueError("message_too_large")
+    return inflated
 
 #: How many tanks this one will hold a direct link to at once. A tank holds
 #: its own squid and up to three visitors, so this is room for every one of
@@ -151,7 +169,7 @@ class NetworkNode:
                 if ip not in candidates:
                     candidates.append(ip)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
         # Strategy 2: also grab the default-route IP the OS prefers
         try:
@@ -162,7 +180,7 @@ class NetworkNode:
                 if default_ip not in candidates:
                     candidates.append(default_ip)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
         self.logger.info(f"[IP] All detected IPs on this machine: {candidates}")
 
@@ -230,14 +248,14 @@ class NetworkNode:
             for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
                 candidates.add(info[4][0])
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 s.settimeout(0.1)
                 s.connect(("8.8.8.8", 80))
                 candidates.add(s.getsockname()[0])
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
         scored = sorted(
             [(score(ip), ip) for ip in candidates if score(ip) >= 0],
@@ -263,7 +281,7 @@ class NetworkNode:
             if self.socket: # If socket exists but not connected, close it first
                 try:
                     self.socket.close()
-                except Exception: pass # Ignore errors on close if already closed
+                except Exception: _LOG.debug('Ignored exception', exc_info=True) # Ignore errors on close if already closed
             
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -334,7 +352,7 @@ class NetworkNode:
             self.logger.error(f"Error initializing socket structure: {e}", exc_info=self.debug_mode)
             if self.socket:
                 try: self.socket.close()
-                except: pass
+                except: _LOG.debug('Ignored exception', exc_info=True)
             self.socket = None
             self.is_connected = False
             self.initialized = False
@@ -447,7 +465,7 @@ class NetworkNode:
         try:
             self._is_listening_active = True # Set flag before starting thread
             self.listener_thread = threading.Thread(target=self._listen_for_multicast, daemon=True)
-            self.listener_thread.setName(f"MPNodeListener-{self.node_id[:4]}") # Helpful for debugging threads
+            self.listener_thread.name = f"MPNodeListener-{self.node_id[:4]}" # Helpful for debugging threads
             self.listener_thread.start()
             self.logger.info("Listener thread started successfully.")
             return True
@@ -851,7 +869,9 @@ class NetworkNode:
             try: # This peeking is best-effort for logging, might fail if data is not as expected
                 peek_data_bytes = raw_data
                 if self.use_compression: # Try decompressing a copy for peeking
-                    try: peek_data_bytes = zlib.decompress(raw_data)
+                    # Bounded: a hostile packet is refused here (the ValueError
+                    # lands in the except below), not inflated for a log line.
+                    try: peek_data_bytes = _bounded_inflate(raw_data)
                     except zlib.error: pass # If not zlib compressed, peek_data_bytes remains raw_data
                 
                 j_peek = json.loads(peek_data_bytes.decode('utf-8', errors='ignore'))
@@ -875,9 +895,10 @@ class NetworkNode:
                             # Assumes decompress_message returns a dict or raises error
                             message_dict = self.utils.decompress_message(raw_data)
                         else: # Fallback to direct zlib + json
-                            data_for_json_decode = zlib.decompress(raw_data)
-                            if len(data_for_json_decode) > MAX_MESSAGE_BYTES:
-                                continue
+                            try:
+                                data_for_json_decode = _bounded_inflate(raw_data)
+                            except ValueError:
+                                continue    # would inflate past the limit: a bomb, not a message
                             message_dict = json.loads(data_for_json_decode.decode('utf-8'))
                         decoded_successfully = True
                     except (zlib.error, TypeError) as e_zlib: # TypeError if utils.decompress_message fails unexpectedly

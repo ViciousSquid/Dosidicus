@@ -31,6 +31,13 @@ MULTIPLAYER_MODULES = (
 )
 
 
+def mobile_assets():
+    """The images the phone app uses, as paths under the repository's images/."""
+    listing = Path(__file__).resolve().parent / 'mobile_assets.txt'
+    lines = (line.strip() for line in listing.read_text(encoding='utf-8').splitlines())
+    return [line for line in lines if line and not line.startswith('#')]
+
+
 def prepare(destination=None):
     android = Path(__file__).resolve().parent
     root = android.parent
@@ -39,6 +46,12 @@ def prepare(destination=None):
     for name in ('dosidicus_mobile', 'assets'):
         shutil.copytree(android / name, target / name, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+    # The pictures are the desktop game's own (images/), not a second copy:
+    # android/assets holds only what exists on a phone alone (the presplash).
+    for relative in mobile_assets():
+        staged = target / 'assets' / relative
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / 'images' / relative, staged)
     shutil.copy2(android / 'main.py', target / 'main.py')
     shutil.copy2(root / 'config.ini', target / 'config.ini')
     (target / 'src').mkdir(exist_ok=True)

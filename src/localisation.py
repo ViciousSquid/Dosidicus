@@ -1,7 +1,9 @@
 # localisation.py
-import json
-import os
-import sys
+
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 from pathlib import Path
 
 class Localisation:
@@ -98,6 +100,7 @@ class Localisation:
                     if lang_code not in ('__init__',) and not lang_code.startswith('_'):
                         languages.add(lang_code)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Localisation] Error scanning translations directory: {e}")
         
         return sorted(list(languages))
@@ -118,6 +121,7 @@ class Localisation:
             if name:
                 return name
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Localisation] Error getting name for '{lang_code}': {e}")
         
         # Fallback to hardcoded map

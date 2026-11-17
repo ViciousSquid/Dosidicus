@@ -1,5 +1,9 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 from PyQt5 import QtCore, QtGui, QtWidgets
-import time, json, math, random, os
+import time, math, os
 from .localisation import Localisation
 
 
@@ -348,7 +352,7 @@ class StatisticsWindow(QtWidgets.QWidget):
             colour = QtGui.QColor(*(self.GAIN_COLOUR if change > 0 else self.LOSS_COLOUR))
             show(item, f"{change:+d}", colour)
         except Exception:                           # a number failing to float costs no points
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
 
     def set_score(self, value):
         """Directly set the score value (used for loading saves)"""

@@ -51,11 +51,16 @@ names the action, the cue and the consequence.
 
 from __future__ import annotations
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import time
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
 from .brain_constants import (CORE_STAT_NEURONS, PURE_INPUT_NEURONS,
                               is_motor_synapse, is_world_sense)
@@ -743,7 +748,7 @@ class ActionOutcomeLedger:
             from .social_knowledge import think
             think(brain, thought)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         squid = getattr(getattr(brain, 'tamagotchi_logic', None), 'squid', None)
         memory = getattr(squid, 'memory_manager', None)
         if memory is not None and hasattr(memory, 'add_long_term_memory'):
@@ -756,7 +761,7 @@ class ActionOutcomeLedger:
                      'effect': round(effect, 1), 'confidence': confidence,
                      'episode': episode.episode_id, 'valence': 0.0})
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
     def _change_mind(self, entry: Contingency, statement: str, now: float) -> None:
         """Its own later experience has stopped bearing a belief out.
@@ -777,7 +782,7 @@ class ActionOutcomeLedger:
             from .social_knowledge import think
             think(brain, thought)
         except Exception:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         squid = getattr(getattr(brain, 'tamagotchi_logic', None), 'squid', None)
         memory = getattr(squid, 'memory_manager', None)
         if memory is not None and hasattr(memory, 'add_long_term_memory'):
@@ -789,7 +794,7 @@ class ActionOutcomeLedger:
                      'about': entry.stat, 'occasions': entry.n,
                      'changed_mind': True, 'valence': 0.0})
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
     def _record_co_occurrence(self, expiring: List[_OpenEpisode]) -> None:
         """Note, for each closing episode, which other actions overlapped it.

@@ -1,12 +1,15 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import os
-import json
 import time
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
-from PyQt5 import QtCore, QtWidgets, QtGui
+from PyQt5 import QtCore, QtWidgets
 
 # Import the local copy of DisplayScaling
 from .display_scaling import DisplayScaling as _DS
@@ -31,7 +34,6 @@ from .achievements_data import (
     AchievementCategory,
     ACHIEVEMENT_DEFINITIONS,
     TIER_COLORS,
-    get_achievement,
 )
 
 # Import localisation
@@ -880,7 +882,7 @@ class AchievementsPlugin:
             self._queue_notification(ach)
 
         if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'show_message'):
-            self.tamagotchi_logic.show_message(f"🏆")
+            self.tamagotchi_logic.show_message("🏆")
 
         return True
 
@@ -1096,7 +1098,7 @@ class AchievementsPlugin:
             if 'push_decoration' in self._original_methods and self.squid:
                 self.squid.push_decoration = self._original_methods['push_decoration']
         except:
-            pass
+            _LOG.debug('Ignored exception', exc_info=True)
         self._original_methods.clear()
 
     # ----------------------------------------------------------
@@ -1115,7 +1117,7 @@ class AchievementsPlugin:
                 self.squid = self.tamagotchi_logic.squid
                 self._install_hooks()
                 if self.logger:
-                    self.logger.info(f"Re-acquired squid reference and reinstalled hooks")
+                    self.logger.info("Re-acquired squid reference and reinstalled hooks")
 
         if self.age_check_timer and not self.age_check_timer.isActive():
             self.age_check_timer.start(60000)

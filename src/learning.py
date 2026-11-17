@@ -20,7 +20,11 @@ connector limits as everything else. There is one rule, one write path and one
 record.
 """
 
-import random
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import csv
 import time
 import json
@@ -467,6 +471,7 @@ class HebbianLearning:
                 print(f"Learning Event: {sanitized_event}")
             
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error logging learning event: {e}")
             # Optionally log to a separate error log
     
@@ -476,6 +481,7 @@ class HebbianLearning:
             with open(self.learning_log_file, 'w') as f:
                 json.dump(self.learning_event_log, f, indent=2)
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error saving learning log: {e}")
     
     def export_learning_log(self, filename=None):
@@ -498,6 +504,7 @@ class HebbianLearning:
             
             print(f"Learning log exported to {filename}")
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error exporting learning log: {e}")
 
     def capture_network_state(self):
@@ -579,6 +586,7 @@ class HebbianLearning:
             
             print(f"Network evolution history exported to {filename}")
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error exporting network evolution: {e}")
 
     def update_learning_rate(self, novelty_factor):
@@ -748,5 +756,6 @@ class LearningConfig:
             
             print("Configuration loaded from config.ini")
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"Error loading from config.ini: {e}")
             print("Using default configuration values")

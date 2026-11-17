@@ -1,8 +1,13 @@
 # brain_neuron_hooks.py
+
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import math
 import random
 import time
-from typing import Dict, Callable, Any, Optional
+from typing import Dict, Callable
 
 class BrainNeuronHooks:
     """
@@ -164,6 +169,7 @@ class BrainNeuronHooks:
                 try:
                     input_values[neuron_name] = all_handlers[neuron_name]()
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"[BrainNeuronHooks] Error in handler for '{neuron_name}': {e}")
                     input_values[neuron_name] = 0.0
 

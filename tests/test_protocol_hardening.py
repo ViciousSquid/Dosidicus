@@ -203,3 +203,40 @@ def test_a_visitor_is_drawn_where_its_body_is_in_this_tank():
     entities.update_remote_squid('squid_vis001', {'x': 0., 'y': 300., 'image_direction_key': 'left'})
     assert (info['network_target_x'], info['network_target_y']) == (640., 420.)
     assert info['current_image_name'].startswith('right')
+
+
+def test_no_receive_path_inflates_a_packet_without_a_ceiling():
+    """Every place received bytes are decompressed is bounded - including the
+    one that only peeked at the sender for a log line, and the fallback used
+    when the utilities module is missing, which checked the size only after
+    inflating all of it."""
+    import pytest
+    from plugins.multiplayer import mp_network_node
+    from plugins.multiplayer.mp_constants import MAX_MESSAGE_BYTES
+    from plugins.multiplayer.network_utilities import NetworkUtilities
+
+    bomb = zlib.compress(b"\0" * (64 * 1024 * 1024), 9)     # 64 MB in ~64 KB
+    assert len(bomb) < 70_000
+    for inflate in (mp_network_node._bounded_inflate, NetworkUtilities.bounded_inflate):
+        with pytest.raises(ValueError):
+            inflate(bomb)
+        honest = zlib.compress(b"x" * MAX_MESSAGE_BYTES)
+        assert inflate(honest) == b"x" * MAX_MESSAGE_BYTES
+        with pytest.raises(zlib.error):
+            inflate(b'{"not": "zlib"}')
+
+    source = Path(mp_network_node.__file__).read_text(encoding="utf-8")
+    assert "zlib.decompress(" not in source
+
+
+def test_a_phone_refuses_a_snapshot_that_unpacks_without_end():
+    import gzip
+    import pytest
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "android"))
+    from dosidicus_mobile.engine import portability
+
+    honest = gzip.compress(json.dumps({"squid": "onion"}).encode())
+    assert portability.snapshot_dict(honest) == {"squid": "onion"}
+    bomb = gzip.compress(b" " * (portability.SNAPSHOT_MAX_UNPACKED_BYTES + 1024), 9)
+    with pytest.raises(ValueError):
+        portability.snapshot_dict(bomb)

@@ -23,7 +23,7 @@ so the Laboratory shows, synapse by synapse, how the squid's life changed
 how it meets others. Qt-free: desktop and mobile share it.
 """
 
-from typing import Any, List, Tuple
+from typing import List, Tuple
 
 from .brain_constants import AQUARIUM_SENSE, SOCIAL_SENSOR
 

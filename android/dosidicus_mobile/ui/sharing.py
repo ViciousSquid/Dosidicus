@@ -153,7 +153,7 @@ def open_url(url):
         url = "https://" + url
     if is_android():
         try:
-            from jnius import autoclass, cast
+            from jnius import autoclass
             PythonActivity = autoclass("org.kivy.android.PythonActivity")
             Intent = autoclass("android.content.Intent")
             Uri = autoclass("android.net.Uri")

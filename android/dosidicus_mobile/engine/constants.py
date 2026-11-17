@@ -6,10 +6,9 @@ screen size. The 7 core stat neurons plus the mandatory ``can_see_food`` sensor
 are the minimum viable brain; input sensors are driven by game state.
 """
 
-from . import shared  # locate the desktop source package
 from src.brain_constants import (
     CORE_STAT_NEURONS as CORE_NEURON_NAMES, REQUIRED_NEURONS,
-    INPUT_SENSORS, PURE_INPUT_NEURONS, BINARY_NEURONS, LOGICAL_CANVAS,
+    PURE_INPUT_NEURONS, BINARY_NEURONS, LOGICAL_CANVAS,
     is_social_neuron,
 )
 

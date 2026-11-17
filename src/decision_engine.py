@@ -2,6 +2,11 @@
 # exploration of emergent behavioural complexity via dynamic, biologically-inspired neural architecture rather than a static state machine.
 # Version 5.0 — Behaviour read from the network | 2026
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import random
 import time
 
@@ -232,6 +237,7 @@ class DecisionEngine:
                 perceptual_inputs = logic.brain_hooks.get_input_neuron_values()
                 logic.brain_hooks.update_decay()  # Critical: decay temporal sensors
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[DecisionEngine] Hook error: {e}")
                 perceptual_inputs = {}
         decision_data['inputs'] = perceptual_inputs

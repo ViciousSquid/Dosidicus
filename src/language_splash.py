@@ -15,6 +15,11 @@ the tutorial question is drawn the same way (main.TimedMessageBox).
 Light on purpose: PyQt5, the config manager and the localisation table only.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import importlib
 import os
 import pkgutil
@@ -44,12 +49,12 @@ def available_languages() -> List[Tuple[str, str]]:
         import translations
         codes.update(m.name for m in pkgutil.iter_modules(translations.__path__))
     except Exception:
-        pass
+        _LOG.debug('Ignored exception', exc_info=True)
     try:
         from .localisation import Localisation
         codes.update(Localisation.instance().get_available_languages())
     except Exception:
-        pass
+        _LOG.debug('Ignored exception', exc_info=True)
     found = []
     for code in sorted(c for c in codes if not c.startswith('_')):
         try:

@@ -95,7 +95,7 @@ def test_the_host_reports_what_hit_never_why():
 
 @pytest.fixture
 def poop_tank():
-    from src.interactions2 import PoopInteractionManager
+    from src.poop_interactions import PoopInteractionManager
     scene = QtWidgets.QGraphicsScene(0, 0, 900, 500)
     kept = []
 

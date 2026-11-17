@@ -297,7 +297,7 @@ class StatisticsPersistenceTests(unittest.TestCase):
         with (
             redirect_stdout(io.StringIO()),
             patch(
-                "src.tamagotchi_logic.show_custom_brain_load_warning",
+                "src.logic_persistence.show_custom_brain_load_warning",
                 return_value=True,
             ),
         ):
@@ -389,7 +389,7 @@ class StatisticsPersistenceTests(unittest.TestCase):
         with (
             redirect_stdout(io.StringIO()),
             patch(
-                "src.tamagotchi_logic.show_custom_brain_load_warning",
+                "src.logic_persistence.show_custom_brain_load_warning",
                 return_value=True,
             ),
         ):
@@ -475,7 +475,7 @@ class StatisticsPersistenceTests(unittest.TestCase):
         with (
             redirect_stdout(io.StringIO()),
             patch(
-                "src.tamagotchi_logic.show_custom_brain_load_warning",
+                "src.logic_persistence.show_custom_brain_load_warning",
                 return_value=True,
             ),
         ):

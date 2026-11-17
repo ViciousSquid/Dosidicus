@@ -1,11 +1,16 @@
 # In plugins/multiplayer/network_utilities.py
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import json
 import zlib
 import socket # Make sure socket is imported if get_local_ip uses it
 import time   # Make sure time is imported if is_node_active uses it
 import uuid   # Make sure uuid is imported if generate_node_id uses it
-from typing import Dict, Any, Union, List, Tuple # Ensure all used types are imported
+from typing import Dict, Any, Union # Ensure all used types are imported
 
 # It's good practice to have a logger for utilities if they are complex
 # import logging
@@ -94,9 +99,28 @@ class NetworkUtilities:
             else: # Should not happen if TypeError is caught, but as a safeguard
                 return json.dumps({"error": "zlib_error_and_serialization_failed", "details": str(ze), "original_type": message.get('type')}).encode('utf-8')
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             error_detail = f"General error compressing SQUID_EXIT: {e}" if is_squid_exit_message else f"General error compressing message: {e}"
             print(f"DEBUG_COMPRESS_ERROR: {error_detail}")
             return json.dumps({"error": "compression_failure", "details": str(e), "original_type": message.get('type')}).encode('utf-8')
+
+    @staticmethod
+    def bounded_inflate(data: bytes, limit: int = None) -> bytes:
+        """zlib-decompress `data`, refusing to produce more than `limit` bytes.
+
+        A datagram of a few kilobytes can be crafted to inflate to hundreds of
+        megabytes. Anyone on the LAN can send one, so nothing received is ever
+        inflated without a ceiling. Raises zlib.error if the data is not zlib,
+        ValueError if it would exceed the limit.
+        """
+        if limit is None:
+            from .mp_constants import MAX_MESSAGE_BYTES
+            limit = MAX_MESSAGE_BYTES
+        inflater = zlib.decompressobj()
+        inflated = inflater.decompress(data, limit)
+        if inflater.unconsumed_tail:
+            raise ValueError("message_too_large")
+        return inflated
 
     @staticmethod
     def decompress_message(compressed_msg: bytes) -> Union[Dict[str, Any], None]:
@@ -119,10 +143,9 @@ class NetworkUtilities:
         try:
             # Attempt zlib decompression first
             try:
-                from .mp_constants import MAX_MESSAGE_BYTES
-                inflater = zlib.decompressobj()
-                decompressed_bytes = inflater.decompress(compressed_msg, MAX_MESSAGE_BYTES)
-                if inflater.unconsumed_tail:
+                try:
+                    decompressed_bytes = NetworkUtilities.bounded_inflate(compressed_msg)
+                except ValueError:
                     # A bomb, not a message: refuse it rather than inflate it.
                     return {"error": "message_too_large"}
                 if is_potentially_squid_exit:
@@ -158,6 +181,7 @@ class NetworkUtilities:
             print(f"DEBUG_DECOMPRESS_ERROR: JSONDecodeError. Details: {jde}. Data fed to json.loads (first 100 chars): {decompressed_data_str[:100] if decompressed_data_str else 'N/A'}")
             return {"error": "json_decode_error", "details": str(jde)}
         except Exception as e: # Catch-all for other unexpected errors
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"DEBUG_DECOMPRESS_ERROR: General Exception during decompression. Details: {e}. Raw data (first 100 bytes): {compressed_msg[:100]}")
             return {"error": "general_decompression_failure", "details": str(e)}
 

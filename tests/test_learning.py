@@ -7,7 +7,6 @@ tests therefore assert on the STRUCTURE that experience produces, not on
 whether a learning function was called.
 """
 
-import math
 import os
 import random
 import sys

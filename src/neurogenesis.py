@@ -47,11 +47,15 @@ in FunctionalNeuron). Neurons in a brain saved before v5 keep exactly the
 behaviour they were saved with.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import time
-import math
 import random
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional, Set, Any
 
 from .capability import Deficit, NEURON_WORTHY, regulation_specialisation
@@ -928,6 +932,7 @@ class EnhancedNeurogenesis:
                     try:
                         self._on_neuron_leveled_callback(name, 1.0)
                     except Exception as e:
+                        _LOG.warning('Handled exception', exc_info=True)
                         print(f"Level callback error: {e}")
                 continue
             if now - neuron.born_at < PROBATION_SECONDS:
@@ -1000,6 +1005,7 @@ class EnhancedNeurogenesis:
                 grow(neuron_name)
                 return
             except Exception as e:
+                _LOG.warning('Handled exception', exc_info=True)
                 print(f"[Neurogenesis] could not animate {neuron_name}: {e}")
         if hasattr(bw, 'visible_neurons'):
             bw.visible_neurons.add(neuron_name)
@@ -1739,6 +1745,7 @@ class EnhancedNeurogenesis:
                     f'GREW A NEW NEURON!: {neuron_name}'
                 )
         except Exception as e:
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"⚠️ Could not record neurogenesis memory: {e}")
 
     def _on_neuron_created(self, neuron_name: str, neuron_type: str):

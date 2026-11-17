@@ -17,7 +17,7 @@ import math
 import re
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
-from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QWaitCondition, QSize, Qt, QPointF, QRectF
+from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QWaitCondition, Qt, QPointF, QRectF
 from PyQt5.QtGui import QImage, QPainter, QColor, QPen, QBrush, QFont, QPolygonF
 
 

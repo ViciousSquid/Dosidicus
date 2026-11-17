@@ -1,4 +1,9 @@
 """The desktop save archive container, also used by Android autosaves/exports."""
+
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 from datetime import datetime
 import json
 import os
@@ -28,6 +33,7 @@ def write_save_archive(path, sections, squid_uuid):
             from .life_timeline import build
             sections = dict(sections, timeline=build(sections))
         except Exception as problem:                    # noqa: BLE001
+            _LOG.warning('Handled exception', exc_info=True)
             print(f"[Warning] Could not write the life timeline: {problem}")
     temporary = path.with_name(path.name + '.tmp')
     try:

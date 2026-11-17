@@ -1,24 +1,13 @@
-
-_"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/) , [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
-
-<p align="left">
-  <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
-  <img src="https://img.shields.io/badge/License-GPL_v2-blue.svg?style=flat" height="20" alt="GPL-2.0">
-  <img src="https://img.shields.io/badge/Translations-7-228B22?style=flat&logo=google-translate&logoColor=white&labelColor=333333" height="20" alt="Translations">
-    <a href="https://buymeacoffee.com/vicioussquid"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" height="20" alt="Buy Me A Coffee"></a>
-</p>
-
-> ### #1 `weird` topic project on GitHub — and #2 `simulation-game`.
-
 # _Dosidicus electronicus_
 ### Learn neuroscience by **raising a neural network as a pet**
 _A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
 
-
-- Part **educational neuro tool**, part **sim game**, part **fever dream**
-- Combining 1990s virtual pet nostalgia with modern computational neuroscience.
+<img src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" width="900">
+<img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
 
 ### [Download for Windows, macOS, Linux and Android](https://github.com/ViciousSquid/Dosidicus/releases)
+
+Or run it from source (Python 3.10 or newer):
 
 ```bash
 git clone https://github.com/ViciousSquid/Dosidicus.git
@@ -29,8 +18,18 @@ pip install -r requirements.txt
 python main.py
 ```
 
-<img src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" width="900">
-<img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
+<p align="left">
+  <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
+  <img src="https://img.shields.io/badge/License-GPL_v2-blue.svg?style=flat" height="20" alt="GPL-2.0">
+  <img src="https://img.shields.io/badge/Translations-7-228B22?style=flat&logo=google-translate&logoColor=white&labelColor=333333" height="20" alt="Translations">
+    <a href="https://buymeacoffee.com/vicioussquid"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" height="20" alt="Buy Me A Coffee"></a>
+</p>
+
+_"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/) , [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
+
+- Part **educational neuro tool**, part **sim game**, part **fever dream**
+- Combining 1990s virtual pet nostalgia with modern computational neuroscience.
+- #1 `weird` topic project on GitHub — and #2 `simulation-game`.
 
 ---
 
@@ -219,7 +218,7 @@ Troubleshooting (quick):
 ### Build a macOS DMG installer
 
 In GitHub **Actions**, select **Build (Nuitka)**, then **Run workflow** on
-`3.2.0_LatestVersion`. The workflow builds native Apple Silicon and Intel apps,
+the default branch. The workflow builds native Apple Silicon and Intel apps,
 checks their signatures and startup, then creates and verifies compressed DMGs.
 Download `nuitka-macos-arm64-dmg` (Apple Silicon) or `nuitka-macos-x64-dmg`
 (Intel) from the run's **Artifacts** section and extract the `.dmg` file.
@@ -233,11 +232,30 @@ require approval under **System Settings → Privacy & Security → Open Anyway*
 Saves and settings are stored in `~/Library/Application Support/Dosidicus`.
 
 - **Dependencies:**
-  - Python ^3.9
+  - Python ^3.10
   - PyQt5 ^5.15 (GUI framework)
   - numpy ^1.21 (neural network computations)
   - **OPTIONAL** onnxruntime or onnxruntime-directml ([more info](https://github.com/ViciousSquid/Dosidicus/wiki/AI-accelerator-support))
 - **Core Structure:** Modular codebase in `src/` including brain designer, decision engine, learning algorithms, personality traits, memory management, UI components, and interaction systems. Entry point via `main.py`.
+
+### Working on the code
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest          # the whole suite, about two minutes, no display needed
+ruff check .              # undefined names, duplicate keys, unused imports
+```
+
+Both run on every pull request. [CONTRIBUTING.md](CONTRIBUTING.md) says what a
+pull request needs; [tests/README.md](tests/README.md) says which test covers what.
+
+### When something goes wrong
+
+The game writes a log to `logs/dosidicus_log.txt`, beside the `saves/` folder
+(on macOS: `~/Library/Application Support/Dosidicus/logs/`). It records every
+error the game caught and carried on from, with its traceback - attach it to a
+bug report. Start the game with `DOSIDICUS_LOG_LEVEL=DEBUG` set to record the
+errors it deliberately ignores as well.
 
 ### Key Project Components
 - **Plugin System:** Extensible architecture with built-in plugins for achievements (tracking milestones) and multiplayer (networked interactions).

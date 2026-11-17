@@ -39,6 +39,36 @@ The Challenge: Improve docstrings, write "Field Guides" for new users, or record
 
 Goal: Turn complex neuroscience concepts into playable tutorials.
 
+### 🧪 Before You Open a Pull Request
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest        # everything, about two minutes; no display needed
+ruff check .            # undefined names, duplicate keys, unused imports
+```
+
+Both run automatically on every pull request, on Python 3.10, 3.11 and 3.13.
+A pull request is ready when:
+
+- **the tests pass and `ruff check .` is clean** - if a Qt test complains
+  about a display, set `QT_QPA_PLATFORM=offscreen`;
+- **a behaviour change comes with a test.** [tests/README.md](tests/README.md)
+  says which file covers what, and how to study the brain without the game;
+- **engine code stays free of Qt.** The modules listed in
+  `android/prepare_apk.py` are shared with the phone app and the headless
+  trainer: nothing in them may import PyQt5;
+- **errors are logged, not swallowed.** Use
+  `_LOG = logging.getLogger(__name__)` and `_LOG.warning(..., exc_info=True)`
+  rather than a bare `except: pass` or a `print` of the message alone. It all
+  ends up in `logs/dosidicus_log.txt`, which is what players attach to bug
+  reports;
+- **a new English string is added to every language file**, or
+  `tests/test_translations.py` will say which ones are missing it. A machine
+  translation marked for review is better than a missing key.
+
+Line endings: keep each file's existing ones (some are CRLF), so the diff
+shows only what you changed.
+
 ### 🚀 How to Get Started
 Check the "Ahead" Forks: See what the community is already building in the Network Graph.
 

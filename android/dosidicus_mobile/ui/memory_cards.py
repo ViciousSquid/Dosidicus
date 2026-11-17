@@ -18,7 +18,7 @@ from kivy.uix.image import Image
 from kivy.graphics import Color, RoundedRectangle
 from kivy.metrics import dp, sp
 
-from .assets import asset, ASSET_DIR
+from .assets import asset
 
 # card palette (bg r,g,b ; fg r,g,b)
 _BLUE = ((0.25, 0.41, 0.88), (1, 1, 1))

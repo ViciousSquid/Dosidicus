@@ -37,7 +37,7 @@ wall forever because a packet went missing.
 """
 
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from .identity import SquidIdentity, ENCOUNTER_PROTOCOL_VERSION
 

@@ -1,28 +1,11 @@
 LANGUAGE_HEADER = "ja - 日本語"
 translations = {
     # Core continuous neurons
-    "hunger": "空腹",
-    "happiness": "幸福",
-    "cleanliness": "清潔さ",
-    "sleepiness": "眠気",
-    "satisfaction": "満足度",
-    "anxiety": "不安",
     "aggression": "攻撃性",
-    "curiosity": "好奇心",
 
     # Binary/sensor neurons
-    "can_see_food": "餌が見える",
-    "is_eating": "食事中",
-    "is_sleeping": "睡眠中",
-    "is_sick": "病気",
-    "pursuing_food": "餌を追跡中",
-    "is_startled": "驚き",
-    "is_fleeing": "逃走中",
 
     # Base keys for neurogenesis patterns
-    "novelty": "新規性",
-    "stress": "ストレス",
-    "reward": "報酬",
 
     # ===== MAIN MENU =====
     "file": "ファイル",
@@ -39,6 +22,8 @@ translations = {
     # ===== VIEW MENU =====
     "brain_designer": "脳デザイナー",
     "decorations": "装飾",
+    "journey": "旅路",
+    "journey_title": "あなたのイカの旅路",
     "statistics": "統計",
     "brain_tool": "脳ツール",
     "neuron_lab": "ニューロン研究所",
@@ -286,8 +271,6 @@ translations = {
 
     # ===== BRAIN WIDGET LAYERS (NEW) =====
     "layer_name": "層",
-    "layer_input": "入力",
-    "layer_output": "出力",
     "layer_hidden": "隠れ層",
 
     # ===== NEUROGENESIS LOGS (NEW) =====

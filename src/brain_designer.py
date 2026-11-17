@@ -5,6 +5,11 @@ Brain Designer - Visual Neural Network Designer for Dosidicus-2
 Launch the brain designer GUI application with error handling and logging.
 """
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import sys
 import os
 import shutil
@@ -34,6 +39,7 @@ def perform_cleanup_and_exit():
                     dirs.remove(name)  # Prevent os.walk from trying to enter this dir
                     deleted_count += 1
                 except Exception as e:
+                    _LOG.warning('Handled exception', exc_info=True)
                     print(f"   ❌ Failed to delete {path}: {e}")
                     
     print(f"✨ Cleanup complete. Removed {deleted_count} directories.")
@@ -58,6 +64,7 @@ def show_error_dialog(title: str, message: str):
         msg_box.exec_()
     except Exception:
         # Fallback to console
+        _LOG.warning('Handled exception', exc_info=True)
         print(f"\n{'='*60}")
         print(f"ERROR: {title}")
         print('='*60)
@@ -70,7 +77,7 @@ def check_dependencies():
     missing = []
     
     try:
-        import PyQt5
+        import PyQt5  # noqa: F401
     except ImportError:
         missing.append("PyQt5")
     
@@ -108,8 +115,7 @@ def main():
     # Import logging after dependency check
     from src.designer_logging import (
         initialize_error_handling, 
-        get_logger,
-        OperationLogger
+        get_logger
     )
     
     # Initialize error handling and logging (only create log files in debug mode)
@@ -125,7 +131,7 @@ def main():
     try:
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtGui import QColor, QPalette
-        from PyQt5.QtCore import Qt
+        from PyQt5.QtCore import Qt  # noqa: F401
 
         # The game's own font, style and point size, the same on every
         # system (src/desktop_style.py) - set up before the application.

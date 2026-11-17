@@ -34,6 +34,11 @@ Design notes
 
 from __future__ import annotations
 
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -966,7 +971,7 @@ class CausalLedger:
                     if matches(item.subject, item.action, item.statement):
                         items.append(item)
             except Exception:
-                pass
+                _LOG.debug('Ignored exception', exc_info=True)
 
         # --- structure: why the neurons exist -------------------------------
         for name, origin in self.origins.items():

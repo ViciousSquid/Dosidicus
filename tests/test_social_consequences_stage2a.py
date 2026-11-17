@@ -48,7 +48,7 @@ from plugins.multiplayer.encounter import (                # noqa: E402
 from plugins.multiplayer.encounter_sensors import ConspecificView  # noqa: E402
 from plugins.multiplayer.remote_protocol import (          # noqa: E402
     Consequence, PerceptionFrame, ProtocolError,
-    CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
+    CONSEQUENCE_CONTEST,
     FORBIDDEN_KEYS, OBSERVABLE_SENSORS,
 )
 

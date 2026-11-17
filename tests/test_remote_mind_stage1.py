@@ -41,15 +41,15 @@ from plugins.multiplayer.consent import (                 # noqa: E402
     ConsentPolicy, MODE_OPEN, MODE_CLOSED,
 )
 from plugins.multiplayer.host_body import (               # noqa: E402
-    HostBody, VisitorActor, GRASP_RANGE,
+    HostBody, VisitorActor,
 )
 from plugins.multiplayer.visitor_mind import (            # noqa: E402
-    VisitorMind, RemotePerception, REMOTE_DRIVEN_SENSORS,
+    VisitorMind, REMOTE_DRIVEN_SENSORS,
 )
 from plugins.multiplayer.remote_protocol import (         # noqa: E402
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
-    CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, FORBIDDEN_KEYS, INTENT_LEASE, LINK_TIMEOUT,
+    CONSEQUENCE_CONTEST,
+    FORBIDDEN_KEYS, INTENT_LEASE, LINK_TIMEOUT,
     OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT,
     END_LINK_LOST, new_visit_id,
 )

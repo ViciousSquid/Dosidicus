@@ -1,15 +1,12 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout, QListWidget, QListWidgetItem, 
-    QPushButton, QLabel, QLineEdit, QDoubleSpinBox, QCheckBox, QComboBox, QTextEdit, 
-    QTableWidget, QTableWidgetItem, QHeaderView, QScrollArea, QDialog, QMessageBox, QInputDialog
+    QPushButton, QLabel, QLineEdit, QDoubleSpinBox, QCheckBox, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView, QScrollArea, QDialog, QMessageBox, QInputDialog
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from typing import Optional, Dict
 
 from .designer_core import BrainDesign, DesignerNeuron, DesignerLayer
 from .designer_constants import (
-    NeuronType, INPUT_SENSORS, REQUIRED_NEURONS, DEFAULT_SENSOR_CONNECTIONS,
-    is_required_neuron, is_input_sensor
+    NeuronType, INPUT_SENSORS, REQUIRED_NEURONS
 )
 
 # Optional: Import sensor discovery for plugin sensors

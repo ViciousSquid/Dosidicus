@@ -1,28 +1,11 @@
 LANGUAGE_HEADER = "zh - 中文"
 translations = {
     # Core continuous neurons
-    "hunger": "饥饿感",
-    "happiness": "快乐值",
-    "cleanliness": "清洁度",
-    "sleepiness": "困倦感",
-    "satisfaction": "满足感",
-    "anxiety": "焦虑感",
     "aggression": "攻击性",
-    "curiosity": "好奇心",
 
     # Binary/sensor neurons
-    "can_see_food": "看见食物",
-    "is_eating": "进食中",
-    "is_sleeping": "睡眠中",
-    "is_sick": "生病中",
-    "pursuing_food": "寻找食物",
-    "is_startled": "受惊",
-    "is_fleeing": "逃跑中",
 
     # Base keys for neurogenesis patterns
-    "novelty": "新奇",
-    "stress": "压力",
-    "reward": "奖励",
 
     # ===== MAIN MENU =====
     "file": "文件",
@@ -39,6 +22,8 @@ translations = {
     # ===== VIEW MENU =====
     "brain_designer": "大脑设计器",
     "decorations": "装饰品",
+    "journey": "旅程",
+    "journey_title": "你的鱿鱼的旅程",
     "statistics": "统计数据",
     "brain_tool": "大脑工具",
     "neuron_lab": "神经元实验室",
@@ -286,8 +271,6 @@ translations = {
 
     # ===== BRAIN WIDGET LAYERS (NEW) =====
     "layer_name": "层级",
-    "layer_input": "输入层",
-    "layer_output": "输出层",
     "layer_hidden": "隐藏层",
 
     # ===== NEUROGENESIS LOGS (NEW) =====
